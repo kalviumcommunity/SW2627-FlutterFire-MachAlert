@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "297020906537",
+    "project_id": "machalert",
+    "storage_bucket": "machalert.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:297020906537:android:bc501b2b4ed4eec948d038",
+        "android_client_info": {
+          "package_name": "com.example.mach_alert"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyATSlrc7-sargxQSnhzczGz26YLhX8WK9I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
