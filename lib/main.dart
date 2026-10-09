@@ -1,7 +1,9 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
+import 'providers/app_state_provider.dart';
 import 'screens/auth/login_screen.dart';
 
 void main() async {
@@ -15,11 +17,14 @@ class MachAlertApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'MachAlert',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
-      home: const LoginScreen(),
+    return MultiProvider(
+      providers: [ChangeNotifierProvider(create: (_) => AppStateProvider())],
+      child: MaterialApp(
+        title: 'MachAlert',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
+        home: const LoginScreen(),
+      ),
     );
   }
 }
