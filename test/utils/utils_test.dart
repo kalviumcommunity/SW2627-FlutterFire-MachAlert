@@ -58,7 +58,10 @@ void main() {
         expect(Validators.required(null), 'This field is required');
         expect(Validators.required(''), 'This field is required');
         expect(Validators.required('   '), 'This field is required');
-        expect(Validators.required('', 'Machine name'), 'Machine name is required');
+        expect(
+          Validators.required('', 'Machine name'),
+          'Machine name is required',
+        );
       });
 
       test('returns null when value is non-empty', () {
@@ -71,9 +74,15 @@ void main() {
       test('returns error when empty or invalid format', () {
         expect(Validators.email(null), 'Email is required');
         expect(Validators.email(''), 'Email is required');
-        expect(Validators.email('not-an-email'), 'Please enter a valid email address');
+        expect(
+          Validators.email('not-an-email'),
+          'Please enter a valid email address',
+        );
         expect(Validators.email('user@'), 'Please enter a valid email address');
-        expect(Validators.email('user@domain'), 'Please enter a valid email address');
+        expect(
+          Validators.email('user@domain'),
+          'Please enter a valid email address',
+        );
       });
 
       test('returns null when email format is valid', () {
@@ -92,7 +101,10 @@ void main() {
       test('returns error when empty or below minimum length', () {
         expect(Validators.password(null), 'Password is required');
         expect(Validators.password(''), 'Password is required');
-        expect(Validators.password('12345'), 'Password must be at least 6 characters');
+        expect(
+          Validators.password('12345'),
+          'Password must be at least 6 characters',
+        );
         expect(
           Validators.password('1234567', minLength: 8),
           'Password must be at least 8 characters',
@@ -114,9 +126,18 @@ void main() {
 
     group('confirmPassword validator', () {
       test('returns error when empty or does not match', () {
-        expect(Validators.confirmPassword(null, 'secret123'), 'Please confirm your password');
-        expect(Validators.confirmPassword('', 'secret123'), 'Please confirm your password');
-        expect(Validators.confirmPassword('secret456', 'secret123'), 'Passwords do not match');
+        expect(
+          Validators.confirmPassword(null, 'secret123'),
+          'Please confirm your password',
+        );
+        expect(
+          Validators.confirmPassword('', 'secret123'),
+          'Please confirm your password',
+        );
+        expect(
+          Validators.confirmPassword('secret456', 'secret123'),
+          'Passwords do not match',
+        );
       });
 
       test('returns null when passwords match', () {
@@ -129,7 +150,10 @@ void main() {
         expect(Validators.number(null), 'Value is required');
         expect(Validators.number(''), 'Value is required');
         expect(Validators.number('abc'), 'Value must be a valid number');
-        expect(Validators.number('abc', 'Temperature'), 'Temperature must be a valid number');
+        expect(
+          Validators.number('abc', 'Temperature'),
+          'Temperature must be a valid number',
+        );
       });
 
       test('returns null when value is a valid integer or double', () {

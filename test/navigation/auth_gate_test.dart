@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -133,4 +136,86 @@ void main() {
     final loginContext = tester.element(find.byType(LoginScreen));
     expect(Navigator.of(loginContext).canPop(), isFalse);
   });
+
+  group('AuthGate Stream Integration & Session Persistence', () {
+    testWidgets(
+      'stream transitions automatically drive AuthGate between Login and Home',
+      (tester) async {
+        final authStreamController = StreamController<User?>.broadcast();
+        final appState = AppStateProvider(
+          authStream: authStreamController.stream,
+        );
+
+        await pumpAuthGate(tester, appState);
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+        // Emits signed-out (null)
+        authStreamController.add(null);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(LoginScreen), findsOneWidget);
+        expect(find.byType(HomeScreen), findsNothing);
+
+        // Emits signed-in user
+        authStreamController.add(
+          _FakeUser(
+            uid: 'u_logged_in',
+            email: 'tech@machalert.com',
+            displayName: 'Tech Operator',
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byType(HomeScreen), findsOneWidget);
+        expect(find.byType(LoginScreen), findsNothing);
+
+        // Emits logout (null)
+        authStreamController.add(null);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(LoginScreen), findsOneWidget);
+        expect(find.byType(HomeScreen), findsNothing);
+
+        final loginContext = tester.element(find.byType(LoginScreen));
+        expect(Navigator.of(loginContext).canPop(), isFalse);
+
+        authStreamController.close();
+      },
+    );
+
+    testWidgets('persisted authenticated session immediately displays Home', (
+      tester,
+    ) async {
+      final authStreamController = StreamController<User?>.broadcast();
+      final appState = AppStateProvider(
+        authStream: authStreamController.stream,
+      );
+
+      // Persisted user emitted right away
+      authStreamController.add(
+        _FakeUser(uid: 'u_persisted', email: 'persisted@machalert.com'),
+      );
+
+      await pumpAuthGate(tester, appState);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(LoginScreen), findsNothing);
+
+      authStreamController.close();
+    });
+  });
+}
+
+class _FakeUser extends Fake implements User {
+  @override
+  final String uid;
+
+  @override
+  final String? email;
+
+  @override
+  final String? displayName;
+
+  _FakeUser({required this.uid, this.email, this.displayName});
 }

@@ -72,7 +72,10 @@ void main() {
       expect(user.name, 'Bob Smith');
       expect(user.email, 'bob@factory.com');
       expect(user.role, 'technician');
-      expect(user.createdAt?.millisecondsSinceEpoch, now.millisecondsSinceEpoch);
+      expect(
+        user.createdAt?.millisecondsSinceEpoch,
+        now.millisecondsSinceEpoch,
+      );
     });
 
     test('copyWith works as expected', () {
@@ -337,24 +340,27 @@ void main() {
       expect(map['updatedAt'], resolvedAt.toIso8601String());
     });
 
-    test('fromMap recreates model correctly with assignedAt/resolvedAt fallback', () {
-      final map = {
-        'maintenanceId': 'mnt1',
-        'machineId': 'm1',
-        'technicianId': 'tech1',
-        'priority': 'Critical',
-        'status': 'Resolved',
-        'assignedAt': now.toIso8601String(),
-        'resolvedAt': resolvedAt.toIso8601String(),
-      };
+    test(
+      'fromMap recreates model correctly with assignedAt/resolvedAt fallback',
+      () {
+        final map = {
+          'maintenanceId': 'mnt1',
+          'machineId': 'm1',
+          'technicianId': 'tech1',
+          'priority': 'Critical',
+          'status': 'Resolved',
+          'assignedAt': now.toIso8601String(),
+          'resolvedAt': resolvedAt.toIso8601String(),
+        };
 
-      final maintenance = MaintenanceModel.fromMap(map);
-      expect(maintenance.id, 'mnt1');
-      expect(maintenance.priority, 'Critical');
-      expect(maintenance.status, 'Resolved');
-      expect(maintenance.createdAt, now);
-      expect(maintenance.updatedAt, resolvedAt);
-    });
+        final maintenance = MaintenanceModel.fromMap(map);
+        expect(maintenance.id, 'mnt1');
+        expect(maintenance.priority, 'Critical');
+        expect(maintenance.status, 'Resolved');
+        expect(maintenance.createdAt, now);
+        expect(maintenance.updatedAt, resolvedAt);
+      },
+    );
 
     test('copyWith works as expected', () {
       final maintenance = MaintenanceModel(
@@ -365,7 +371,10 @@ void main() {
         status: 'Pending',
       );
 
-      final updated = maintenance.copyWith(status: 'Resolved', notes: 'Completed');
+      final updated = maintenance.copyWith(
+        status: 'Resolved',
+        notes: 'Completed',
+      );
       expect(updated.status, 'Resolved');
       expect(updated.notes, 'Completed');
       expect(updated.id, 'mnt1');
