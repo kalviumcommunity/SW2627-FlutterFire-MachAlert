@@ -7,7 +7,10 @@ import 'package:mach_alert/screens/auth/auth_gate.dart';
 import 'package:mach_alert/services/auth_service.dart';
 import 'package:provider/provider.dart';
 
-class _FakeFirebaseAuth extends Fake implements FirebaseAuth {}
+class _FakeFirebaseAuth extends Fake implements FirebaseAuth {
+  @override
+  Stream<User?> authStateChanges() => const Stream<User?>.empty();
+}
 
 void main() {
   group('MachAlertApp Root Configuration Tests', () {

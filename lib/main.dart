@@ -17,8 +17,9 @@ void main() async {
 
 class MachAlertApp extends StatelessWidget {
   final AuthService? authService;
+  final AppStateProvider? appStateProvider;
 
-  const MachAlertApp({super.key, this.authService});
+  const MachAlertApp({super.key, this.authService, this.appStateProvider});
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +29,22 @@ class MachAlertApp extends StatelessWidget {
           Provider<AuthService>.value(value: authService!)
         else
           Provider<AuthService>(create: (_) => AuthService()),
-        ChangeNotifierProvider(create: (_) => AppStateProvider()),
+        if (appStateProvider != null)
+          ChangeNotifierProvider<AppStateProvider>.value(
+            value: appStateProvider!,
+          )
+        else
+          ChangeNotifierProvider<AppStateProvider>(
+            create: (context) {
+              AuthService? resolvedAuth;
+              try {
+                resolvedAuth = context.read<AuthService>();
+              } catch (_) {
+                resolvedAuth = null;
+              }
+              return AppStateProvider(authService: resolvedAuth);
+            },
+          ),
       ],
       child: MaterialApp(
         title: 'MachAlert',

@@ -71,7 +71,11 @@ class MaintenanceModel {
 
   factory MaintenanceModel.fromMap(Map<String, dynamic> map, [String? docId]) {
     return MaintenanceModel(
-      id: docId ?? map['id'] as String? ?? map['maintenanceId'] as String? ?? '',
+      id:
+          docId ??
+          map['id'] as String? ??
+          map['maintenanceId'] as String? ??
+          '',
       machineId: map['machineId'] as String? ?? '',
       machineName: map['machineName'] as String?,
       faultId: map['faultId'] as String?,
