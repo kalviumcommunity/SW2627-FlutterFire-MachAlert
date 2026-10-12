@@ -190,6 +190,30 @@ void main() {
       });
 
       test(
+        'converts weak-password error on signup to user-friendly message',
+        () async {
+          fakeAuth.errorToThrow = FirebaseAuthException(
+            code: 'weak-password',
+            message: 'Password should be at least 6 characters',
+          );
+
+          expect(
+            () =>
+                authService.signUp(email: 'new@machalert.com', password: '123'),
+            throwsA(
+              isA<AuthServiceException>()
+                  .having((e) => e.code, 'code', 'weak-password')
+                  .having(
+                    (e) => e.message,
+                    'message',
+                    'The password provided is too weak.',
+                  ),
+            ),
+          );
+        },
+      );
+
+      test(
         'does not catch non-FirebaseAuthException errors indiscriminately',
         () async {
           fakeAuth.errorToThrow = StateError(
@@ -251,6 +275,29 @@ void main() {
                   (e) => e.message,
                   'message',
                   'Incorrect password. Please try again.',
+                ),
+          ),
+        );
+      });
+
+      test('converts invalid-credential error on sign in to safe user-friendly message', () async {
+        fakeAuth.errorToThrow = FirebaseAuthException(
+          code: 'invalid-credential',
+          message: 'Invalid credential provided',
+        );
+
+        expect(
+          () => authService.signIn(
+            email: 'tech@machalert.com',
+            password: 'badpassword',
+          ),
+          throwsA(
+            isA<AuthServiceException>()
+                .having((e) => e.code, 'code', 'invalid-credential')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'Invalid email or password. Please try again.',
                 ),
           ),
         );
@@ -322,6 +369,9 @@ void main() {
         'network-request-failed':
             'A network error occurred. Please check your internet connection.',
         'too-many-requests': 'Too many requests. Please try again later.',
+        'user-disabled': 'This user account has been disabled.',
+        'operation-not-allowed':
+            'Operation not allowed. Please contact support.',
       };
 
       for (final entry in expectedMappings.entries) {
