@@ -4,11 +4,13 @@ import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'providers/app_state_provider.dart';
-import 'screens/auth/login_screen.dart';
+import 'screens/auth/auth_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   runApp(const MachAlertApp());
 }
 
@@ -23,7 +25,7 @@ class MachAlertApp extends StatelessWidget {
         title: 'MachAlert',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
-        home: const LoginScreen(),
+        home: const AuthGate(),
       ),
     );
   }
