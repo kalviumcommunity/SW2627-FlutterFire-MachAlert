@@ -1083,63 +1083,70 @@ To ensure equal accountability and clear separation of concerns across the 3 beg
 ## 20. 20-Day Development Roadmap
 
 ```text
-DAY 01–05: FOUNDATIONS & SETUP
-├── Project scaffolding, Git convention setup, Flutter theme, Firebase console provisioning
-└── Output: Running Flutter skeleton connected to Firebase project with empty collections.
+PHASE 1 — FLUTTER & FIREBASE FOUNDATION (DAYS 1–5)
+├── Day 1: Project setup, theme configuration, base models & folder structure
+├── Day 2: Reusable app widgets, Firebase integration verification & utility classes
+├── Day 3: App navigation & routing, Firebase service layer & app state structure
+├── Day 4: Login & signup screens, Firebase Auth service & form validation
+└── Day 5: Authentication flow, signup/login/logout implementation & auth state handling (Complete)
+└── Output: Functional Flutter skeleton, root MultiProvider tree & reactive authentication cycle.
 
-DAY 06–08: AUTHENTICATION & ROLE-BASED ACCESS
-├── Login, Sign Up, Role Selection, Persistent Session, Auth Guards
-└── Output: Working authentication cycle with role routing to dummy dashboard.
+PHASE 2 — AUTHENTICATION + CORE UI (DAYS 6–10)
+├── Day 6: Persistent login, splash screen, loading UI & startup routing
+├── Day 7: Role-based dashboard UI, users Firestore collection & dashboard logic
+├── Day 8: Machine list screen, machines Firestore collection & machine data mapping
+├── Day 9: Machine details screen, machine data fetching & state update logic
+└── Day 10: Machine management UI states, machine CRUD operations & Flutter integration
+└── Output: Persistent auth routing, role-based dashboard & complete machine inventory management.
 
-DAY 09–12: MACHINE INVENTORY & TELEMETRY MODULE
-├── Machine data models, Firestore machine streams, Machine Cards, Details Screen
-└── Output: Real-time machine directory with live health scores and line filters.
+PHASE 3 — FAULT REPORTING (DAYS 11–15)
+├── Day 11: Fault reporting screen, faults Firestore collection & fault model validation
+├── Day 12: Fault form fields, severity selector, fault add operation & Firestore submission
+├── Day 13: Fault history screen, fault queries and fetching & fault history data logic
+├── Day 14: Realtime fault list UI, Firestore realtime listeners & realtime fault updates
+└── Day 15: Fault search & filter UI, query optimization & client-side filtering logic
+└── Output: End-to-end fault reporting form, realtime snapshots & searchable fault history.
 
-DAY 13–15: FAULT REPORTING & MEDIA PIPELINE
-├── Fault reporting form, Image Picker integration, Firebase Storage upload, Fault History
-└── Output: Operators can snap photos and submit faults, creating real-time Firestore records.
+PHASE 4 — STORAGE + MAINTENANCE (DAYS 16–18)
+├── Day 16: Image picker & preview, Firebase Storage integration & image upload handling
+├── Day 17: Maintenance task screens, maintenance Firestore collection & task logic
+└── Day 18: Maintenance status UI, maintenance update operations & workflow validation
+└── Output: Technician maintenance lifecycle with photo attachment proof & repair logging.
 
-DAY 16–17: MAINTENANCE WORKFLOW & STATUS DISPATCH
-├── Maintenance task list, Task assignment, Status lifecycle (Pending->Done), Notes input
-└── Output: Technicians pick up tasks, input repair notes, and resolve faults.
-
-DAY 18–19: SMART RULE ENGINE, POLISH & TEST SUITE
-├── Health score recalculations, 7-day recurring fault alert trigger, Bug bashing, UI polish
-└── Output: Fully functional, bug-free, styled industrial application.
-
-DAY 20: FINAL EVALUATION, DOCUMENTATION & DEMO SPRINT
-├── Comprehensive demo rehearsal, README finalization, Presentation slides
-└── Output: Flawless 3–5 minute presentation and project submission.
+PHASE 5 — SECURITY, TESTING & FINALIZATION (DAYS 19–20)
+├── Day 19: Loading/error/empty states polish, Firestore & Storage security rules & role testing
+└── Day 20: Final UI/navigation polish, Firebase cleanup & end-to-end testing & documentation
+└── Output: Production-ready industrial MVP with locked security rules & comprehensive test suite.
 ```
 
 ---
 
 ## 21. Daily PR Plan (60 Pull Requests Matrix)
 
-Every developer delivers **one focused, testable, and reviewed Pull Request every calendar day**. Below is the exact 60-PR schedule:
+Every developer delivers **one focused, testable, and reviewed Pull Request every calendar day**. Below is the exact 60-PR schedule across all 20 development days:
 
-| Day | Member 1 (UI/UX) PR | Member 2 (Firebase) PR | Member 3 (Logic & Integration) PR | Daily Feature Milestone Achieved |
+| Day | Main Goal | Member 1 — Flutter/UI PR | Member 2 — Firebase PR | Member 3 — Logic/Integration/Testing PR |
 |---|---|---|---|---|
-| **Day 1** | `feat(ui): add industrial theme colors and typography` | `chore(firebase): configure firebase options and core init` | `chore(project): initialize folder structure and app routes` | Project initialized, Firebase connected, styling tokens established. |
-| **Day 2** | `feat(ui): create custom button and text field widgets` | `chore(firebase): add firestore security rules template` | `feat(utils): create regex string validators for forms` | Common UI form primitives and validation utilities ready. |
-| **Day 3** | `feat(ui): implement animated splash screen layout` | `feat(auth): configure firebase auth service wrapper` | `feat(models): create user model with to/from map helpers` | Splash screen visual assets and user data serialization ready. |
-| **Day 4** | `feat(ui): create custom loading spinner and error snackbar`| `feat(firestore): configure firestore helper service class` | `feat(state): setup root multiprovider configuration` | Global loading states and central state management wired up. |
-| **Day 5** | `feat(ui): design reusable status pill badge widget` | `feat(firestore): seed initial machine documents in db` | `feat(models): build machine data model and unit tests` | Database seeded with 6 factory machines; models tested. |
-| **Day 6** | `feat(ui): design login screen layout with logo header` | `feat(auth): implement signin with email and password` | `feat(state): build auth provider login action and states` | Functional Login screen with error handling complete. |
-| **Day 7** | `feat(ui): design signup screen with role dropdown` | `feat(auth): implement signup and write user doc to firestore`| `feat(state): bind signup form validation to auth provider` | Full registration flow operational with role selection. |
-| **Day 8** | `feat(ui): implement persistent bottom navigation bar` | `feat(auth): setup persistent auth state stream listener` | `feat(routes): implement role-based route guard redirect` | Authenticated users stay logged in and route by role. |
-| **Day 9** | `feat(ui): build base dashboard layout and greeting bar`| `feat(firestore): add realtime stream for plant machines` | `feat(state): build machine provider with realtime listener`| Live machine count and user welcome banner on dashboard. |
-| **Day 10**| `feat(ui): design machine list card with health gauge` | `feat(firestore): add query filtering by production line` | `feat(logic): implement client-side machine name search` | Machine directory browsable with live line-filtering tabs. |
-| **Day 11**| `feat(ui): design machine detail screen layout` | `feat(firestore): fetch single machine realtime stream` | `feat(state): bind machine details and telemetry chips` | Machine details view with live temp and vibration readouts. |
-| **Day 12**| `feat(ui): design report fault screen layout and chips` | `feat(firestore): create addFault document transaction` | `feat(state): create fault provider with form controllers` | Static fault reporting form ready with dropdown picker. |
-| **Day 13**| `feat(ui): add image preview thumbnail and remove button`| `feat(storage): setup firebase storage fault image upload` | `feat(logic): integrate image_picker for camera & gallery` | Fault form can take photos and upload image to Storage. |
-| **Day 14**| `feat(ui): design fault history card and list layout` | `feat(firestore): add query for faults sorted by date` | `feat(state): implement fault history filtering by status` | Fault history feed functional with real-time updates. |
-| **Day 15**| `feat(ui): add modal dialog to view enlarged fault photo`| `feat(firestore): auto-update machine status on high fault`| `feat(logic): bind fault submission to machine status update`| Submitting high-severity fault turns machine status Red. |
-| **Day 16**| `feat(ui): design maintenance task list card and tabs` | `feat(firestore): implement maintenance collection queries`| `feat(state): build maintenance provider with task streams`| Maintenance task screen renders tasks assigned to user. |
-| **Day 17**| `feat(ui): build maintenance detail screen and action bar`| `feat(firestore): add updateMaintenanceStatus transaction` | `feat(logic): implement mandatory technician notes check` | Technicians can accept tasks and mark them Resolved. |
-| **Day 18**| `feat(ui): design smart alert banner and notifications tab`| `feat(rules): write 7-day recurring fault query in firestore`| `feat(logic): implement deterministic health score algorithm`| Recurring fault warnings generate automated alert badges. |
-| **Day 19**| `feat(ui): build profile screen with role badge and logout`| `feat(rules): finalize strict firestore & storage rules` | `test: add unit tests for validators and health score` | Complete profile screen, security rules locked, tests green. |
-| **Day 20**| `style(ui): polish animations, margins, and contrast` | `docs: add firestore schema documentation to README` | `chore: clean debug logs and prepare presentation build` | Application polished, audited, packaged, and ready for demo. |
+| **Day 1** | Project Setup | `feat: initialize flutter project and app theme` | `feat: configure firebase project` | `chore: create project folder structure and base models` |
+| **Day 2** | Flutter Core | `feat: add reusable app widgets` | `chore: verify firebase flutter integration` | `feat: add dart models and utility classes` |
+| **Day 3** | Navigation | `feat: implement app routing and navigation` | `feat: create firebase service layer` | `feat: implement navigation and app state structure` |
+| **Day 4** | Authentication UI | `feat: create login and signup screens` | `feat: implement firebase authentication service` | `feat: add authentication validation and error handling` |
+| **Day 5** (Complete) | Authentication Flow | `feat: connect auth screens to app navigation` | `feat: implement signup login and logout` | `feat: implement authentication state handling` |
+| **Day 6** | Persistent Login | `feat: add splash screen and loading UI` | `feat: implement persistent authentication` | `feat: handle auth state and startup routing` |
+| **Day 7** | Dashboard | `feat: create role based dashboard UI` | `feat: create user firestore collection` | `feat: implement role based dashboard logic` |
+| **Day 8** | Machine Module | `feat: create machine list screen` | `feat: create machines firestore collection` | `feat: create machine model and data mapping` |
+| **Day 9** | Machine Details | `feat: create machine details screen` | `feat: implement machine data fetching` | `feat: implement machine state and update logic` |
+| **Day 10** | Machine CRUD | `feat: add machine management UI states` | `feat: implement machine add update delete operations` | `feat: integrate machine CRUD with flutter` |
+| **Day 11** | Fault Module | `feat: create fault reporting screen` | `feat: create faults firestore collection` | `feat: create fault model and validation` |
+| **Day 12** | Fault Submission | `feat: add fault form fields and severity selector` | `feat: implement fault add operation` | `feat: integrate fault submission with firestore` |
+| **Day 13** | Fault History | `feat: create fault history screen` | `feat: implement fault fetching and queries` | `feat: implement fault history data logic` |
+| **Day 14** | Real-Time Faults | `feat: add realtime fault list UI` | `feat: implement firestore realtime listeners` | `feat: integrate realtime fault updates` |
+| **Day 15** | Search & Filtering | `feat: add fault search and filter UI` | `feat: optimize firestore fault queries` | `feat: implement fault search and filtering` |
+| **Day 16** | Image Upload | `feat: add image picker and preview` | `feat: integrate firebase storage` | `feat: implement image upload and url handling` |
+| **Day 17** | Maintenance Tasks | `feat: create maintenance task screens` | `feat: create maintenance firestore collection` | `feat: implement maintenance task logic` |
+| **Day 18** | Maintenance Workflow | `feat: add maintenance status UI` | `feat: implement maintenance update operations` | `feat: integrate maintenance workflow and validation` |
+| **Day 19** | Security + UX | `fix: improve loading error and empty states` | `feat: add firestore and storage security rules` | `test: validate role permissions and app workflows` |
+| **Day 20** | Final Integration | `polish: finalize UI and application navigation` | `chore: finalize firebase configuration and cleanup` | `test: complete end to end testing and documentation` |
 
 ---
 
@@ -1432,16 +1439,14 @@ TIMELINE & ACTOR CUES:
 
 ### 30.2 20-Day × 3-Member Pull Request Master Table (Summary Matrix)
 
-| Day Range | Phase | Member 1 (UI/UX) Focus | Member 2 (Firebase) Focus | Member 3 (Logic) Focus | Total PRs |
+| Day Range | Phase | Member 1 — Flutter/UI Focus | Member 2 — Firebase Focus | Member 3 — Logic/Integration/Testing Focus | Total PRs |
 |---|---|---|---|---|---|
-| **Days 1–5** | Foundations & Architecture | Theme, Buttons, Splash, Badges | Firebase Init, Rules, Seeding | Models, Validators, Providers | 15 PRs |
-| **Days 6–8** | Authentication & RBAC | Login UI, SignUp UI, Bottom Nav | Auth Service, User Firestore writes | Auth Provider, Route Guards | 9 PRs |
-| **Days 9–12** | Machine Catalog & Detail | Machine Card, List Screen, Details UI | Machine Streams, Queries | Machine Provider, Search Logic | 12 PRs |
-| **Days 13–15** | Fault Reporting & Storage | Report Fault UI, Image Preview, History | Storage Upload, Fault Writes | Image Picker, Fault Provider | 9 PRs |
-| **Days 16–17** | Maintenance Work Orders | Task Cards, Maintenance Action UI | Maintenance Queries, Transactions | Task Lifecycle, Notes Logic | 6 PRs |
-| **Days 18–19** | Smart Rules & Security | Alert Feed UI, Profile Screen | Strict Rules, Composite Indexes | Rule Engine, Unit Test Suite | 6 PRs |
-| **Day 20** | Final Polish & Packaging | Theme Polish, Contrast Audit | Schema Documentation | Clean Code, Demo Build | 3 PRs |
-| **TOTAL** | **Sprint 2 Complete** | **20 PRs** | **20 PRs** | **20 PRs** | **60 PRs** |
+| **Days 1–5** | Phase 1 — Flutter & Firebase Foundation | Project setup, app theme, reusable widgets, navigation & auth screens | Firebase project config, auth service, signup, login & logout | Project structure, models, utility classes & auth state handling | 15 PRs |
+| **Days 6–10** | Phase 2 — Authentication + Core UI | Splash & loading UI, role-based dashboard, machine list & details screens | Persistent auth, users collection, machines collection & CRUD operations | Startup routing, dashboard logic, machine models & Flutter CRUD integration | 15 PRs |
+| **Days 11–15** | Phase 3 — Fault Reporting | Fault reporting screen, form fields, fault history, realtime UI & search/filter UI | Faults collection, fault add operation, fault queries & realtime listeners | Fault model & validation, firestore submission & fault search/filtering | 15 PRs |
+| **Days 16–18** | Phase 4 — Storage + Maintenance | Image picker & preview, maintenance task screens & status UI | Firebase storage integration, maintenance collection & update operations | Image upload handling, maintenance task logic & workflow validation | 9 PRs |
+| **Days 19–20** | Phase 5 — Security, Testing & Finalization | Loading, error & empty states polish, UI & navigation finalization | Firestore & storage security rules, Firebase config & cleanup | Role validation, end-to-end testing & documentation | 6 PRs |
+| **TOTAL** | **20 Development Days** | **20 PRs** | **20 PRs** | **20 PRs** | **60 PRs** |
 
 ---
 
