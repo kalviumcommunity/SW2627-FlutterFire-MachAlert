@@ -36,11 +36,13 @@ void main() {
     expect(find.text('Confirm Password'), findsOneWidget);
   });
 
-  testWidgets('Signup submit button is disabled', (tester) async {
+  testWidgets('Signup submit button is enabled', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: SignupScreen()));
 
-    final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
+    final button = tester.widget<ElevatedButton>(
+      find.widgetWithText(ElevatedButton, 'Sign Up'),
+    );
 
-    expect(button.onPressed, isNull);
+    expect(button.onPressed, isNotNull);
   });
 }
