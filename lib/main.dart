@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'providers/app_state_provider.dart';
 import 'screens/auth/auth_gate.dart';
+import 'services/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,12 +16,20 @@ void main() async {
 }
 
 class MachAlertApp extends StatelessWidget {
-  const MachAlertApp({super.key});
+  final AuthService? authService;
+
+  const MachAlertApp({super.key, this.authService});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => AppStateProvider())],
+      providers: [
+        if (authService != null)
+          Provider<AuthService>.value(value: authService!)
+        else
+          Provider<AuthService>(create: (_) => AuthService()),
+        ChangeNotifierProvider(create: (_) => AppStateProvider()),
+      ],
       child: MaterialApp(
         title: 'MachAlert',
         debugShowCheckedModeBanner: false,

@@ -48,6 +48,10 @@ class AuthServiceException implements Exception {
         return 'A network error occurred. Please check your internet connection.';
       case 'too-many-requests':
         return 'Too many requests. Please try again later.';
+      case 'user-disabled':
+        return 'This user account has been disabled.';
+      case 'operation-not-allowed':
+        return 'Operation not allowed. Please contact support.';
       default:
         return defaultErrorMessage;
     }

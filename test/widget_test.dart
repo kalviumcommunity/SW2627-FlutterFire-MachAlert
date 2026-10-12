@@ -1,9 +1,13 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mach_alert/main.dart';
 import 'package:mach_alert/providers/app_state_provider.dart';
 import 'package:mach_alert/screens/auth/auth_gate.dart';
+import 'package:mach_alert/services/auth_service.dart';
 import 'package:provider/provider.dart';
+
+class _FakeFirebaseAuth extends Fake implements FirebaseAuth {}
 
 void main() {
   group('MachAlertApp Root Configuration Tests', () {
@@ -36,6 +40,25 @@ void main() {
       expect(appStateProvider.route, AppRoute.login);
 
       expect(appStateProvider.user, isNull);
+    });
+
+    testWidgets('AuthService is available to descendants', (tester) async {
+      final fakeAuth = _FakeFirebaseAuth();
+      final authService = AuthService(firebaseAuth: fakeAuth);
+
+      await tester.pumpWidget(MachAlertApp(authService: authService));
+
+      await tester.pump();
+
+      final authGateContext = tester.element(find.byType(AuthGate));
+
+      final retrievedAuthService = Provider.of<AuthService>(
+        authGateContext,
+        listen: false,
+      );
+
+      expect(retrievedAuthService, isNotNull);
+      expect(retrievedAuthService, same(authService));
     });
 
     testWidgets('initial state shows loading indicator', (tester) async {
