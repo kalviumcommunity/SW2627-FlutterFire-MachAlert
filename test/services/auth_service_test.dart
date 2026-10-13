@@ -77,6 +77,8 @@ class FakeFirebaseAuth extends Fake implements FirebaseAuth {
       throw errorToThrow!;
     }
     signOutCalled = true;
+    _currentUser = null;
+    _authStateController.add(null);
   }
 
   void emitAuthState(User? user) {
@@ -434,6 +436,150 @@ void main() {
         expect(ex1.hashCode, equals(ex2.hashCode));
         expect(ex1, isNot(equals(ex3)));
       });
+    });
+
+    group('Persistent Authentication & Session Lifecycle', () {
+      test(
+        'restores existing user session on startup without requiring re-authentication',
+        () {
+          final persistedUser = FakeUser(
+            uid: 'persisted_operator_001',
+            email: 'operator@machalert.com',
+          );
+          final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
+          addTearDown(persistentAuth.dispose);
+          final service = AuthService(firebaseAuth: persistentAuth);
+
+          expect(service.currentUser, isNotNull);
+          expect(service.currentUser?.uid, 'persisted_operator_001');
+          expect(service.currentUser?.email, 'operator@machalert.com');
+        },
+      );
+
+      test(
+        'returns null currentUser on startup when no session was persisted',
+        () {
+          final freshAuth = FakeFirebaseAuth(initialUser: null);
+          addTearDown(freshAuth.dispose);
+          final service = AuthService(firebaseAuth: freshAuth);
+
+          expect(service.currentUser, isNull);
+        },
+      );
+
+      test(
+        'emits restored user session immediately on startup via authStateChanges',
+        () async {
+          final persistedUser = FakeUser(
+            uid: 'persisted_tech_002',
+            email: 'tech@machalert.com',
+          );
+          final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
+          addTearDown(persistentAuth.dispose);
+          final service = AuthService(firebaseAuth: persistentAuth);
+
+          final authFuture = expectLater(
+            service.authStateChanges(),
+            emits(persistedUser),
+          );
+
+          persistentAuth.emitAuthState(persistedUser);
+          await authFuture;
+        },
+      );
+
+      test(
+        'emits null via authStateChanges when startup resolves as unauthenticated',
+        () async {
+          final persistentAuth = FakeFirebaseAuth(initialUser: null);
+          addTearDown(persistentAuth.dispose);
+          final service = AuthService(firebaseAuth: persistentAuth);
+
+          final authFuture = expectLater(
+            service.authStateChanges(),
+            emits(isNull),
+          );
+
+          persistentAuth.emitAuthState(null);
+          await authFuture;
+        },
+      );
+
+      test(
+        'multiple listeners receive session restoration broadcasts independently',
+        () async {
+          final persistedUser = FakeUser(
+            uid: 'multi_listener_user',
+            email: 'multi@machalert.com',
+          );
+          final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
+          addTearDown(persistentAuth.dispose);
+          final service = AuthService(firebaseAuth: persistentAuth);
+
+          final listener1 = expectLater(
+            service.authStateChanges(),
+            emits(persistedUser),
+          );
+          final listener2 = expectLater(
+            service.authStateChanges(),
+            emits(persistedUser),
+          );
+
+          persistentAuth.emitAuthState(persistedUser);
+
+          await Future.wait([listener1, listener2]);
+        },
+      );
+
+      test(
+        'signOut terminates persisted session and updates currentUser and stream to null',
+        () async {
+          final persistedUser = FakeUser(
+            uid: 'session_user_logout',
+            email: 'logout@machalert.com',
+          );
+          final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
+          addTearDown(persistentAuth.dispose);
+          final service = AuthService(firebaseAuth: persistentAuth);
+
+          expect(service.currentUser, isNotNull);
+
+          final expectation = expectLater(
+            service.authStateChanges(),
+            emits(isNull),
+          );
+
+          await service.signOut();
+
+          expect(persistentAuth.signOutCalled, isTrue);
+          expect(service.currentUser, isNull);
+          await expectation;
+        },
+      );
+
+      test(
+        'persisted session survives new AuthService wrapper instantiation',
+        () {
+          final persistedUser = FakeUser(
+            uid: 'persisted_lifecycle_user',
+            email: 'lifecycle@machalert.com',
+          );
+          final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
+          addTearDown(persistentAuth.dispose);
+
+          // Simulates initial app boot
+          final serviceInstance1 = AuthService(firebaseAuth: persistentAuth);
+          expect(serviceInstance1.currentUser?.uid, 'persisted_lifecycle_user');
+
+          // Simulates app component recreation / dependency re-read
+          final serviceInstance2 = AuthService(firebaseAuth: persistentAuth);
+          expect(serviceInstance2.currentUser?.uid, 'persisted_lifecycle_user');
+          expect(
+            serviceInstance2.currentUser,
+            same(serviceInstance1.currentUser),
+          );
+        },
+      );
     });
   });
 }
