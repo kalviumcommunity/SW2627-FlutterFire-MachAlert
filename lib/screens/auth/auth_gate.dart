@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/app_state_provider.dart';
-import '../../widgets/app_loading_indicator.dart';
 import '../dashboard/home_screen.dart';
+import '../splash/splash_screen.dart';
 import 'login_screen.dart';
 
 /// Displays the appropriate UI for the shared authentication state.
@@ -18,10 +18,7 @@ class AuthGate extends StatelessWidget {
     final status = context.watch<AppStateProvider>().status;
 
     if (status == AppStatus.initializing) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('MachAlert')),
-        body: const AppLoadingIndicator(),
-      );
+      return const SplashScreen();
     }
 
     // A different key creates a fresh navigation stack when the

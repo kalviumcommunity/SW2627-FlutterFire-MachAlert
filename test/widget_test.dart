@@ -6,6 +6,7 @@ import 'package:mach_alert/providers/app_state_provider.dart';
 import 'package:mach_alert/screens/auth/auth_gate.dart';
 import 'package:mach_alert/services/auth_service.dart';
 import 'package:provider/provider.dart';
+import 'package:mach_alert/screens/splash/splash_screen.dart';
 
 class _FakeFirebaseAuth extends Fake implements FirebaseAuth {
   @override
@@ -64,10 +65,12 @@ void main() {
       expect(retrievedAuthService, same(authService));
     });
 
-    testWidgets('initial state shows loading indicator', (tester) async {
+    testWidgets('initial state shows splash screen', (tester) async {
       await tester.pumpWidget(const MachAlertApp());
 
       await tester.pump();
+
+      expect(find.byType(SplashScreen), findsOneWidget);
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
