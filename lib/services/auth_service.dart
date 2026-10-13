@@ -90,9 +90,16 @@ class AuthService {
   FirebaseAuth get auth => _firebaseAuth;
 
   /// Returns the currently signed-in [User], or `null` if no user is signed in.
+  ///
+  /// On Android and iOS, Firebase Authentication automatically restores the
+  /// signed-in user's session from native secure storage upon app startup.
   User? get currentUser => _firebaseAuth.currentUser;
 
   /// Stream of authentication state changes.
+  ///
+  /// Emits the active [User] when a persisted session is restored on startup
+  /// or when a user signs in, and emits `null` when signed out or when no
+  /// session exists.
   Stream<User?> authStateChanges() => _firebaseAuth.authStateChanges();
 
   /// Registers a new user with [email] and [password].

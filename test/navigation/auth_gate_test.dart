@@ -207,6 +207,41 @@ void main() {
 
       authStreamController.close();
     });
+
+    testWidgets(
+      'startup stream emitting null resolves unauthenticated state to Login without hanging on Splash',
+      (tester) async {
+        final authStreamController = StreamController<User?>.broadcast();
+        addTearDown(() async {
+          await authStreamController.close();
+        });
+
+        final appState = AppStateProvider(
+          authStream: authStreamController.stream,
+        );
+
+        // 1. Starts in AppStatus.initializing prior to stream emission
+        expect(appState.status, AppStatus.initializing);
+
+        await pumpAuthGate(tester, appState);
+
+        // 2. Shows SplashScreen while waiting for the initial auth state
+        expect(find.byType(SplashScreen), findsOneWidget);
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        expect(find.byType(LoginScreen), findsNothing);
+        expect(find.byType(HomeScreen), findsNothing);
+
+        // 3. Emits null to represent a signed-out user session on cold boot
+        authStreamController.add(null);
+        await tester.pumpAndSettle();
+
+        // 4. Verifies that LoginScreen appears and SplashScreen is removed
+        expect(appState.status, AppStatus.unauthenticated);
+        expect(find.byType(LoginScreen), findsOneWidget);
+        expect(find.byType(SplashScreen), findsNothing);
+        expect(find.byType(HomeScreen), findsNothing);
+      },
+    );
   });
 }
 
