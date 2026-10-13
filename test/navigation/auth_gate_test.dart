@@ -242,6 +242,39 @@ void main() {
         expect(find.byType(HomeScreen), findsNothing);
       },
     );
+
+    testWidgets(
+      'startup stream error resolves unauthenticated state to Login without hanging on Splash',
+      (tester) async {
+        final authStreamController = StreamController<User?>.broadcast();
+        addTearDown(() async {
+          await authStreamController.close();
+        });
+
+        final appState = AppStateProvider(
+          authStream: authStreamController.stream,
+        );
+
+        expect(appState.status, AppStatus.initializing);
+
+        await pumpAuthGate(tester, appState);
+
+        expect(find.byType(SplashScreen), findsOneWidget);
+        expect(find.byType(LoginScreen), findsNothing);
+        expect(find.byType(HomeScreen), findsNothing);
+
+        // Stream emits error
+        authStreamController.addError(
+          Exception('Network failure on startup auth check'),
+        );
+        await tester.pumpAndSettle();
+
+        expect(appState.status, AppStatus.unauthenticated);
+        expect(find.byType(LoginScreen), findsOneWidget);
+        expect(find.byType(SplashScreen), findsNothing);
+        expect(find.byType(HomeScreen), findsNothing);
+      },
+    );
   });
 }
 

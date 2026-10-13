@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mach_alert/models/user_model.dart';
 import 'package:mach_alert/providers/app_state_provider.dart';
+import 'package:mach_alert/services/auth_service.dart';
 
 void main() {
   group('AppStateProvider Tests', () {
@@ -291,7 +292,47 @@ void main() {
         expect(providerWithStream.isDisposed, isTrue);
       },
     );
+
+    test(
+      'subscribes to authService.authStateChanges when authService is provided',
+      () async {
+        final controller = StreamController<User?>.broadcast();
+        final fakeAuth = _FakeFirebaseAuthWithStream(controller.stream);
+        final authService = AuthService(firebaseAuth: fakeAuth);
+
+        final providerWithAuthService = AppStateProvider(
+          authService: authService,
+        );
+        addTearDown(() {
+          controller.close();
+          if (!providerWithAuthService.isDisposed) {
+            providerWithAuthService.dispose();
+          }
+        });
+
+        expect(providerWithAuthService.hasActiveSubscription, isTrue);
+        expect(providerWithAuthService.status, AppStatus.initializing);
+
+        final fakeUser = _FakeUser(
+          uid: 'uid_from_service',
+          email: 'service@test.com',
+        );
+        controller.add(fakeUser);
+        await pumpEventQueue();
+
+        expect(providerWithAuthService.status, AppStatus.authenticated);
+        expect(providerWithAuthService.user?.id, 'uid_from_service');
+      },
+    );
   });
+}
+
+class _FakeFirebaseAuthWithStream extends Fake implements FirebaseAuth {
+  final Stream<User?> _stream;
+  _FakeFirebaseAuthWithStream(this._stream);
+
+  @override
+  Stream<User?> authStateChanges() => _stream;
 }
 
 class _FakeUser extends Fake implements User {
