@@ -11,6 +11,7 @@ import 'package:mach_alert/screens/auth/auth_gate.dart';
 import 'package:mach_alert/screens/auth/login_screen.dart';
 import 'package:mach_alert/screens/auth/signup_screen.dart';
 import 'package:mach_alert/screens/dashboard/home_screen.dart';
+import 'package:mach_alert/screens/splash/splash_screen.dart';
 
 UserModel createTestUser() {
   return UserModel(
@@ -55,15 +56,17 @@ Future<void> openSignup(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('Initializing state displays a loading indicator', (
-    tester,
-  ) async {
+  testWidgets('Initializing state displays SplashScreen', (tester) async {
     final appState = AppStateProvider();
 
     await pumpAuthGate(tester, appState);
 
+    expect(find.byType(SplashScreen), findsOneWidget);
+
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
     expect(find.byType(LoginScreen), findsNothing);
+
     expect(find.byType(HomeScreen), findsNothing);
   });
 
