@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/user_service.dart';
+import '../../utils/app_constants.dart';
 import '../../utils/validators.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_text_field.dart';
 
 class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key});
+  final UserService? userService;
+
+  const SignupScreen({super.key, this.userService});
 
   @override
   State<SignupScreen> createState() => _SignupScreenState();
@@ -48,6 +52,14 @@ class _SignupScreenState extends State<SignupScreen> {
 
     try {
       final authService = context.read<AuthService>();
+      UserService? userService = widget.userService;
+      if (userService == null) {
+        try {
+          userService = context.read<UserService>();
+        } catch (_) {
+          userService = null;
+        }
+      }
 
       final credential = await authService.signUp(
         email: _emailController.text.trim(),
@@ -57,6 +69,37 @@ class _SignupScreenState extends State<SignupScreen> {
       // Firebase Auth currently stores email/password.
       // Save the entered name as the Firebase display name.
       await credential.user?.updateDisplayName(_nameController.text.trim());
+
+      if (userService != null && credential.user != null) {
+        try {
+          await userService.createProfileIfAbsent(
+            uid: credential.user!.uid,
+            email: _emailController.text.trim(),
+            displayName: _nameController.text.trim(),
+            role: AppConstants.roleOperator,
+          );
+        } on UserServiceException catch (profileError) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Account created, but could not set up user profile: ${profileError.message}',
+                ),
+              ),
+            );
+          }
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Account created, but could not set up user profile. Please check your connection.',
+                ),
+              ),
+            );
+          }
+        }
+      }
 
       // Do not manually navigate to Home.
       // Auth state handling + AuthGate will do that.

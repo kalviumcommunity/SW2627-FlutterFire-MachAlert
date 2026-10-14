@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 import 'providers/app_state_provider.dart';
 import 'screens/auth/auth_gate.dart';
 import 'services/auth_service.dart';
+import 'services/user_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,9 +18,15 @@ void main() async {
 
 class MachAlertApp extends StatelessWidget {
   final AuthService? authService;
+  final UserService? userService;
   final AppStateProvider? appStateProvider;
 
-  const MachAlertApp({super.key, this.authService, this.appStateProvider});
+  const MachAlertApp({
+    super.key,
+    this.authService,
+    this.userService,
+    this.appStateProvider,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +36,10 @@ class MachAlertApp extends StatelessWidget {
           Provider<AuthService>.value(value: authService!)
         else
           Provider<AuthService>(create: (_) => AuthService()),
+        if (userService != null)
+          Provider<UserService>.value(value: userService!)
+        else
+          Provider<UserService>(create: (_) => UserService()),
         if (appStateProvider != null)
           ChangeNotifierProvider<AppStateProvider>.value(
             value: appStateProvider!,

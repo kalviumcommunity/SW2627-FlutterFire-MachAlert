@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function: Check if request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function: Fetch user document from users collection
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Helper function: Check if authenticated user is a manager
+    function isManager() {
+      return isAuthenticated() && getUserData().role == 'manager';
+    }
+
+    // Helper function: Check if authenticated user is a technician
+    function isTechnician() {
+      return isAuthenticated() && getUserData().role == 'technician';
+    }
+
+    // Helper function: Check if authenticated user is an operator
+    function isOperator() {
+      return isAuthenticated() && getUserData().role == 'operator';
+    }
+
+    // --- USERS COLLECTION ---
+    // Canonical path: /users/{userId} where userId == FirebaseAuth.currentUser.uid
+    match /users/{userId} {
+      // Any authenticated user can read user profiles (needed for technician/manager names & greetings)
+      allow read: if isAuthenticated();
+
+      // On CREATE:
+      // 1. Must be authenticated and creating their own document
+      // 2. Newly registered users CANNOT assign themselves the 'manager' role
+      // 3. Allowed client-assigned roles are strictly 'operator' or 'technician'
+      // 4. UID in document must match authenticated UID
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.role in ['operator', 'technician']
+        && request.resource.data.role != 'manager';
+
+      // On UPDATE:
+      // 1. Manager updating another user's profile: can update role, but role must be recognized
+      // 2. Any user updating their own profile: can ONLY edit permitted profile fields
+      //    (displayName, name, updatedAt); cannot alter role, uid, userId, or createdAt
+      allow update: if isAuthenticated() && (
+        (
+          isManager()
+          && request.auth.uid != userId
+          && request.resource.data.role in ['operator', 'technician', 'manager']
+        ) ||
+        (
+          request.auth.uid == userId
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'name', 'updatedAt'])
+        )
+      );
+
+      // On DELETE:
+      // Managers can delete other user accounts, but CANNOT delete their own account
+      allow delete: if isManager() && request.auth.uid != userId;
+    }
+
+    // --- MACHINES COLLECTION ---
+    match /machines/{machineId} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isManager();
+      allow update: if isAuthenticated();
+    }
+
+    // --- FAULTS COLLECTION ---
+    match /faults/{faultId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (isTechnician() || isManager() || resource.data.reportedBy == request.auth.uid);
+      allow delete: if isManager();
+    }
+
+    // --- MAINTENANCE COLLECTION ---
+    match /maintenance/{taskId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (isTechnician() || isManager());
+      allow update: if isAuthenticated() && (isTechnician() || isManager());
+      allow delete: if isManager();
+    }
+
+    // --- ALERTS COLLECTION ---
+    match /alerts/{alertId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (isTechnician() || isManager());
+      allow delete: if isManager();
+    }
+  }
+}
