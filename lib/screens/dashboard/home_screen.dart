@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../providers/app_state_provider.dart';
 import '../../services/auth_service.dart';
+import '../../utils/app_constants.dart';
 import '../../widgets/app_button.dart';
+import '../../widgets/dashboard_action_card.dart';
+import '../../widgets/dashboard_stat_card.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,9 +27,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final authService = context.read<AuthService>();
 
       await authService.signOut();
-
-      // No Navigator.push/pop here.
-      // Auth state -> AuthGate handles the screen change.
     } on AuthServiceException catch (error) {
       if (!mounted) {
         return;
@@ -50,23 +51,45 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _showComingSoon(String feature) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$feature will be available soon.')));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppStateProvider>();
+    final user = appState.user;
+
+    final name = user?.name.trim().isNotEmpty == true
+        ? user!.name.trim()
+        : 'MachAlert User';
+
+    final role = user?.role.trim().toLowerCase() ?? '';
+
     return Scaffold(
       appBar: AppBar(title: const Text('MachAlert')),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Home', style: Theme.of(context).textTheme.headlineSmall),
+              Text(
+                'Welcome, $name',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _roleLabel(role),
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 24),
 
-              const SizedBox(height: 12),
+              _buildDashboardForRole(role),
 
-              const Text('You are signed in to MachAlert.'),
-
-              const Spacer(),
+              const SizedBox(height: 32),
 
               AppButton(
                 text: 'Logout',
@@ -77,6 +100,198 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  String _roleLabel(String role) {
+    switch (role) {
+      case AppConstants.roleManager:
+        return 'Manager Dashboard';
+
+      case AppConstants.roleTechnician:
+        return 'Technician Dashboard';
+
+      case AppConstants.roleOperator:
+        return 'Operator Dashboard';
+
+      default:
+        return 'Dashboard';
+    }
+  }
+
+  Widget _buildDashboardForRole(String role) {
+    switch (role) {
+      case AppConstants.roleManager:
+        return _buildManagerDashboard();
+
+      case AppConstants.roleTechnician:
+        return _buildTechnicianDashboard();
+
+      case AppConstants.roleOperator:
+        return _buildOperatorDashboard();
+
+      default:
+        return _buildDefaultDashboard();
+    }
+  }
+
+  Widget _buildManagerDashboard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Factory Overview', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+
+        const Row(
+          children: [
+            Expanded(
+              child: DashboardStatCard(
+                label: 'Machines',
+                value: '--',
+                icon: Icons.precision_manufacturing,
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: DashboardStatCard(
+                label: 'Active Faults',
+                value: '--',
+                icon: Icons.warning_amber,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 20),
+
+        DashboardActionCard(
+          title: 'Machines',
+          subtitle: 'View production machines',
+          icon: Icons.precision_manufacturing,
+          onTap: () => _showComingSoon('Machines'),
+        ),
+
+        DashboardActionCard(
+          title: 'Faults',
+          subtitle: 'Monitor active machine faults',
+          icon: Icons.warning,
+          onTap: () => _showComingSoon('Fault monitoring'),
+        ),
+
+        DashboardActionCard(
+          title: 'Maintenance',
+          subtitle: 'Track maintenance activity',
+          icon: Icons.build,
+          onTap: () => _showComingSoon('Maintenance'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTechnicianDashboard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Maintenance Overview',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+
+        const Row(
+          children: [
+            Expanded(
+              child: DashboardStatCard(
+                label: 'Assigned Tasks',
+                value: '--',
+                icon: Icons.assignment,
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: DashboardStatCard(
+                label: 'Active Faults',
+                value: '--',
+                icon: Icons.warning_amber,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 20),
+
+        DashboardActionCard(
+          title: 'Assigned Maintenance',
+          subtitle: 'View your maintenance tasks',
+          icon: Icons.assignment_turned_in,
+          onTap: () => _showComingSoon('Assigned maintenance'),
+        ),
+
+        DashboardActionCard(
+          title: 'Active Faults',
+          subtitle: 'Inspect reported machine faults',
+          icon: Icons.warning,
+          onTap: () => _showComingSoon('Active faults'),
+        ),
+
+        DashboardActionCard(
+          title: 'Machines',
+          subtitle: 'View machine information',
+          icon: Icons.precision_manufacturing,
+          onTap: () => _showComingSoon('Machines'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOperatorDashboard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Machine Operations',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+
+        DashboardActionCard(
+          title: 'Machines',
+          subtitle: 'View machines on your production line',
+          icon: Icons.precision_manufacturing,
+          onTap: () => _showComingSoon('Machines'),
+        ),
+
+        DashboardActionCard(
+          title: 'Report Fault',
+          subtitle: 'Report a machine problem immediately',
+          icon: Icons.report_problem,
+          onTap: () => _showComingSoon('Fault reporting'),
+        ),
+
+        DashboardActionCard(
+          title: 'My Reports',
+          subtitle: 'Review faults you have reported',
+          icon: Icons.history,
+          onTap: () => _showComingSoon('My reports'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDefaultDashboard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('Your role is being prepared.'),
+        const SizedBox(height: 16),
+
+        DashboardActionCard(
+          title: 'Machines',
+          subtitle: 'Machine information will appear here',
+          icon: Icons.precision_manufacturing,
+          onTap: () => _showComingSoon('Machines'),
+        ),
+      ],
     );
   }
 }
