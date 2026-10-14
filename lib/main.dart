@@ -47,13 +47,14 @@ class MachAlertApp extends StatelessWidget {
         else
           ChangeNotifierProvider<AppStateProvider>(
             create: (context) {
-              AuthService? resolvedAuth;
-              try {
-                resolvedAuth = context.read<AuthService>();
-              } catch (_) {
-                resolvedAuth = null;
-              }
-              return AppStateProvider(authService: resolvedAuth);
+              final authService = context.read<AuthService>();
+
+              final userService = context.read<UserService>();
+
+              return AppStateProvider(
+                authService: authService,
+                userService: userService,
+              );
             },
           ),
       ],
