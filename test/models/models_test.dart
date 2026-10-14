@@ -91,6 +91,118 @@ void main() {
       expect(updated.role, 'manager');
       expect(updated.name, 'Jane Doe');
     });
+
+    test('convenience getters uid and displayName match id and name', () {
+      final user = UserModel(
+        id: 'user_xyz',
+        name: 'Alice Johnson',
+        email: 'alice@factory.com',
+        role: 'technician',
+      );
+
+      expect(user.uid, 'user_xyz');
+      expect(user.displayName, 'Alice Johnson');
+    });
+
+    test('updatedAt is serialized and deserialized correctly', () {
+      final updated = DateTime(2026, 10, 8, 14, 0);
+      final user = UserModel(
+        id: 'u456',
+        name: 'Mark Davis',
+        email: 'mark@factory.com',
+        role: 'operator',
+        createdAt: now,
+        updatedAt: updated,
+      );
+
+      final map = user.toMap();
+      expect(map['updatedAt'], updated.toIso8601String());
+
+      final reconstituted = UserModel.fromMap(map);
+      expect(reconstituted.updatedAt, updated);
+    });
+
+    test('hasRecognizedRole returns true only for valid roles', () {
+      expect(
+        UserModel(
+          id: '1',
+          name: 'A',
+          email: 'a@a.com',
+          role: 'operator',
+        ).hasRecognizedRole,
+        isTrue,
+      );
+      expect(
+        UserModel(
+          id: '2',
+          name: 'B',
+          email: 'b@b.com',
+          role: 'technician',
+        ).hasRecognizedRole,
+        isTrue,
+      );
+      expect(
+        UserModel(
+          id: '3',
+          name: 'C',
+          email: 'c@c.com',
+          role: 'manager',
+        ).hasRecognizedRole,
+        isTrue,
+      );
+      expect(
+        UserModel(
+          id: '4',
+          name: 'D',
+          email: 'd@d.com',
+          role: 'admin',
+        ).hasRecognizedRole,
+        isFalse,
+      );
+      expect(
+        UserModel(
+          id: '5',
+          name: 'E',
+          email: 'e@e.com',
+          role: '',
+        ).hasRecognizedRole,
+        isFalse,
+      );
+    });
+
+    test('toFirestoreMap generates expected schema with both keys', () {
+      final user = UserModel(
+        id: 'u789',
+        name: 'Sara Connor',
+        email: 'sara@factory.com',
+        role: 'manager',
+        createdAt: now,
+      );
+
+      final firestoreMap = user.toFirestoreMap();
+      expect(firestoreMap['uid'], 'u789');
+      expect(firestoreMap['userId'], 'u789');
+      expect(firestoreMap['name'], 'Sara Connor');
+      expect(firestoreMap['displayName'], 'Sara Connor');
+      expect(firestoreMap['email'], 'sara@factory.com');
+      expect(firestoreMap['role'], 'manager');
+      expect(firestoreMap['createdAt'], isNotNull);
+    });
+
+    test('fromMap parses uid and displayName fallback keys', () {
+      final map = {
+        'uid': 'uid_fallback',
+        'displayName': 'Fallback Name',
+        'email': 'fallback@factory.com',
+        'role': 'technician',
+      };
+
+      final user = UserModel.fromMap(map);
+      expect(user.id, 'uid_fallback');
+      expect(user.name, 'Fallback Name');
+      expect(user.email, 'fallback@factory.com');
+      expect(user.role, 'technician');
+    });
   });
 
   group('MachineModel Tests', () {
