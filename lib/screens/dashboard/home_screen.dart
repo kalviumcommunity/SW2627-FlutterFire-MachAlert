@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/app_state_provider.dart';
 import '../../services/auth_service.dart';
 import '../../utils/app_constants.dart';
+import '../../utils/app_routes.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/dashboard_action_card.dart';
 import '../../widgets/dashboard_stat_card.dart';
@@ -51,6 +52,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _openMachines() {
+    Navigator.of(context).push<void>(AppRoutes.machines());
+  }
+
   void _showComingSoon(String feature) {
     ScaffoldMessenger.of(
       context,
@@ -80,11 +85,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 'Welcome, $name',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
+
               const SizedBox(height: 6),
+
               Text(
                 _roleLabel(role),
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
+
               const SizedBox(height: 24),
 
               _buildDashboardForRole(role),
@@ -140,6 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('Factory Overview', style: Theme.of(context).textTheme.titleLarge),
+
         const SizedBox(height: 12),
 
         const Row(
@@ -168,21 +177,25 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Machines',
           subtitle: 'View production machines',
           icon: Icons.precision_manufacturing,
-          onTap: () => _showComingSoon('Machines'),
+          onTap: _openMachines,
         ),
 
         DashboardActionCard(
           title: 'Faults',
           subtitle: 'Monitor active machine faults',
           icon: Icons.warning,
-          onTap: () => _showComingSoon('Fault monitoring'),
+          onTap: () {
+            _showComingSoon('Fault monitoring');
+          },
         ),
 
         DashboardActionCard(
           title: 'Maintenance',
           subtitle: 'Track maintenance activity',
           icon: Icons.build,
-          onTap: () => _showComingSoon('Maintenance'),
+          onTap: () {
+            _showComingSoon('Maintenance');
+          },
         ),
       ],
     );
@@ -196,6 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
           'Maintenance Overview',
           style: Theme.of(context).textTheme.titleLarge,
         ),
+
         const SizedBox(height: 12),
 
         const Row(
@@ -224,21 +238,25 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Assigned Maintenance',
           subtitle: 'View your maintenance tasks',
           icon: Icons.assignment_turned_in,
-          onTap: () => _showComingSoon('Assigned maintenance'),
+          onTap: () {
+            _showComingSoon('Assigned maintenance');
+          },
         ),
 
         DashboardActionCard(
           title: 'Active Faults',
           subtitle: 'Inspect reported machine faults',
           icon: Icons.warning,
-          onTap: () => _showComingSoon('Active faults'),
+          onTap: () {
+            _showComingSoon('Active faults');
+          },
         ),
 
         DashboardActionCard(
           title: 'Machines',
           subtitle: 'View machine information',
           icon: Icons.precision_manufacturing,
-          onTap: () => _showComingSoon('Machines'),
+          onTap: _openMachines,
         ),
       ],
     );
@@ -252,27 +270,32 @@ class _HomeScreenState extends State<HomeScreen> {
           'Machine Operations',
           style: Theme.of(context).textTheme.titleLarge,
         ),
+
         const SizedBox(height: 12),
 
         DashboardActionCard(
           title: 'Machines',
           subtitle: 'View machines on your production line',
           icon: Icons.precision_manufacturing,
-          onTap: () => _showComingSoon('Machines'),
+          onTap: _openMachines,
         ),
 
         DashboardActionCard(
           title: 'Report Fault',
           subtitle: 'Report a machine problem immediately',
           icon: Icons.report_problem,
-          onTap: () => _showComingSoon('Fault reporting'),
+          onTap: () {
+            _showComingSoon('Fault reporting');
+          },
         ),
 
         DashboardActionCard(
           title: 'My Reports',
           subtitle: 'Review faults you have reported',
           icon: Icons.history,
-          onTap: () => _showComingSoon('My reports'),
+          onTap: () {
+            _showComingSoon('My reports');
+          },
         ),
       ],
     );
@@ -283,13 +306,14 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text('Your role is being prepared.'),
+
         const SizedBox(height: 16),
 
         DashboardActionCard(
           title: 'Machines',
           subtitle: 'Machine information will appear here',
           icon: Icons.precision_manufacturing,
-          onTap: () => _showComingSoon('Machines'),
+          onTap: _openMachines,
         ),
       ],
     );
