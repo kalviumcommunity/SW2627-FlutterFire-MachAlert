@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mach_alert/models/machine_model.dart';
 import 'package:mach_alert/screens/machines/machine_list_screen.dart';
+import 'package:mach_alert/screens/machines/machine_details_screen.dart';
 
 MachineModel machine({
   required String id,
@@ -87,5 +88,23 @@ void main() {
     await tester.pump();
 
     expect(find.text('No machines found'), findsOneWidget);
+  });
+
+  testWidgets('tapping machine opens MachineDetailsScreen', (tester) async {
+    final machines = [
+      machine(id: 'M-01', name: 'CNC Machine', status: 'Operational'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: MachineListScreen(machines: machines)),
+    );
+
+    await tester.tap(find.text('M-01'));
+
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MachineDetailsScreen), findsOneWidget);
+
+    expect(find.text('CNC Machine'), findsOneWidget);
   });
 }
