@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../models/machine_model.dart';
+import '../../utils/app_routes.dart';
 
 class MachineDetailsScreen extends StatefulWidget {
   final MachineModel machine;
+  final bool canManage;
 
-  const MachineDetailsScreen({super.key, required this.machine});
+  const MachineDetailsScreen({
+    super.key,
+    required this.machine,
+    this.canManage = false,
+  });
 
   @override
   State<MachineDetailsScreen> createState() => _MachineDetailsScreenState();
@@ -16,6 +22,63 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
 
   MachineModel get machine => widget.machine;
 
+  void _handleManagementAction(String action) {
+    switch (action) {
+      case 'edit':
+        _openEditMachine();
+        break;
+
+      case 'delete':
+        _showDeleteConfirmation();
+        break;
+    }
+  }
+
+  void _openEditMachine() {
+    Navigator.of(context).push<void>(AppRoutes.editMachine(machine));
+  }
+
+  Future<void> _showDeleteConfirmation() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Machine?'),
+          content: Text(
+            'Are you sure you want to delete '
+            '${machine.id} - ${machine.name}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Delete operation will be connected during CRUD integration.',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -24,6 +87,37 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
           machine.id,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
+        actions: [
+          if (widget.canManage)
+            PopupMenuButton<String>(
+              tooltip: 'Manage machine',
+              onSelected: _handleManagementAction,
+              itemBuilder: (context) {
+                return const [
+                  PopupMenuItem<String>(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined),
+                        SizedBox(width: 12),
+                        Text('Edit Machine'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline),
+                        SizedBox(width: 12),
+                        Text('Delete Machine'),
+                      ],
+                    ),
+                  ),
+                ];
+              },
+            ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -119,7 +213,9 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
               shape: BoxShape.circle,
             ),
           ),
+
           const SizedBox(width: 6),
+
           Text(
             style.label,
             style: TextStyle(color: style.color, fontWeight: FontWeight.w600),
@@ -198,7 +294,9 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
                 icon: Icons.fact_check_outlined,
               ),
             ),
+
             const SizedBox(width: 12),
+
             Expanded(
               child: _MetricCard(
                 label: 'Total Breakdowns',
@@ -220,7 +318,9 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
                 icon: Icons.favorite_outline,
               ),
             ),
+
             const SizedBox(width: 12),
+
             Expanded(
               child: _MetricCard(
                 label: 'Temperature',
@@ -286,6 +386,7 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
               style: Theme.of(context).textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
+
             TextButton(
               onPressed: () {
                 setState(() {
@@ -308,7 +409,9 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
                   Icons.history,
                   color: Theme.of(context).colorScheme.primary,
                 ),
+
                 const SizedBox(width: 14),
+
                 const Expanded(
                   child: Text(
                     'Machine activity logs will appear here once available.',
@@ -323,7 +426,7 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   }
 
   Widget _buildLogsTab() {
-    return _PlaceholderSection(
+    return const _PlaceholderSection(
       icon: Icons.receipt_long_outlined,
       title: 'Machine Logs',
       description: 'Inspection and breakdown logs will appear here once connected to Firestore.',
@@ -331,7 +434,7 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   }
 
   Widget _buildTrendTab() {
-    return _PlaceholderSection(
+    return const _PlaceholderSection(
       icon: Icons.show_chart,
       title: 'Machine Trend',
       description: 'Machine health and sensor trends will appear here in a later analytics task.',
@@ -397,13 +500,17 @@ class _MetricCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(icon, color: Theme.of(context).colorScheme.primary),
+
             const SizedBox(height: 12),
+
             Text(
               value,
               style: Theme.of(context).textTheme.titleLarge
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
+
             const SizedBox(height: 4),
+
             Text(label, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
@@ -454,9 +561,13 @@ class _PlaceholderSection extends StatelessWidget {
       child: Column(
         children: [
           Icon(icon, size: 64, color: Theme.of(context).colorScheme.outline),
+
           const SizedBox(height: 16),
+
           Text(title, style: Theme.of(context).textTheme.titleLarge),
+
           const SizedBox(height: 8),
+
           Text(description, textAlign: TextAlign.center),
         ],
       ),

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../models/machine_model.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/dashboard/home_screen.dart';
-import '../models/machine_model.dart';
-import '../screens/machines/machine_list_screen.dart';
 import '../screens/machines/machine_details_screen.dart';
+import '../screens/machines/machine_form_screen.dart';
+import '../screens/machines/machine_list_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -17,15 +18,38 @@ class AppRoutes {
     return MaterialPageRoute<void>(builder: (_) => const HomeScreen());
   }
 
-  static Route<void> machines({List<MachineModel> machines = const []}) {
+  static Route<void> machines({
+    List<MachineModel> machines = const [],
+    bool canManage = false,
+  }) {
     return MaterialPageRoute<void>(
-      builder: (_) => MachineListScreen(machines: machines),
+      builder: (_) =>
+          MachineListScreen(machines: machines, canManage: canManage),
     );
   }
 
-  static Route<void> machineDetails(MachineModel machine) {
+  static Route<void> machineDetails(
+    MachineModel machine, {
+    bool canManage = false,
+  }) {
     return MaterialPageRoute<void>(
-      builder: (_) => MachineDetailsScreen(machine: machine),
+      builder: (_) =>
+          MachineDetailsScreen(machine: machine, canManage: canManage),
+    );
+  }
+
+  static Route<void> addMachine({MachineSaveCallback? onSave}) {
+    return MaterialPageRoute<void>(
+      builder: (_) => MachineFormScreen(onSave: onSave),
+    );
+  }
+
+  static Route<void> editMachine(
+    MachineModel machine, {
+    MachineSaveCallback? onSave,
+  }) {
+    return MaterialPageRoute<void>(
+      builder: (_) => MachineFormScreen(machine: machine, onSave: onSave),
     );
   }
 }

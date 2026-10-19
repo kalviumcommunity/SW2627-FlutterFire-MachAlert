@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../models/machine_model.dart';
-import '../../widgets/machine_list_tile.dart';
 import '../../utils/app_routes.dart';
+import '../../widgets/machine_list_tile.dart';
 
 class MachineListScreen extends StatefulWidget {
   final List<MachineModel> machines;
+  final bool canManage;
 
-  const MachineListScreen({super.key, this.machines = const []});
+  const MachineListScreen({
+    super.key,
+    this.machines = const [],
+    this.canManage = false,
+  });
 
   @override
   State<MachineListScreen> createState() => _MachineListScreenState();
@@ -48,7 +53,13 @@ class _MachineListScreenState extends State<MachineListScreen> {
   }
 
   void _openMachine(MachineModel machine) {
-    Navigator.of(context).push<void>(AppRoutes.machineDetails(machine));
+    Navigator.of(context).push<void>(
+      AppRoutes.machineDetails(machine, canManage: widget.canManage),
+    );
+  }
+
+  void _openAddMachine() {
+    Navigator.of(context).push<void>(AppRoutes.addMachine());
   }
 
   @override
@@ -62,6 +73,13 @@ class _MachineListScreenState extends State<MachineListScreen> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
+      floatingActionButton: widget.canManage
+          ? FloatingActionButton.extended(
+              onPressed: _openAddMachine,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Machine'),
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -111,7 +129,9 @@ class _MachineListScreenState extends State<MachineListScreen> {
 
                         return MachineListTile(
                           machine: machine,
-                          onTap: () => _openMachine(machine),
+                          onTap: () {
+                            _openMachine(machine);
+                          },
                         );
                       },
                     ),
@@ -151,6 +171,8 @@ class _MachineListScreenState extends State<MachineListScreen> {
             Text(
               isSearching
                   ? 'Try another machine name, ID, or status.'
+                  : widget.canManage
+                  ? 'Add your first machine using the Add Machine button.'
                   : 'Machines will appear here once they are added.',
               textAlign: TextAlign.center,
             ),

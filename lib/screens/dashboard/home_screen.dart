@@ -53,8 +53,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openMachines() {
-    Navigator.of(context).push<void>(AppRoutes.machines());
-  }
+  final role = context
+      .read<AppStateProvider>()
+      .user
+      ?.role
+      .trim()
+      .toLowerCase();
+
+  Navigator.of(context).push<void>(
+    AppRoutes.machines(
+      canManage:
+          role == AppConstants.roleManager,
+    ),
+  );
+}
 
   void _showComingSoon(String feature) {
     ScaffoldMessenger.of(
