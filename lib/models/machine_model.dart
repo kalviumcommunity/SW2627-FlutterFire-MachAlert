@@ -1,3 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../utils/app_constants.dart';
+
 class MachineModel {
   final String id;
   final String name;
@@ -24,6 +28,31 @@ class MachineModel {
     this.createdAt,
     this.updatedAt,
   });
+
+  /// Canonical machine identifier alias for [id], matching PRD schema.
+  String get machineId => id;
+
+  /// Returns whether this machine has a recognized operational status.
+  bool get hasRecognizedStatus => AppConstants.machineStatuses.any(
+    (s) => s.toLowerCase() == status.trim().toLowerCase(),
+  );
+
+  /// Helper getters for operational statuses.
+  bool get isOperational =>
+      status.trim().toLowerCase() ==
+      AppConstants.machineStatusOperational.toLowerCase();
+
+  bool get isWarning =>
+      status.trim().toLowerCase() ==
+      AppConstants.machineStatusWarning.toLowerCase();
+
+  bool get isCritical =>
+      status.trim().toLowerCase() ==
+      AppConstants.machineStatusCritical.toLowerCase();
+
+  bool get isUnderMaintenance =>
+      status.trim().toLowerCase() ==
+      AppConstants.machineStatusUnderMaintenance.toLowerCase();
 
   MachineModel copyWith({
     String? id,
@@ -56,6 +85,7 @@ class MachineModel {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'machineId': id,
       'name': name,
       'productionLine': productionLine,
       'modelNumber': modelNumber,
@@ -69,25 +99,96 @@ class MachineModel {
     };
   }
 
+  /// Converts this [MachineModel] to a Firestore-compatible document map.
+  ///
+  /// Serializes date fields as Firestore [Timestamp] instances and handles
+  /// server timestamps for creation and update timestamps.
+  Map<String, dynamic> toFirestoreMap({bool isUpdate = false}) {
+    final map = <String, dynamic>{
+      'id': id,
+      'machineId': id,
+      'name': name,
+      'productionLine': productionLine,
+      'modelNumber': modelNumber?.trim(),
+      'status': status,
+      'healthScore': healthScore,
+      'temperature': temperature,
+      'vibration': vibration,
+      'lastInspection': lastInspection != null
+          ? Timestamp.fromDate(lastInspection!)
+          : null,
+    };
+
+    if (!isUpdate) {
+      map['createdAt'] = createdAt != null
+          ? Timestamp.fromDate(createdAt!)
+          : FieldValue.serverTimestamp();
+    }
+
+    map['updatedAt'] = updatedAt != null
+        ? Timestamp.fromDate(updatedAt!)
+        : FieldValue.serverTimestamp();
+
+    return map;
+  }
+
   factory MachineModel.fromMap(Map<String, dynamic> map, [String? docId]) {
+    final resolvedId = _resolveId(map, docId);
+
     return MachineModel(
-      id: docId ?? map['id'] as String? ?? map['machineId'] as String? ?? '',
-      name: map['name'] as String? ?? '',
-      productionLine: map['productionLine'] as String? ?? '',
-      modelNumber: map['modelNumber'] as String?,
-      status: map['status'] as String? ?? '',
-      healthScore: (map['healthScore'] as num?)?.toDouble() ?? 0.0,
-      temperature: (map['temperature'] as num?)?.toDouble(),
-      vibration: (map['vibration'] as num?)?.toDouble(),
+      id: resolvedId,
+      name: map['name']?.toString() ?? '',
+      productionLine: map['productionLine']?.toString() ?? '',
+      modelNumber: map['modelNumber']?.toString(),
+      status: map['status']?.toString() ?? '',
+      healthScore: _parseDouble(map['healthScore']) ?? 0.0,
+      temperature: _parseDouble(map['temperature']),
+      vibration: _parseDouble(map['vibration']),
       lastInspection: _parseDateTime(map['lastInspection']),
       createdAt: _parseDateTime(map['createdAt']),
       updatedAt: _parseDateTime(map['updatedAt']),
     );
   }
 
+  /// Constructs a [MachineModel] from a Firestore [DocumentSnapshot].
+  factory MachineModel.fromFirestore(DocumentSnapshot snapshot) {
+    final data =
+        snapshot.data() as Map<String, dynamic>? ?? <String, dynamic>{};
+    return MachineModel.fromMap(data, snapshot.id);
+  }
+
+  static String _resolveId(Map<String, dynamic> map, [String? docId]) {
+    if (docId != null && docId.trim().isNotEmpty) {
+      return docId.trim();
+    }
+    final rawId = map['id'] ?? map['machineId'];
+    if (rawId != null) {
+      final str = rawId.toString().trim();
+      if (str.isNotEmpty) return str;
+    }
+    final fallback = map['machineId'] ?? map['id'];
+    if (fallback != null) {
+      final str = fallback.toString().trim();
+      if (str.isNotEmpty) return str;
+    }
+    return '';
+  }
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return null;
+      return double.tryParse(trimmed);
+    }
+    return null;
+  }
+
   static DateTime? _parseDateTime(dynamic value) {
     if (value == null) return null;
     if (value is DateTime) return value;
+    if (value is Timestamp) return value.toDate();
     if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
     if (value is String) return DateTime.tryParse(value);
     try {

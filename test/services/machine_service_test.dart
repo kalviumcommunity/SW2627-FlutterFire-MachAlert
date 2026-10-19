@@ -37,6 +37,14 @@ class FakeErrorDocumentReference extends Fake
   Future<void> delete() async {
     throw exception;
   }
+
+  @override
+  Stream<DocumentSnapshot<Map<String, dynamic>>> snapshots({
+    bool includeMetadataChanges = false,
+    ListenSource source = ListenSource.defaultSource,
+  }) {
+    return Stream.error(exception);
+  }
 }
 
 class FakeErrorCollectionReference extends Fake
@@ -54,6 +62,32 @@ class FakeErrorCollectionReference extends Fake
   Future<QuerySnapshot<Map<String, dynamic>>> get([GetOptions? options]) async {
     throw exception;
   }
+
+  @override
+  Query<Map<String, dynamic>> where(
+    Object field, {
+    Object? isEqualTo,
+    Object? isNotEqualTo,
+    Object? isLessThan,
+    Object? isLessThanOrEqualTo,
+    Object? isGreaterThan,
+    Object? isGreaterThanOrEqualTo,
+    Object? arrayContains,
+    Iterable<Object?>? arrayContainsAny,
+    Iterable<Object?>? whereIn,
+    Iterable<Object?>? whereNotIn,
+    bool? isNull,
+  }) {
+    return this;
+  }
+
+  @override
+  Stream<QuerySnapshot<Map<String, dynamic>>> snapshots({
+    bool includeMetadataChanges = false,
+    ListenSource source = ListenSource.defaultSource,
+  }) {
+    return Stream.error(exception);
+  }
 }
 
 class FakeErrorFirestore extends Fake implements FirebaseFirestore {
@@ -64,6 +98,15 @@ class FakeErrorFirestore extends Fake implements FirebaseFirestore {
   @override
   CollectionReference<Map<String, dynamic>> collection(String collectionPath) {
     return FakeErrorCollectionReference(exception);
+  }
+
+  @override
+  Future<T> runTransaction<T>(
+    TransactionHandler<T> transactionHandler, {
+    Duration timeout = const Duration(seconds: 30),
+    int maxAttempts = 5,
+  }) async {
+    throw exception;
   }
 }
 
@@ -312,6 +355,114 @@ void main() {
           ),
         );
       });
+
+      test('createMachineFromMap validates required fields and throws', () async {
+        // Missing / empty name
+        expect(
+          () => machineService.createMachineFromMap({
+            'productionLine': 'Line 1',
+            'status': 'Operational',
+          }),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-name',
+            ),
+          ),
+        );
+
+        // Missing / empty productionLine
+        expect(
+          () => machineService.createMachineFromMap({
+            'name': 'Valid Name',
+            'productionLine': '   ',
+            'status': 'Operational',
+          }),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-line',
+            ),
+          ),
+        );
+
+        // Invalid status
+        expect(
+          () => machineService.createMachineFromMap({
+            'name': 'Valid Name',
+            'productionLine': 'Line 1',
+            'status': 'NonExistentStatus',
+          }),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-status',
+            ),
+          ),
+        );
+      });
+
+      test('addMachine writes matching canonical id and machineId with timestamps', () async {
+        final machine = MachineModel(
+          id: 'MCH-CANONICAL-01',
+          name: 'Lathe Machine',
+          productionLine: 'Line 2',
+          status: 'Operational',
+          healthScore: 90.0,
+          createdAt: DateTime(2026, 10, 1),
+        );
+
+        await machineService.addMachine(machine);
+
+        final doc = await fakeFirestore
+            .collection('machines')
+            .doc('MCH-CANONICAL-01')
+            .get();
+        expect(doc.exists, isTrue);
+        final data = doc.data()!;
+        expect(data['id'], 'MCH-CANONICAL-01');
+        expect(data['machineId'], 'MCH-CANONICAL-01');
+        expect(data['createdAt'], isA<Timestamp>());
+        expect(data['updatedAt'], isNotNull);
+      });
+
+      test('addMachine throws already-exists and preserves document when duplicate ID is added', () async {
+        final initialMachine = MachineModel(
+          id: 'M-ORIGINAL',
+          name: 'Original Lathe',
+          productionLine: 'Line Alpha',
+          status: 'Operational',
+          healthScore: 95.0,
+        );
+        await machineService.addMachine(initialMachine);
+
+        final duplicateMachine = MachineModel(
+          id: 'M-ORIGINAL',
+          name: 'Overwriting Lathe',
+          productionLine: 'Line Beta',
+          status: 'Critical',
+          healthScore: 10.0,
+        );
+
+        await expectLater(
+          () => machineService.addMachine(duplicateMachine),
+          throwsA(
+            isA<MachineServiceException>()
+                .having((e) => e.code, 'code', 'already-exists')
+                .having((e) => e.message, 'message', contains('already exists')),
+          ),
+        );
+
+        final stored = await machineService.getMachineById('M-ORIGINAL');
+        expect(stored, isNotNull);
+        expect(stored!.name, 'Original Lathe');
+        expect(stored.productionLine, 'Line Alpha');
+        expect(stored.status, 'Operational');
+        expect(stored.healthScore, 95.0);
+      });
     });
 
     group('getMachineById & machineExists', () {
@@ -432,6 +583,53 @@ void main() {
         );
         expect(line1Critical, isEmpty);
       });
+
+      test('getMachinesByLine retrieves machines for specified line', () async {
+        final line1 = await machineService.getMachinesByLine('Line 1');
+        expect(line1.length, 2);
+        expect(line1.map((m) => m.id), containsAll(['M1', 'M2']));
+
+        final nonExistent = await machineService.getMachinesByLine('Line 99');
+        expect(nonExistent, isEmpty);
+      });
+
+      test('getMachinesByStatus retrieves machines with specified status', () async {
+        final criticals = await machineService.getMachinesByStatus('Critical');
+        expect(criticals.length, 1);
+        expect(criticals.first.id, 'M3');
+
+        final maintenance = await machineService.getMachinesByStatus(
+          'under maintenance',
+        );
+        expect(maintenance.length, 1);
+        expect(maintenance.first.id, 'M4');
+      });
+
+      test('getMachines throws on invalid status', () async {
+        expect(
+          () => machineService.getMachines(status: 'invalid_status'),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-status',
+            ),
+          ),
+        );
+      });
+
+      test('getMachineById throws invalid-id on empty or whitespace id', () {
+        expect(
+          () => machineService.getMachineById(''),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-id',
+            ),
+          ),
+        );
+      });
     });
 
     group('updateMachine & updateMachineStatus', () {
@@ -530,6 +728,220 @@ void main() {
           expect(doc.data()!['lastInspection'], isA<Timestamp>());
         },
       );
+
+      test('updateMachineModel updates mutable fields from MachineModel', () async {
+        final updatedModel = MachineModel(
+          id: 'MCH-UPD',
+          name: 'Upgraded Welding Unit',
+          productionLine: 'Line 3',
+          modelNumber: 'WeldPro-950X',
+          status: AppConstants.machineStatusWarning,
+          healthScore: 78.0,
+          temperature: 84.5,
+          vibration: 4.2,
+          lastInspection: DateTime(2026, 10, 18, 9, 0),
+        );
+
+        await machineService.updateMachineModel(updatedModel);
+
+        final doc = await fakeFirestore.collection('machines').doc('MCH-UPD').get();
+        final data = doc.data()!;
+        expect(data['name'], 'Upgraded Welding Unit');
+        expect(data['productionLine'], 'Line 3');
+        expect(data['modelNumber'], 'WeldPro-950X');
+        expect(data['status'], AppConstants.machineStatusWarning);
+        expect(data['healthScore'], 78.0);
+        expect(data['temperature'], 84.5);
+        expect(data['vibration'], 4.2);
+        expect(data['lastInspection'], isA<Timestamp>());
+        expect(data['updatedAt'], isNotNull);
+      });
+
+      test('updateMachine throws not-found when updating non-existent machine', () async {
+        expect(
+          () => machineService.updateMachine('NON-EXISTENT-ID', {'name': 'New Machine'}),
+          throwsA(
+            isA<MachineServiceException>()
+                .having((e) => e.code, 'code', 'not-found')
+                .having((e) => e.message, 'message', 'The requested machine was not found.'),
+          ),
+        );
+      });
+
+      test('updateMachine throws on empty name or empty production line', () async {
+        expect(
+          () => machineService.updateMachine('MCH-UPD', {'name': '   '}),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-name',
+            ),
+          ),
+        );
+
+        expect(
+          () => machineService.updateMachine('MCH-UPD', {'productionLine': ''}),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-line',
+            ),
+          ),
+        );
+      });
+
+      test('successful partial update updates only specified fields while preserving existing document data', () async {
+        final initialCreatedAt = Timestamp.fromDate(DateTime(2026, 9, 1));
+        await fakeFirestore.collection('machines').doc('MCH-PARTIAL').set({
+          'id': 'MCH-PARTIAL',
+          'machineId': 'MCH-PARTIAL',
+          'name': 'Original Name',
+          'productionLine': 'Line 1',
+          'status': 'Operational',
+          'healthScore': 95.0,
+          'createdAt': initialCreatedAt,
+          'updatedAt': initialCreatedAt,
+        });
+
+        // Partial update: only line and temperature
+        await machineService.updateMachine('MCH-PARTIAL', {
+          'productionLine': 'Line 3',
+          'temperature': 74.2,
+        });
+
+        final doc = await fakeFirestore.collection('machines').doc('MCH-PARTIAL').get();
+        final data = doc.data()!;
+        expect(data['name'], 'Original Name'); // Preserved
+        expect(data['productionLine'], 'Line 3'); // Updated
+        expect(data['temperature'], 74.2); // Added/Updated
+        expect(data['healthScore'], 95.0); // Preserved
+        expect(data['createdAt'], initialCreatedAt); // Preserved
+        expect(data['updatedAt'], isNotNull);
+      });
+
+      test('updateMachine throws invalid-argument for out-of-range or invalid numeric values', () async {
+        // Negative health score
+        expect(
+          () => machineService.updateMachine('MCH-UPD', {'healthScore': -1.0}),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-argument',
+            ),
+          ),
+        );
+
+        // Health score > 100
+        expect(
+          () => machineService.updateMachine('MCH-UPD', {'healthScore': 105.0}),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-argument',
+            ),
+          ),
+        );
+
+        // Health score non-numeric
+        expect(
+          () => machineService.updateMachine('MCH-UPD', {'healthScore': 'good'}),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-argument',
+            ),
+          ),
+        );
+
+        // Non-numeric temperature
+        expect(
+          () => machineService.updateMachine('MCH-UPD', {'temperature': 'boiling'}),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-argument',
+            ),
+          ),
+        );
+
+        // Non-numeric vibration
+        expect(
+          () => machineService.updateMachine('MCH-UPD', {'vibration': 'shaky'}),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-argument',
+            ),
+          ),
+        );
+      });
+
+      test('updateMachine throws invalid-status when updating status to unrecognized status', () async {
+        expect(
+          () => machineService.updateMachine('MCH-UPD', {'status': 'Exploded'}),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-status',
+            ),
+          ),
+        );
+      });
+
+      test('updateMachineModel throws not-found when updating non-existent machine', () async {
+        final missingMachine = MachineModel(
+          id: 'DOES-NOT-EXIST',
+          name: 'Ghost Machine',
+          productionLine: 'Line 1',
+          status: 'Operational',
+          healthScore: 85.0,
+        );
+
+        expect(
+          () => machineService.updateMachineModel(missingMachine),
+          throwsA(
+            isA<MachineServiceException>()
+                .having((e) => e.code, 'code', 'not-found')
+                .having((e) => e.message, 'message', 'The requested machine was not found.'),
+          ),
+        );
+      });
+
+      test('updateMachineStatus normalizes status casing and throws on invalid status', () async {
+        await machineService.updateMachineStatus('MCH-UPD', 'warning');
+        final machine = await machineService.getMachineById('MCH-UPD');
+        expect(machine!.status, 'Warning');
+
+        expect(
+          () => machineService.updateMachineStatus('MCH-UPD', 'invalid_status'),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-status',
+            ),
+          ),
+        );
+
+        expect(
+          () => machineService.updateMachineStatus('MCH-UPD', ''),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-status',
+            ),
+          ),
+        );
+      });
     });
 
     group('deleteMachine', () {
@@ -548,6 +960,38 @@ void main() {
         expect(await machineService.machineExists('MCH-DEL'), isFalse);
         final fetched = await machineService.getMachineById('MCH-DEL');
         expect(fetched, isNull);
+      });
+
+      test('deleting a non-existent machine is safe and completes without error', () async {
+        expect(await machineService.machineExists('MCH-GHOST'), isFalse);
+
+        await machineService.deleteMachine('MCH-GHOST');
+
+        expect(await machineService.machineExists('MCH-GHOST'), isFalse);
+      });
+
+      test('deleteMachine throws invalid-id for empty or whitespace id', () {
+        expect(
+          () => machineService.deleteMachine(''),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-id',
+            ),
+          ),
+        );
+
+        expect(
+          () => machineService.deleteMachine('   '),
+          throwsA(
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-id',
+            ),
+          ),
+        );
       });
     });
 
@@ -639,6 +1083,56 @@ void main() {
           await sub.cancel();
         },
       );
+
+      test('streamMachinesByLine emits filtered machines in real time', () async {
+        final stream = machineService.streamMachinesByLine('Line 2');
+        final emissions = <List<MachineModel>>[];
+        final sub = stream.listen(emissions.add);
+
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(emissions.last, isEmpty);
+
+        await machineService.addMachine(
+          MachineModel(
+            id: 'L2-STR',
+            name: 'Line 2 Press',
+            productionLine: 'Line 2',
+            status: 'Operational',
+            healthScore: 92,
+          ),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(emissions.last.length, 1);
+        expect(emissions.last.first.id, 'L2-STR');
+
+        await sub.cancel();
+      });
+
+      test('streamMachinesByStatus emits filtered machines in real time', () async {
+        final stream = machineService.streamMachinesByStatus('Critical');
+        final emissions = <List<MachineModel>>[];
+        final sub = stream.listen(emissions.add);
+
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(emissions.last, isEmpty);
+
+        await machineService.addMachine(
+          MachineModel(
+            id: 'CRIT-STR',
+            name: 'Critical Robot',
+            productionLine: 'Line 1',
+            status: 'Critical',
+            healthScore: 35,
+          ),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        expect(emissions.last.length, 1);
+        expect(emissions.last.first.id, 'CRIT-STR');
+
+        await sub.cancel();
+      });
     });
 
     group('Firestore Exception Handling', () {
@@ -668,6 +1162,82 @@ void main() {
           );
         },
       );
+
+      test('getMachines maps permission-denied FirebaseException to MachineServiceException', () async {
+        final errorFirestore = FakeErrorFirestore(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+            message: 'Query not allowed',
+          ),
+        );
+        final errorService = MachineService(firestore: errorFirestore);
+
+        expect(
+          () => errorService.getMachines(),
+          throwsA(
+            isA<MachineServiceException>()
+                .having((e) => e.code, 'code', 'permission-denied'),
+          ),
+        );
+      });
+
+      test('getMachines maps unavailable FirebaseException to MachineServiceException', () async {
+        final errorFirestore = FakeErrorFirestore(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'unavailable',
+            message: 'Network offline',
+          ),
+        );
+        final errorService = MachineService(firestore: errorFirestore);
+
+        expect(
+          () => errorService.getMachines(),
+          throwsA(
+            isA<MachineServiceException>()
+                .having((e) => e.code, 'code', 'unavailable'),
+          ),
+        );
+      });
+
+      test('streamMachine propagates permission-denied FirebaseException as MachineServiceException', () {
+        final errorFirestore = FakeErrorFirestore(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+            message: 'Read denied',
+          ),
+        );
+        final errorService = MachineService(firestore: errorFirestore);
+
+        expect(
+          errorService.streamMachine('MCH-ERR'),
+          emitsError(
+            isA<MachineServiceException>()
+                .having((e) => e.code, 'code', 'permission-denied'),
+          ),
+        );
+      });
+
+      test('streamMachines propagates unavailable FirebaseException as MachineServiceException', () {
+        final errorFirestore = FakeErrorFirestore(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'unavailable',
+            message: 'Backend down',
+          ),
+        );
+        final errorService = MachineService(firestore: errorFirestore);
+
+        expect(
+          errorService.streamMachines(),
+          emitsError(
+            isA<MachineServiceException>()
+                .having((e) => e.code, 'code', 'unavailable'),
+          ),
+        );
+      });
 
       test(
         'maps unavailable FirebaseException to MachineServiceException',
@@ -730,6 +1300,134 @@ void main() {
           );
         },
       );
+
+      test('addMachine maps permission-denied FirebaseException to MachineServiceException', () async {
+        final errorFirestore = FakeErrorFirestore(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+            message: 'Create denied',
+          ),
+        );
+        final errorService = MachineService(firestore: errorFirestore);
+
+        expect(
+          () => errorService.addMachine(
+            MachineModel(
+              id: 'MCH-DENIED',
+              name: 'Denied Machine',
+              productionLine: 'Line 1',
+              status: 'Operational',
+              healthScore: 90.0,
+            ),
+          ),
+          throwsA(
+            isA<MachineServiceException>()
+                .having((e) => e.code, 'code', 'permission-denied')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'You do not have permission to access or modify this machine.',
+                ),
+          ),
+        );
+      });
+
+      test('updateMachine maps permission-denied FirebaseException to MachineServiceException', () async {
+        final errorFirestore = FakeErrorFirestore(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+            message: 'Update denied',
+          ),
+        );
+        final errorService = MachineService(firestore: errorFirestore);
+
+        expect(
+          () => errorService.updateMachine('MCH-UPD', {'name': 'New Name'}),
+          throwsA(
+            isA<MachineServiceException>()
+                .having((e) => e.code, 'code', 'permission-denied')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'You do not have permission to access or modify this machine.',
+                ),
+          ),
+        );
+      });
+
+      test('deleteMachine maps permission-denied FirebaseException to MachineServiceException', () async {
+        final errorFirestore = FakeErrorFirestore(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+            message: 'Delete denied',
+          ),
+        );
+        final errorService = MachineService(firestore: errorFirestore);
+
+        expect(
+          () => errorService.deleteMachine('MCH-DEL'),
+          throwsA(
+            isA<MachineServiceException>()
+                .having((e) => e.code, 'code', 'permission-denied')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'You do not have permission to access or modify this machine.',
+                ),
+          ),
+        );
+      });
+
+      test('updateMachine maps unavailable FirebaseException to MachineServiceException', () async {
+        final errorFirestore = FakeErrorFirestore(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'unavailable',
+            message: 'Firestore down',
+          ),
+        );
+        final errorService = MachineService(firestore: errorFirestore);
+
+        expect(
+          () => errorService.updateMachine('MCH-UPD', {'name': 'New Name'}),
+          throwsA(
+            isA<MachineServiceException>()
+                .having((e) => e.code, 'code', 'unavailable')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  contains('network connection'),
+                ),
+          ),
+        );
+      });
+
+      test('deleteMachine maps unavailable FirebaseException to MachineServiceException', () async {
+        final errorFirestore = FakeErrorFirestore(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'unavailable',
+            message: 'Firestore down',
+          ),
+        );
+        final errorService = MachineService(firestore: errorFirestore);
+
+        expect(
+          () => errorService.deleteMachine('MCH-DEL'),
+          throwsA(
+            isA<MachineServiceException>()
+                .having((e) => e.code, 'code', 'unavailable')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  contains('network connection'),
+                ),
+          ),
+        );
+      });
 
       test('MachineServiceException equality and toString', () {
         final ex1 = MachineServiceException(code: 'not-found');

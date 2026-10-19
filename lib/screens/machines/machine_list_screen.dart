@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/machine_model.dart';
+import '../../providers/app_state_provider.dart';
+import '../../providers/machine_provider.dart';
+import '../../utils/app_constants.dart';
 import '../../utils/app_routes.dart';
 import '../../widgets/machine_list_tile.dart';
 
@@ -24,12 +28,36 @@ class _MachineListScreenState extends State<MachineListScreen> {
   String _searchQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        final provider = context.read<MachineProvider>();
+        if (!provider.hasActiveSubscription && provider.machines.isEmpty) {
+          provider.subscribeToMachines();
+        }
+      } catch (_) {}
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
-  List<MachineModel> get _filteredMachines {
+  bool _resolveCanManage(BuildContext context) {
+    try {
+      final appState = Provider.of<AppStateProvider>(context, listen: false);
+      final role = appState.user?.role.trim().toLowerCase();
+      return role == AppConstants.roleManager;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  List<MachineModel> _getFilteredStaticMachines() {
     final query = _searchQuery.trim().toLowerCase();
 
     if (query.isEmpty) {
@@ -52,19 +80,43 @@ class _MachineListScreenState extends State<MachineListScreen> {
     );
   }
 
-  void _openMachine(MachineModel machine) {
+  void _openMachine(MachineModel machine, bool canManage) {
+    try {
+      context.read<MachineProvider>().selectMachine(machine);
+    } catch (_) {}
+
     Navigator.of(context).push<void>(
-      AppRoutes.machineDetails(machine, canManage: widget.canManage),
+      AppRoutes.machineDetails(machine, canManage: canManage),
     );
   }
 
-  void _openAddMachine() {
+  void _openAddMachine(bool canManage) {
+    if (!canManage || !_resolveCanManage(context)) return;
     Navigator.of(context).push<void>(AppRoutes.addMachine());
   }
 
   @override
   Widget build(BuildContext context) {
-    final machines = _filteredMachines;
+    final canManage = _resolveCanManage(context);
+
+    MachineProvider? machineProvider;
+    try {
+      machineProvider = context.watch<MachineProvider>();
+    } catch (_) {}
+
+    final bool useStaticList = widget.machines.isNotEmpty || machineProvider == null;
+
+    final List<MachineModel> machines = useStaticList
+        ? _getFilteredStaticMachines()
+        : machineProvider.filteredMachines;
+
+    final bool isLoading = !useStaticList &&
+        machineProvider.isLoading &&
+        machineProvider.machines.isEmpty;
+
+    final bool hasError = !useStaticList &&
+        machineProvider.hasError &&
+        machineProvider.machines.isEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -73,9 +125,9 @@ class _MachineListScreenState extends State<MachineListScreen> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
-      floatingActionButton: widget.canManage
+      floatingActionButton: canManage
           ? FloatingActionButton.extended(
-              onPressed: _openAddMachine,
+              onPressed: () => _openAddMachine(canManage),
               icon: const Icon(Icons.add),
               label: const Text('Add Machine'),
             )
@@ -94,6 +146,9 @@ class _MachineListScreenState extends State<MachineListScreen> {
                         setState(() {
                           _searchQuery = value;
                         });
+                        if (!useStaticList) {
+                          machineProvider?.setSearchQuery(value);
+                        }
                       },
                       decoration: InputDecoration(
                         hintText: 'Search machines...',
@@ -119,22 +174,38 @@ class _MachineListScreenState extends State<MachineListScreen> {
             ),
 
             Expanded(
-              child: machines.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: machines.length,
-                      itemBuilder: (context, index) {
-                        final machine = machines[index];
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : hasError
+                      ? _buildErrorState(
+                          machineProvider.errorMessage,
+                          machineProvider.fetchMachines,
+                        )
+                      : machines.isEmpty
+                          ? _buildEmptyState(canManage)
+                          : RefreshIndicator(
+                              onRefresh: () async {
+                                if (machineProvider != null) {
+                                  try {
+                                    await machineProvider.fetchMachines();
+                                  } catch (_) {}
+                                }
+                              },
+                              child: ListView.builder(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                itemCount: machines.length,
+                                itemBuilder: (context, index) {
+                                  final machine = machines[index];
 
-                        return MachineListTile(
-                          machine: machine,
-                          onTap: () {
-                            _openMachine(machine);
-                          },
-                        );
-                      },
-                    ),
+                                  return MachineListTile(
+                                    machine: machine,
+                                    onTap: () {
+                                      _openMachine(machine, canManage);
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
             ),
           ],
         ),
@@ -142,7 +213,37 @@ class _MachineListScreenState extends State<MachineListScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildErrorState(String? errorMessage, Future<void> Function() onRetry) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              errorMessage ?? 'Failed to load machines',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => onRetry(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool canManage) {
     final isSearching = _searchQuery.trim().isNotEmpty;
 
     return Center(
@@ -171,7 +272,7 @@ class _MachineListScreenState extends State<MachineListScreen> {
             Text(
               isSearching
                   ? 'Try another machine name, ID, or status.'
-                  : widget.canManage
+                  : canManage
                   ? 'Add your first machine using the Add Machine button.'
                   : 'Machines will appear here once they are added.',
               textAlign: TextAlign.center,

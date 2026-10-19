@@ -1,8 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mach_alert/models/fault_model.dart';
 import 'package:mach_alert/models/machine_model.dart';
 import 'package:mach_alert/models/maintenance_model.dart';
 import 'package:mach_alert/models/user_model.dart';
+import 'package:mach_alert/utils/app_constants.dart';
 
 void main() {
   group('UserModel Tests', () {
@@ -236,7 +239,20 @@ void main() {
       expect(machine.lastInspection, inspectionDate);
     });
 
-    test('toMap returns expected values', () {
+    test('canonical machineId getter matches id', () {
+      final machine = MachineModel(
+        id: 'MCH-LINE1-CNC01',
+        name: 'CNC Machine',
+        productionLine: 'Line 1',
+        status: 'Operational',
+        healthScore: 100,
+      );
+
+      expect(machine.machineId, 'MCH-LINE1-CNC01');
+      expect(machine.machineId, machine.id);
+    });
+
+    test('toMap returns expected values with both id and machineId', () {
       final machine = MachineModel(
         id: 'm1',
         name: 'CNC Milling Machine',
@@ -253,6 +269,7 @@ void main() {
 
       final map = machine.toMap();
       expect(map['id'], 'm1');
+      expect(map['machineId'], 'm1');
       expect(map['name'], 'CNC Milling Machine');
       expect(map['productionLine'], 'Line 1');
       expect(map['modelNumber'], 'Haas VF-2SS');
@@ -263,6 +280,87 @@ void main() {
       expect(map['lastInspection'], inspectionDate.toIso8601String());
       expect(map['createdAt'], createdDate.toIso8601String());
       expect(map['updatedAt'], updatedDate.toIso8601String());
+    });
+
+    test('toFirestoreMap generates expected map with Timestamps for creation', () {
+      final machine = MachineModel(
+        id: 'm1',
+        name: 'CNC Milling Machine',
+        productionLine: 'Line 1',
+        modelNumber: 'Haas VF-2SS',
+        status: 'Operational',
+        healthScore: 95.0,
+        temperature: 65.5,
+        vibration: 2.1,
+        lastInspection: inspectionDate,
+        createdAt: createdDate,
+        updatedAt: updatedDate,
+      );
+
+      final firestoreMap = machine.toFirestoreMap(isUpdate: false);
+      expect(firestoreMap['id'], 'm1');
+      expect(firestoreMap['machineId'], 'm1');
+      expect(firestoreMap['name'], 'CNC Milling Machine');
+      expect(firestoreMap['productionLine'], 'Line 1');
+      expect(firestoreMap['modelNumber'], 'Haas VF-2SS');
+      expect(firestoreMap['status'], 'Operational');
+      expect(firestoreMap['healthScore'], 95.0);
+      expect(firestoreMap['temperature'], 65.5);
+      expect(firestoreMap['vibration'], 2.1);
+      expect(firestoreMap['lastInspection'], Timestamp.fromDate(inspectionDate));
+      expect(firestoreMap['createdAt'], Timestamp.fromDate(createdDate));
+      expect(firestoreMap['updatedAt'], Timestamp.fromDate(updatedDate));
+    });
+
+    test('toFirestoreMap with isUpdate: true omits createdAt and uses FieldValue fallbacks', () {
+      final machine = MachineModel(
+        id: 'm2',
+        name: 'Drill Press',
+        productionLine: 'Line 2',
+        status: 'Warning',
+        healthScore: 75.0,
+      );
+
+      final updateMap = machine.toFirestoreMap(isUpdate: true);
+      expect(updateMap['id'], 'm2');
+      expect(updateMap['machineId'], 'm2');
+      expect(updateMap.containsKey('createdAt'), isFalse);
+      expect(updateMap['updatedAt'], isA<FieldValue>());
+      expect(updateMap['lastInspection'], isNull);
+    });
+
+    test('fromFirestore reconstructs model correctly from DocumentSnapshot', () async {
+      final fakeDb = FakeFirebaseFirestore();
+      await fakeDb.collection('machines').doc('MCH-SNAP-01').set({
+        'id': 'MCH-SNAP-01',
+        'machineId': 'MCH-SNAP-01',
+        'name': 'Stamping Press',
+        'productionLine': 'Line 2',
+        'modelNumber': 'Komatsu 200T',
+        'status': 'Operational',
+        'healthScore': 89,
+        'temperature': 71.2,
+        'vibration': 3.4,
+        'lastInspection': Timestamp.fromDate(inspectionDate),
+        'createdAt': Timestamp.fromDate(createdDate),
+        'updatedAt': Timestamp.fromDate(updatedDate),
+      });
+
+      final snapshot = await fakeDb.collection('machines').doc('MCH-SNAP-01').get();
+      final machine = MachineModel.fromFirestore(snapshot);
+
+      expect(machine.id, 'MCH-SNAP-01');
+      expect(machine.machineId, 'MCH-SNAP-01');
+      expect(machine.name, 'Stamping Press');
+      expect(machine.productionLine, 'Line 2');
+      expect(machine.modelNumber, 'Komatsu 200T');
+      expect(machine.status, 'Operational');
+      expect(machine.healthScore, 89.0);
+      expect(machine.temperature, 71.2);
+      expect(machine.vibration, 3.4);
+      expect(machine.lastInspection, inspectionDate);
+      expect(machine.createdAt, createdDate);
+      expect(machine.updatedAt, updatedDate);
     });
 
     test('fromMap recreates model correctly with type casting for numbers', () {
@@ -287,6 +385,150 @@ void main() {
       expect(machine.temperature, 65.0);
       expect(machine.vibration, 2.1);
       expect(machine.lastInspection, inspectionDate);
+    });
+
+    test('fromMap parses numeric strings and handles invalid numbers safely', () {
+      final map = {
+        'id': 'm3',
+        'name': 'Lathe Machine',
+        'productionLine': 'Line 3',
+        'status': 'Critical',
+        'healthScore': '85.5',
+        'temperature': '92.3',
+        'vibration': ' 14.7 ',
+      };
+
+      final machine = MachineModel.fromMap(map);
+      expect(machine.healthScore, 85.5);
+      expect(machine.temperature, 92.3);
+      expect(machine.vibration, 14.7);
+
+      final invalidMap = {
+        'id': 'm4',
+        'name': 'Faulty Machine',
+        'productionLine': 'Line 1',
+        'status': 'Warning',
+        'healthScore': 'not-a-number',
+        'temperature': 'invalid_temp',
+        'vibration': '',
+      };
+
+      final safeMachine = MachineModel.fromMap(invalidMap);
+      expect(safeMachine.healthScore, 0.0);
+      expect(safeMachine.temperature, isNull);
+      expect(safeMachine.vibration, isNull);
+    });
+
+    test('fromMap parses Firestore Timestamp, epoch millis, and handles invalid dates safely', () {
+      final map = {
+        'id': 'm5',
+        'name': 'Packaging Arm',
+        'productionLine': 'Line 1',
+        'status': 'Operational',
+        'healthScore': 100,
+        'lastInspection': Timestamp.fromDate(inspectionDate),
+        'createdAt': createdDate.millisecondsSinceEpoch,
+        'updatedAt': 'not-a-valid-date',
+      };
+
+      final machine = MachineModel.fromMap(map);
+      expect(machine.lastInspection, inspectionDate);
+      expect(machine.createdAt?.millisecondsSinceEpoch, createdDate.millisecondsSinceEpoch);
+      expect(machine.updatedAt, isNull);
+    });
+
+    test('fromMap resolves id with correct precedence (docId > id > machineId)', () {
+      // 1. docId takes precedence over map keys
+      final m1 = MachineModel.fromMap({'id': 'map_id', 'machineId': 'map_machine_id'}, 'doc_override');
+      expect(m1.id, 'doc_override');
+
+      // 2. map['id'] takes precedence over map['machineId']
+      final m2 = MachineModel.fromMap({'id': 'map_id', 'machineId': 'map_machine_id'});
+      expect(m2.id, 'map_id');
+
+      // 3. map['machineId'] is used when map['id'] is absent or empty
+      final m3 = MachineModel.fromMap({'id': '  ', 'machineId': 'map_machine_id'});
+      expect(m3.id, 'map_machine_id');
+
+      // 4. Default to empty string when neither is present
+      final m4 = MachineModel.fromMap({});
+      expect(m4.id, '');
+    });
+
+    test('round-trip serialization toMap and fromMap preserves model data', () {
+      final machine = MachineModel(
+        id: 'MCH-RT-01',
+        name: 'Injection Molder',
+        productionLine: 'Line 2',
+        modelNumber: 'Engel Victory',
+        status: 'Operational',
+        healthScore: 97.0,
+        temperature: 55.4,
+        vibration: 1.8,
+        lastInspection: DateTime(2026, 10, 10, 14, 30),
+        createdAt: DateTime(2026, 10, 1, 8, 0),
+        updatedAt: DateTime(2026, 10, 12, 10, 0),
+      );
+
+      final map = machine.toMap();
+      final recreated = MachineModel.fromMap(map);
+
+      expect(recreated, equals(machine));
+      expect(recreated.machineId, machine.machineId);
+    });
+
+    test('status helper getters and hasRecognizedStatus behave correctly', () {
+      final operational = MachineModel(
+        id: '1',
+        name: 'M1',
+        productionLine: 'L1',
+        status: AppConstants.machineStatusOperational,
+        healthScore: 100,
+      );
+      expect(operational.isOperational, isTrue);
+      expect(operational.isWarning, isFalse);
+      expect(operational.isCritical, isFalse);
+      expect(operational.isUnderMaintenance, isFalse);
+      expect(operational.hasRecognizedStatus, isTrue);
+
+      final warning = MachineModel(
+        id: '2',
+        name: 'M2',
+        productionLine: 'L1',
+        status: 'warning',
+        healthScore: 70,
+      );
+      expect(warning.isWarning, isTrue);
+      expect(warning.hasRecognizedStatus, isTrue);
+
+      final critical = MachineModel(
+        id: '3',
+        name: 'M3',
+        productionLine: 'L1',
+        status: 'Critical',
+        healthScore: 40,
+      );
+      expect(critical.isCritical, isTrue);
+      expect(critical.hasRecognizedStatus, isTrue);
+
+      final maintenance = MachineModel(
+        id: '4',
+        name: 'M4',
+        productionLine: 'L1',
+        status: 'Under Maintenance',
+        healthScore: 60,
+      );
+      expect(maintenance.isUnderMaintenance, isTrue);
+      expect(maintenance.hasRecognizedStatus, isTrue);
+
+      final unknown = MachineModel(
+        id: '5',
+        name: 'M5',
+        productionLine: 'L1',
+        status: 'Decommissioned',
+        healthScore: 0,
+      );
+      expect(unknown.hasRecognizedStatus, isFalse);
     });
 
     test('copyWith works as expected', () {

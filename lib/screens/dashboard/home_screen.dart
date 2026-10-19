@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/app_state_provider.dart';
+import '../../providers/machine_provider.dart';
 import '../../services/auth_service.dart';
 import '../../utils/app_constants.dart';
 import '../../utils/app_routes.dart';
@@ -156,6 +157,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildManagerDashboard() {
+    MachineProvider? machineProvider;
+    try {
+      machineProvider = context.watch<MachineProvider>();
+    } catch (_) {}
+
+    final machineCount = (machineProvider != null && !machineProvider.isLoading)
+        ? machineProvider.machines.length.toString()
+        : '--';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -163,17 +173,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 12),
 
-        const Row(
+        Row(
           children: [
             Expanded(
               child: DashboardStatCard(
                 label: 'Machines',
-                value: '--',
+                value: machineCount,
                 icon: Icons.precision_manufacturing,
               ),
             ),
-            SizedBox(width: 12),
-            Expanded(
+            const SizedBox(width: 12),
+            const Expanded(
               child: DashboardStatCard(
                 label: 'Active Faults',
                 value: '--',

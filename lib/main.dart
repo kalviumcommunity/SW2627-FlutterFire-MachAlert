@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'providers/app_state_provider.dart';
+import 'providers/machine_provider.dart';
 import 'screens/auth/auth_gate.dart';
 import 'services/auth_service.dart';
+import 'services/machine_service.dart';
 import 'services/user_service.dart';
 
 void main() async {
@@ -19,13 +21,17 @@ void main() async {
 class MachAlertApp extends StatelessWidget {
   final AuthService? authService;
   final UserService? userService;
+  final MachineService? machineService;
   final AppStateProvider? appStateProvider;
+  final MachineProvider? machineProvider;
 
   const MachAlertApp({
     super.key,
     this.authService,
     this.userService,
+    this.machineService,
     this.appStateProvider,
+    this.machineProvider,
   });
 
   @override
@@ -40,6 +46,10 @@ class MachAlertApp extends StatelessWidget {
           Provider<UserService>.value(value: userService!)
         else
           Provider<UserService>(create: (_) => UserService()),
+        if (machineService != null)
+          Provider<MachineService>.value(value: machineService!)
+        else
+          Provider<MachineService>(create: (_) => MachineService()),
         if (appStateProvider != null)
           ChangeNotifierProvider<AppStateProvider>.value(
             value: appStateProvider!,
@@ -55,6 +65,17 @@ class MachAlertApp extends StatelessWidget {
                 authService: authService,
                 userService: userService,
               );
+            },
+          ),
+        if (machineProvider != null)
+          ChangeNotifierProvider<MachineProvider>.value(
+            value: machineProvider!,
+          )
+        else
+          ChangeNotifierProvider<MachineProvider>(
+            create: (context) {
+              final machineService = context.read<MachineService>();
+              return MachineProvider(machineService: machineService);
             },
           ),
       ],
