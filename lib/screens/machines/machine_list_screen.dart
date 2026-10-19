@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/machine_model.dart';
 import '../../widgets/machine_list_tile.dart';
+import '../../utils/app_routes.dart';
 
 class MachineListScreen extends StatefulWidget {
   final List<MachineModel> machines;
@@ -47,11 +48,7 @@ class _MachineListScreenState extends State<MachineListScreen> {
   }
 
   void _openMachine(MachineModel machine) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${machine.id} details will be available on Day 9.'),
-      ),
-    );
+    Navigator.of(context).push<void>(AppRoutes.machineDetails(machine));
   }
 
   @override
