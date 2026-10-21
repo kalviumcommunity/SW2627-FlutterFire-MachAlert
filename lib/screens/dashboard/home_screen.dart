@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/machine_model.dart';
 import '../../providers/app_state_provider.dart';
 import '../../providers/machine_provider.dart';
 import '../../services/auth_service.dart';
@@ -54,20 +55,27 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openMachines() {
-  final role = context
-      .read<AppStateProvider>()
-      .user
-      ?.role
-      .trim()
-      .toLowerCase();
+    final role = context
+        .read<AppStateProvider>()
+        .user
+        ?.role
+        .trim()
+        .toLowerCase();
 
-  Navigator.of(context).push<void>(
-    AppRoutes.machines(
-      canManage:
-          role == AppConstants.roleManager,
-    ),
-  );
-}
+    Navigator.of(context).push<void>(
+      AppRoutes.machines(canManage: role == AppConstants.roleManager),
+    );
+  }
+
+  void _openFaultReporting() {
+    List<MachineModel> machines = const [];
+
+    try {
+      machines = context.read<MachineProvider>().machines;
+    } catch (_) {}
+
+    Navigator.of(context).push<void>(AppRoutes.reportFault(machines: machines));
+  }
 
   void _showComingSoon(String feature) {
     ScaffoldMessenger.of(
@@ -158,11 +166,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildManagerDashboard() {
     MachineProvider? machineProvider;
+
     try {
       machineProvider = context.watch<MachineProvider>();
     } catch (_) {}
 
-    final machineCount = (machineProvider != null && !machineProvider.isLoading)
+    final machineCount = machineProvider != null && !machineProvider.isLoading
         ? machineProvider.machines.length.toString()
         : '--';
 
@@ -182,7 +191,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: Icons.precision_manufacturing,
               ),
             ),
+
             const SizedBox(width: 12),
+
             const Expanded(
               child: DashboardStatCard(
                 label: 'Active Faults',
@@ -243,7 +254,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: Icons.assignment,
               ),
             ),
+
             SizedBox(width: 12),
+
             Expanded(
               child: DashboardStatCard(
                 label: 'Active Faults',
@@ -306,9 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Report Fault',
           subtitle: 'Report a machine problem immediately',
           icon: Icons.report_problem,
-          onTap: () {
-            _showComingSoon('Fault reporting');
-          },
+          onTap: _openFaultReporting,
         ),
 
         DashboardActionCard(
