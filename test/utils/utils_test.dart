@@ -162,5 +162,137 @@ void main() {
         expect(Validators.number('-10.2'), isNull);
       });
     });
+
+    group('faultType validator', () {
+      test('returns error when value is null, empty, or whitespace', () {
+        expect(Validators.faultType(null), 'Fault type is required');
+        expect(Validators.faultType(''), 'Fault type is required');
+        expect(Validators.faultType('   '), 'Fault type is required');
+      });
+
+      test('returns error when type is not in AppConstants.faultTypes (e.g. Sensor, Software, Cosmic)', () {
+        final invalidTypes = [
+          'Sensor',
+          'Software',
+          'SoftwareBug',
+          'Cosmic',
+          'Nuclear',
+          'Hardware',
+          'Network',
+        ];
+        for (final invalid in invalidTypes) {
+          expect(
+            Validators.faultType(invalid),
+            'Please select a valid fault type',
+            reason: 'Type "$invalid" should be rejected as not in AppConstants.faultTypes',
+          );
+        }
+      });
+
+      test('returns null for each valid type in AppConstants.faultTypes', () {
+        expect(Validators.faultType(AppConstants.faultTypeMechanical), isNull);
+        expect(Validators.faultType(AppConstants.faultTypeElectrical), isNull);
+        expect(Validators.faultType(AppConstants.faultTypeHydraulic), isNull);
+        expect(Validators.faultType(AppConstants.faultTypeThermal), isNull);
+        expect(Validators.faultType(AppConstants.faultTypePneumatic), isNull);
+        expect(Validators.faultType(AppConstants.faultTypeOther), isNull);
+
+        for (final type in AppConstants.faultTypes) {
+          expect(Validators.faultType(type), isNull);
+          expect(Validators.faultType(type.toLowerCase()), isNull);
+          expect(Validators.faultType('  $type  '), isNull);
+        }
+      });
+    });
+
+    group('faultSeverity validator', () {
+      test('returns error when value is null, empty, or whitespace', () {
+        expect(Validators.faultSeverity(null), 'Severity is required');
+        expect(Validators.faultSeverity(''), 'Severity is required');
+        expect(Validators.faultSeverity('   '), 'Severity is required');
+      });
+
+      test('returns error when severity is not in AppConstants.severities', () {
+        expect(
+          Validators.faultSeverity('Catastrophic'),
+          'Please select a valid severity level',
+        );
+        expect(
+          Validators.faultSeverity('Minimal'),
+          'Please select a valid severity level',
+        );
+      });
+
+      test('returns null when severity is valid', () {
+        for (final severity in AppConstants.severities) {
+          expect(Validators.faultSeverity(severity), isNull);
+          expect(Validators.faultSeverity(severity.toLowerCase()), isNull);
+        }
+      });
+    });
+
+    group('faultStatus validator', () {
+      test('returns error when value is null, empty, or whitespace', () {
+        expect(Validators.faultStatus(null), 'Status is required');
+        expect(Validators.faultStatus(''), 'Status is required');
+        expect(Validators.faultStatus('   '), 'Status is required');
+      });
+
+      test('returns error when status is not in AppConstants.faultStatuses', () {
+        expect(
+          Validators.faultStatus('Archived'),
+          'Please select a valid fault status',
+        );
+        expect(
+          Validators.faultStatus('Pending'),
+          'Please select a valid fault status',
+        );
+      });
+
+      test('returns null when status is valid', () {
+        for (final status in AppConstants.faultStatuses) {
+          expect(Validators.faultStatus(status), isNull);
+          expect(Validators.faultStatus(status.toLowerCase()), isNull);
+        }
+      });
+    });
+
+    group('faultDescription validator', () {
+      test('returns error when value is null, empty, or whitespace', () {
+        expect(Validators.faultDescription(null), 'Fault description is required');
+        expect(Validators.faultDescription(''), 'Fault description is required');
+        expect(Validators.faultDescription('   '), 'Fault description is required');
+      });
+
+      test('returns error when description is shorter than default minLength (10)', () {
+        expect(
+          Validators.faultDescription('Broken'),
+          'Description must be at least 10 characters',
+        );
+        expect(
+          Validators.faultDescription('123456789'),
+          'Description must be at least 10 characters',
+        );
+      });
+
+      test('returns null when description is at least default minLength', () {
+        expect(Validators.faultDescription('1234567890'), isNull);
+        expect(
+          Validators.faultDescription('Motor overheating on Line 1 spindle'),
+          isNull,
+        );
+      });
+
+      test('supports custom minLength parameter', () {
+        expect(
+          Validators.faultDescription('Short text', minLength: 15),
+          'Description must be at least 15 characters',
+        );
+        expect(
+          Validators.faultDescription('Short text with enough length', minLength: 15),
+          isNull,
+        );
+      });
+    });
   });
 }

@@ -1,3 +1,5 @@
+import 'app_constants.dart';
+
 class Validators {
   Validators._();
 
@@ -64,5 +66,62 @@ class Validators {
   /// Helper boolean check for valid password.
   static bool isValidPassword(String? value, {int minLength = 6}) {
     return password(value, minLength: minLength) == null;
+  }
+
+  /// Validates that a fault type is selected and is one of [AppConstants.faultTypes].
+  static String? faultType(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Fault type is required';
+    }
+    final trimmed = value.trim();
+    final isValid = AppConstants.faultTypes.any(
+      (type) => type.toLowerCase() == trimmed.toLowerCase(),
+    );
+    if (!isValid) {
+      return 'Please select a valid fault type';
+    }
+    return null;
+  }
+
+  /// Validates that a severity is selected and is one of [AppConstants.severities].
+  static String? faultSeverity(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Severity is required';
+    }
+    final trimmed = value.trim();
+    final isValid = AppConstants.severities.any(
+      (sev) => sev.toLowerCase() == trimmed.toLowerCase(),
+    );
+    if (!isValid) {
+      return 'Please select a valid severity level';
+    }
+    return null;
+  }
+
+  /// Validates that a fault status is valid according to [AppConstants.faultStatuses].
+  static String? faultStatus(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Status is required';
+    }
+    final trimmed = value.trim();
+    final isValid = AppConstants.faultStatuses.any(
+      (status) => status.toLowerCase() == trimmed.toLowerCase(),
+    );
+    if (!isValid) {
+      return 'Please select a valid fault status';
+    }
+    return null;
+  }
+
+  /// Validates that a fault description is non-empty and meets [minLength].
+  static String? faultDescription(String? value, {int minLength = 10}) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Fault description is required';
+    }
+    final trimmed = value.trim();
+    if (trimmed.length < minLength) {
+      return 'Description must be at least $minLength characters';
+    }
+    return null;
   }
 }

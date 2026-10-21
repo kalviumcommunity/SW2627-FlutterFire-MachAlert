@@ -550,7 +550,7 @@ void main() {
   group('FaultModel Tests', () {
     final now = DateTime(2026, 10, 7, 11, 15);
 
-    test('can be created successfully with default status', () {
+    test('can be created successfully with default status and faultId alias', () {
       final fault = FaultModel(
         id: 'f100',
         machineId: 'm1',
@@ -564,6 +564,7 @@ void main() {
       );
 
       expect(fault.id, 'f100');
+      expect(fault.faultId, 'f100');
       expect(fault.machineId, 'm1');
       expect(fault.machineName, 'CNC 01');
       expect(fault.status, 'Open');
@@ -587,6 +588,7 @@ void main() {
 
       final map = fault.toMap();
       expect(map['id'], 'f100');
+      expect(map['faultId'], 'f100');
       expect(map['machineId'], 'm1');
       expect(map['machineName'], 'CNC 01');
       expect(map['type'], 'Thermal');
@@ -616,6 +618,7 @@ void main() {
 
       final fault = FaultModel.fromMap(map);
       expect(fault.id, 'f100');
+      expect(fault.faultId, 'f100');
       expect(fault.machineId, 'm1');
       expect(fault.machineName, 'CNC 01');
       expect(fault.type, 'Thermal');
@@ -636,6 +639,422 @@ void main() {
       final updated = fault.copyWith(status: 'Resolved');
       expect(updated.status, 'Resolved');
       expect(updated.id, 'f100');
+    });
+
+    group('Document ID fallback precedence', () {
+      test('supplied docId takes priority over map faultId and id', () {
+        final fault = FaultModel.fromMap(
+          {'faultId': 'map_fault_id', 'id': 'map_id'},
+          'param_doc_id',
+        );
+        expect(fault.id, 'param_doc_id');
+        expect(fault.faultId, 'param_doc_id');
+      });
+
+      test('map faultId takes precedence over id when docId is omitted', () {
+        final fault = FaultModel.fromMap(
+          {'faultId': 'map_fault_id', 'id': 'map_id'},
+        );
+        expect(fault.id, 'map_fault_id');
+      });
+
+      test('map id is used when faultId is missing or empty', () {
+        final fault = FaultModel.fromMap(
+          {'id': 'map_id'},
+        );
+        expect(fault.id, 'map_id');
+
+        final faultWithEmptyFaultId = FaultModel.fromMap(
+          {'faultId': '', 'id': 'map_id_2'},
+        );
+        expect(faultWithEmptyFaultId.id, 'map_id_2');
+      });
+
+      test('empty string fallback when no id is present', () {
+        final fault = FaultModel.fromMap({});
+        expect(fault.id, '');
+      });
+    });
+
+    group('Convenience getters and recognized values', () {
+      test('recognized value getters identify all valid AppConstants.faultTypes', () {
+        for (final validCategory in AppConstants.faultTypes) {
+          final fault = FaultModel(
+            id: 'f1',
+            machineId: 'm1',
+            type: validCategory,
+            severity: AppConstants.severityCritical,
+            description: 'Issue detected',
+            reportedBy: 'u1',
+            status: AppConstants.faultStatusOpen,
+          );
+
+          expect(
+            fault.hasRecognizedType,
+            isTrue,
+            reason: 'Category "$validCategory" must be recognized as in AppConstants.faultTypes',
+          );
+        }
+      });
+
+      test('unsupported types like Sensor and Software return false for hasRecognizedType', () {
+        final unsupportedTypes = [
+          'Sensor',
+          'Software',
+          'SoftwareBug',
+          'AlienInvasion',
+          'Hardware',
+          'Network',
+        ];
+        for (final unsupp in unsupportedTypes) {
+          final fault = FaultModel(
+            id: 'f2',
+            machineId: 'm1',
+            type: unsupp,
+            severity: 'Low',
+            description: 'Issue description',
+            reportedBy: 'u1',
+            status: 'Open',
+          );
+
+          expect(
+            fault.hasRecognizedType,
+            isFalse,
+            reason: 'Type "$unsupp" must not be recognized since it is not in AppConstants.faultTypes',
+          );
+        }
+      });
+
+      test('recognized value getters identify valid constants', () {
+        final validFault = FaultModel(
+          id: 'f1',
+          machineId: 'm1',
+          type: AppConstants.faultTypeElectrical,
+          severity: AppConstants.severityCritical,
+          description: 'Arc flash detected',
+          reportedBy: 'u1',
+          status: AppConstants.faultStatusOpen,
+        );
+
+        expect(validFault.hasRecognizedType, isTrue);
+        expect(validFault.hasRecognizedSeverity, isTrue);
+        expect(validFault.hasRecognizedStatus, isTrue);
+        expect(validFault.isCriticalSeverity, isTrue);
+        expect(validFault.isOpen, isTrue);
+        expect(validFault.isInProgress, isFalse);
+        expect(validFault.isResolved, isFalse);
+      });
+
+      test('unrecognized values return false for recognition getters', () {
+        final weirdFault = FaultModel(
+          id: 'f2',
+          machineId: 'm1',
+          type: 'AlienInvasion',
+          severity: 'SuperExtreme',
+          description: 'Strange behavior',
+          reportedBy: 'u1',
+          status: 'UnknownStatus',
+        );
+
+        expect(weirdFault.hasRecognizedType, isFalse);
+        expect(weirdFault.hasRecognizedSeverity, isFalse);
+        expect(weirdFault.hasRecognizedStatus, isFalse);
+        expect(weirdFault.isCriticalSeverity, isFalse);
+        expect(weirdFault.isOpen, isFalse);
+        expect(weirdFault.isInProgress, isFalse);
+        expect(weirdFault.isResolved, isFalse);
+      });
+
+      test('status and severity helpers identify In Progress, Resolved, and High', () {
+        final inProgressFault = FaultModel(
+          id: 'f3',
+          machineId: 'm1',
+          type: 'Mechanical',
+          severity: 'High',
+          description: 'Bearing play',
+          reportedBy: 'u1',
+          status: 'In Progress',
+        );
+
+        expect(inProgressFault.isInProgress, isTrue);
+        expect(inProgressFault.isOpen, isFalse);
+        expect(inProgressFault.isResolved, isFalse);
+        expect(inProgressFault.isHighSeverity, isTrue);
+        expect(inProgressFault.isCriticalSeverity, isFalse);
+
+        final resolvedFault = inProgressFault.copyWith(status: 'Resolved');
+        expect(resolvedFault.isResolved, isTrue);
+        expect(resolvedFault.isInProgress, isFalse);
+      });
+    });
+
+    group('validate() and isValid functionality', () {
+      test('valid model passes validation with zero errors', () {
+        final validFault = FaultModel(
+          id: 'f1',
+          machineId: 'MCH-01',
+          type: 'Mechanical',
+          severity: 'Low',
+          description: 'Minor vibration on motor mount',
+          reportedBy: 'u100',
+          status: 'Open',
+        );
+
+        expect(validFault.validate(), isEmpty);
+        expect(validFault.isValid, isTrue);
+      });
+
+      test('collects validation errors for empty required fields', () {
+        final emptyFault = FaultModel(
+          id: 'f2',
+          machineId: '   ',
+          type: '',
+          severity: ' ',
+          description: '',
+          reportedBy: '',
+          status: ' ',
+        );
+
+        final errors = emptyFault.validate();
+        expect(errors, contains('Machine ID is required.'));
+        expect(errors, contains('Fault type is required.'));
+        expect(errors, contains('Severity is required.'));
+        expect(errors, contains('Description is required.'));
+        expect(errors, contains('Reporter UID is required.'));
+        expect(errors, contains('Status is required.'));
+        expect(emptyFault.isValid, isFalse);
+      });
+
+      test('collects validation errors for invalid enum values', () {
+        final invalidEnumFault = FaultModel(
+          id: 'f3',
+          machineId: 'MCH-01',
+          type: 'Nuclear',
+          severity: 'Catastrophic',
+          description: 'Reactor leaking',
+          reportedBy: 'u100',
+          status: 'Archived',
+        );
+
+        final errors = invalidEnumFault.validate();
+        expect(errors.any((e) => e.contains('Fault type "Nuclear" is invalid')), isTrue);
+        expect(errors.any((e) => e.contains('Severity "Catastrophic" is invalid')), isTrue);
+        expect(errors.any((e) => e.contains('Status "Archived" is invalid')), isTrue);
+        expect(invalidEnumFault.isValid, isFalse);
+      });
+
+      test('rejects unsupported types like Sensor and Software in validate()', () {
+        final sensorFault = FaultModel(
+          id: 'f_sensor',
+          machineId: 'MCH-01',
+          type: 'Sensor',
+          severity: 'Low',
+          description: 'Sensor failure on temperature probe',
+          reportedBy: 'u100',
+          status: 'Open',
+        );
+        expect(sensorFault.isValid, isFalse);
+        expect(
+          sensorFault.validate(),
+          contains(
+            'Fault type "Sensor" is invalid. Allowed types: Mechanical, Electrical, Hydraulic, Thermal, Pneumatic, Other.',
+          ),
+        );
+
+        final softwareFault = FaultModel(
+          id: 'f_software',
+          machineId: 'MCH-01',
+          type: 'Software',
+          severity: 'Medium',
+          description: 'PLC firmware threw error code 404',
+          reportedBy: 'u100',
+          status: 'Open',
+        );
+        expect(softwareFault.isValid, isFalse);
+        expect(
+          softwareFault.validate(),
+          contains(
+            'Fault type "Software" is invalid. Allowed types: Mechanical, Electrical, Hydraulic, Thermal, Pneumatic, Other.',
+          ),
+        );
+      });
+    });
+
+    group('Date and Timestamp parsing from various sources', () {
+      test('parses Cloud Firestore Timestamp instance', () {
+        final timestamp = Timestamp.fromDate(now);
+        final fault = FaultModel.fromMap({
+          'machineId': 'm1',
+          'type': 'Thermal',
+          'severity': 'High',
+          'description': 'Overheating',
+          'reportedBy': 'u1',
+          'createdAt': timestamp,
+        });
+
+        expect(fault.createdAt, now);
+      });
+
+      test('parses epoch millisecond integer', () {
+        final epochMs = now.millisecondsSinceEpoch;
+        final fault = FaultModel.fromMap({
+          'machineId': 'm1',
+          'type': 'Thermal',
+          'severity': 'High',
+          'description': 'Overheating',
+          'reportedBy': 'u1',
+          'createdAt': epochMs,
+        });
+
+        expect(fault.createdAt, now);
+      });
+
+      test('handles null and invalid date values gracefully', () {
+        final faultNull = FaultModel.fromMap({
+          'machineId': 'm1',
+          'createdAt': null,
+        });
+        expect(faultNull.createdAt, isNull);
+
+        final faultInvalid = FaultModel.fromMap({
+          'machineId': 'm1',
+          'createdAt': 'not-a-valid-date-string',
+        });
+        expect(faultInvalid.createdAt, isNull);
+      });
+    });
+
+    group('toFirestoreMap behavior', () {
+      test('creates map with Timestamp when createdAt is present on create', () {
+        final fault = FaultModel(
+          id: 'f10',
+          machineId: 'm1',
+          machineName: 'CNC',
+          type: 'Thermal',
+          severity: 'High',
+          description: 'Spindle heat',
+          reportedBy: 'u1',
+          createdAt: now,
+        );
+
+        final firestoreMap = fault.toFirestoreMap(isUpdate: false);
+        expect(firestoreMap['id'], 'f10');
+        expect(firestoreMap['faultId'], 'f10');
+        expect(firestoreMap['machineId'], 'm1');
+        expect(firestoreMap['createdAt'], isA<Timestamp>());
+        expect((firestoreMap['createdAt'] as Timestamp).toDate(), now);
+      });
+
+      test('creates map with FieldValue.serverTimestamp when createdAt is null on create', () {
+        final fault = FaultModel(
+          id: 'f11',
+          machineId: 'm1',
+          type: 'Thermal',
+          severity: 'High',
+          description: 'Spindle heat',
+          reportedBy: 'u1',
+          createdAt: null,
+        );
+
+        final firestoreMap = fault.toFirestoreMap(isUpdate: false);
+        expect(firestoreMap['createdAt'], isA<FieldValue>());
+      });
+
+      test('omits createdAt on update to prevent overwriting original creation time', () {
+        final fault = FaultModel(
+          id: 'f12',
+          machineId: 'm1',
+          machineName: 'Milling Station',
+          type: 'Hydraulic',
+          severity: 'High',
+          description: 'Updated description',
+          reportedBy: 'u1',
+          reportedByName: 'Jane Doe',
+          status: 'In Progress',
+          imageUrl: 'https://example.com/leak.jpg',
+          createdAt: now,
+        );
+
+        final updateMap = fault.toFirestoreMap(isUpdate: true);
+        expect(updateMap.containsKey('createdAt'), isFalse);
+        expect(updateMap['id'], 'f12');
+        expect(updateMap['faultId'], 'f12');
+        expect(updateMap['machineId'], 'm1');
+        expect(updateMap['machineName'], 'Milling Station');
+        expect(updateMap['type'], 'Hydraulic');
+        expect(updateMap['severity'], 'High');
+        expect(updateMap['description'], 'Updated description');
+        expect(updateMap['reportedBy'], 'u1');
+        expect(updateMap['reportedByName'], 'Jane Doe');
+        expect(updateMap['status'], 'In Progress');
+        expect(updateMap['imageUrl'], 'https://example.com/leak.jpg');
+      });
+    });
+
+    group('Equality, hashCode, and toString', () {
+      test('equal instances have identical hashCode and evaluate as equal', () {
+        final fault1 = FaultModel(
+          id: 'f1',
+          machineId: 'm1',
+          type: 'Thermal',
+          severity: 'High',
+          description: 'Heat',
+          reportedBy: 'u1',
+          createdAt: now,
+        );
+        final fault2 = FaultModel(
+          id: 'f1',
+          machineId: 'm1',
+          type: 'Thermal',
+          severity: 'High',
+          description: 'Heat',
+          reportedBy: 'u1',
+          createdAt: now,
+        );
+
+        expect(fault1, equals(fault2));
+        expect(fault1.hashCode, equals(fault2.hashCode));
+        expect(fault1.toString(), contains('FaultModel('));
+        expect(fault1.toString(), contains('machineId: m1'));
+      });
+
+      test('instances with same moment in different timezones evaluate as equal', () {
+        final localDate = DateTime(2026, 10, 7, 11, 15);
+        final utcDate = localDate.toUtc();
+
+        final fault1 = FaultModel(
+          id: 'f1',
+          machineId: 'm1',
+          type: 'Thermal',
+          severity: 'High',
+          description: 'Heat',
+          reportedBy: 'u1',
+          createdAt: localDate,
+        );
+        final fault2 = fault1.copyWith(createdAt: utcDate);
+
+        expect(fault1, equals(fault2));
+        expect(fault1.hashCode, equals(fault2.hashCode));
+      });
+
+      test('different instances evaluate as not equal', () {
+        final base = FaultModel(
+          id: 'f1',
+          machineId: 'm1',
+          type: 'Thermal',
+          severity: 'High',
+          description: 'Heat',
+          reportedBy: 'u1',
+        );
+
+        expect(base == base.copyWith(id: 'f2'), isFalse);
+        expect(base == base.copyWith(machineId: 'm2'), isFalse);
+        expect(base == base.copyWith(type: 'Electrical'), isFalse);
+        expect(base == base.copyWith(severity: 'Low'), isFalse);
+        expect(base == base.copyWith(description: 'Other'), isFalse);
+        expect(base == base.copyWith(reportedBy: 'u2'), isFalse);
+        expect(base == base.copyWith(status: 'Resolved'), isFalse);
+      });
     });
   });
 
