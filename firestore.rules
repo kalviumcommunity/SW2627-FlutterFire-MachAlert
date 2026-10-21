@@ -27,6 +27,48 @@ service cloud.firestore {
       return isAuthenticated() && getUserData().role == 'operator';
     }
 
+    // Helper function: Validate allowed fault types matching AppConstants.faultTypes
+    function isValidFaultType(type) {
+      return type in [
+        'Mechanical',
+        'Electrical',
+        'Hydraulic',
+        'Thermal',
+        'Pneumatic',
+        'Other'
+      ];
+    }
+
+    // Helper function: Validate allowed fault severities matching AppConstants.severities
+    function isValidFaultSeverity(severity) {
+      return severity in ['Low', 'Medium', 'High', 'Critical'];
+    }
+
+    // Helper function: Validate allowed fault statuses matching AppConstants.faultStatuses
+    function isValidFaultStatus(status) {
+      return status in ['Open', 'In Progress', 'Resolved'];
+    }
+
+    // Helper function: Validate fault document creation schema and constraints
+    function isValidFaultCreate() {
+      let data = request.resource.data;
+      return isAuthenticated()
+        // Required fields must exist, be strings, and satisfy constraints
+        && ('machineId' in data) && data.machineId is string && data.machineId.size() > 0
+        && ('type' in data) && data.type is string && isValidFaultType(data.type)
+        && ('severity' in data) && data.severity is string && isValidFaultSeverity(data.severity)
+        && ('description' in data) && data.description is string && data.description.size() > 0
+        && ('reportedBy' in data) && data.reportedBy is string && data.reportedBy == request.auth.uid
+        && ('status' in data) && data.status is string && isValidFaultStatus(data.status)
+        // Optional fields validate if present
+        && (!('machineName' in data) || data.machineName == null || data.machineName is string)
+        && (!('reportedByName' in data) || data.reportedByName == null || data.reportedByName is string)
+        && (!('imageUrl' in data) || data.imageUrl == null || data.imageUrl is string)
+        && (!('id' in data) || data.id == null || data.id is string)
+        && (!('faultId' in data) || data.faultId == null || data.faultId is string)
+        && (!('createdAt' in data) || data.createdAt == null || data.createdAt is timestamp || data.createdAt is string);
+    }
+
     // --- USERS COLLECTION ---
     // Canonical path: /users/{userId} where userId == FirebaseAuth.currentUser.uid
     match /users/{userId} {
@@ -76,10 +118,25 @@ service cloud.firestore {
     }
 
     // --- FAULTS COLLECTION ---
+    // Path: /faults/{faultId}
+    // Schema:
+    //   - machineId: string (required, non-empty) - target machine reference ID
+    //   - type: string (required) - category: Mechanical, Electrical, Hydraulic, Thermal, Pneumatic, Other
+    //   - severity: string (required) - Low, Medium, High, Critical
+    //   - description: string (required, non-empty) - symptom narrative
+    //   - reportedBy: string (required) - Firebase Auth UID of reporting user (must match auth.uid)
+    //   - status: string (required) - Open, In Progress, Resolved
+    //   - machineName: string (optional) - denormalized machine name
+    //   - reportedByName: string (optional) - denormalized reporting user name
+    //   - imageUrl: string (optional) - Firebase Storage image download URL
+    //   - createdAt: timestamp | string (optional) - incident report timestamp
+    //   - id / faultId: string (optional) - document ID alias
     match /faults/{faultId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (isTechnician() || isManager() || resource.data.reportedBy == request.auth.uid);
+      allow create: if isValidFaultCreate();
+      allow update: if isAuthenticated()
+        && request.resource.data.reportedBy == resource.data.reportedBy
+        && (isTechnician() || isManager() || resource.data.reportedBy == request.auth.uid);
       allow delete: if isManager();
     }
 
