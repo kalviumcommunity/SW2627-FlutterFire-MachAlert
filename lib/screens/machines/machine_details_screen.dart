@@ -65,9 +65,7 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   Future<void> _openEditMachine(bool canManage) async {
     if (!canManage || !_resolveCanManage(context)) return;
 
-    await Navigator.of(context).push<void>(
-      AppRoutes.editMachine(machine),
-    );
+    await Navigator.of(context).push<void>(AppRoutes.editMachine(machine));
 
     if (mounted) {
       setState(() {});
@@ -148,9 +146,7 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
           : error.toString();
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to delete machine: $message'),
-        ),
+        SnackBar(content: Text('Failed to delete machine: $message')),
       );
     }
   }
@@ -169,7 +165,8 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
           if (canManage)
             PopupMenuButton<String>(
               tooltip: 'Manage machine',
-              onSelected: (action) => _handleManagementAction(action, canManage),
+              onSelected: (action) =>
+                  _handleManagementAction(action, canManage),
               itemBuilder: (context) {
                 return const [
                   PopupMenuItem<String>(
@@ -448,6 +445,21 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
         const SizedBox(height: 24),
 
         _buildRecentLogsPreview(),
+
+        const SizedBox(height: 24),
+
+        FilledButton.icon(
+          onPressed: () {
+            Navigator.of(context).push<void>(
+              AppRoutes.reportFault(
+                machines: [machine],
+                initialMachine: machine,
+              ),
+            );
+          },
+          icon: const Icon(Icons.report_problem_outlined),
+          label: const Text('Report Fault'),
+        ),
       ],
     );
   }

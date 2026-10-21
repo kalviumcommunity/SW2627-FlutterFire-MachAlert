@@ -6,6 +6,7 @@ import '../screens/dashboard/home_screen.dart';
 import '../screens/machines/machine_details_screen.dart';
 import '../screens/machines/machine_form_screen.dart';
 import '../screens/machines/machine_list_screen.dart';
+import '../screens/faults/fault_reporting_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -52,4 +53,15 @@ class AppRoutes {
       builder: (_) => MachineFormScreen(machine: machine, onSave: onSave),
     );
   }
+  static Route<void> reportFault({
+  List<MachineModel> machines = const [],
+  MachineModel? initialMachine,
+}) {
+  return MaterialPageRoute<void>(
+    builder: (_) => FaultReportingScreen(
+      machines: machines,
+      initialMachine: initialMachine,
+    ),
+  );
+}
 }
