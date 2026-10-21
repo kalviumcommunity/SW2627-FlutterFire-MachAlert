@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/machine_model.dart';
+import '../../providers/app_state_provider.dart';
+import '../../providers/machine_provider.dart';
+import '../../services/machine_service.dart';
+import '../../utils/app_constants.dart';
 import '../../utils/app_routes.dart';
 
 class MachineDetailsScreen extends StatefulWidget {
@@ -19,26 +24,61 @@ class MachineDetailsScreen extends StatefulWidget {
 
 class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   int _selectedTab = 0;
+  MachineModel? _localMachine;
 
-  MachineModel get machine => widget.machine;
+  MachineModel get machine {
+    try {
+      final provider = Provider.of<MachineProvider>(context, listen: false);
+      if (provider.selectedMachine?.id == widget.machine.id) {
+        return provider.selectedMachine!;
+      }
+      final match = provider.getMachineById(widget.machine.id);
+      if (match != null) return match;
+    } catch (_) {}
+    return _localMachine ?? widget.machine;
+  }
 
-  void _handleManagementAction(String action) {
+  bool _resolveCanManage(BuildContext context) {
+    try {
+      final appState = Provider.of<AppStateProvider>(context, listen: false);
+      final role = appState.user?.role.trim().toLowerCase();
+      return role == AppConstants.roleManager;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _handleManagementAction(String action, bool canManage) {
+    if (!canManage || !_resolveCanManage(context)) return;
+
     switch (action) {
       case 'edit':
-        _openEditMachine();
+        _openEditMachine(canManage);
         break;
 
       case 'delete':
-        _showDeleteConfirmation();
+        _showDeleteConfirmation(canManage);
         break;
     }
   }
 
-  void _openEditMachine() {
-    Navigator.of(context).push<void>(AppRoutes.editMachine(machine));
+  Future<void> _openEditMachine(bool canManage) async {
+    if (!canManage || !_resolveCanManage(context)) return;
+
+    await Navigator.of(context).push<void>(
+      AppRoutes.editMachine(machine),
+    );
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
-  Future<void> _showDeleteConfirmation() async {
+  Future<void> _showDeleteConfirmation(bool canManage) async {
+    if (!canManage || !_resolveCanManage(context)) return;
+
+    final currentMachine = machine;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -46,7 +86,7 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
           title: const Text('Delete Machine?'),
           content: Text(
             'Are you sure you want to delete '
-            '${machine.id} - ${machine.name}?',
+            '${currentMachine.id} - ${currentMachine.name}?',
           ),
           actions: [
             TextButton(
@@ -70,17 +110,55 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Delete operation will be connected during CRUD integration.',
+    try {
+      MachineProvider? provider;
+      try {
+        provider = Provider.of<MachineProvider>(context, listen: false);
+      } catch (_) {}
+
+      if (provider != null) {
+        await provider.deleteMachine(currentMachine.id);
+      } else {
+        MachineService? service;
+        try {
+          service = Provider.of<MachineService>(context, listen: false);
+        } catch (_) {}
+        service ??= MachineService();
+        await service.deleteMachine(currentMachine.id);
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Machine ${currentMachine.id} deleted successfully.'),
         ),
-      ),
-    );
+      );
+
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      final message = error is MachineServiceException
+          ? error.message
+          : error.toString();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete machine: $message'),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final canManage = _resolveCanManage(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -88,10 +166,10 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
-          if (widget.canManage)
+          if (canManage)
             PopupMenuButton<String>(
               tooltip: 'Manage machine',
-              onSelected: _handleManagementAction,
+              onSelected: (action) => _handleManagementAction(action, canManage),
               itemBuilder: (context) {
                 return const [
                   PopupMenuItem<String>(

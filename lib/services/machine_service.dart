@@ -24,15 +24,16 @@ class MachineServiceException implements Exception {
   factory MachineServiceException.fromFirebaseException(
     FirebaseException exception,
   ) {
+    final normalizedCode = exception.code.toLowerCase().replaceAll('_', '-');
     return MachineServiceException(
-      code: exception.code,
-      message: messageForErrorCode(exception.code),
+      code: normalizedCode,
+      message: messageForErrorCode(normalizedCode),
     );
   }
 
   /// Maps Firestore and validation error codes to safe, user-readable messages.
   static String messageForErrorCode(String code) {
-    switch (code) {
+    switch (code.toLowerCase().replaceAll('_', '-')) {
       case 'permission-denied':
         return 'You do not have permission to access or modify this machine.';
       case 'not-found':
@@ -208,7 +209,16 @@ class MachineService {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      await docRef.set(data);
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        if (snapshot.exists) {
+          throw MachineServiceException(
+            code: 'already-exists',
+            message: 'Machine with ID "$validId" already exists.',
+          );
+        }
+        transaction.set(docRef, data);
+      });
     } on FirebaseException catch (e) {
       throw MachineServiceException.fromFirebaseException(e);
     } catch (e) {
@@ -329,6 +339,14 @@ class MachineService {
     String? status,
   }) => getMachines(productionLine: productionLine, status: status);
 
+  /// Retrieves machines belonging to a specific [productionLine].
+  Future<List<MachineModel>> getMachinesByLine(String productionLine) =>
+      getMachines(productionLine: productionLine);
+
+  /// Retrieves machines filtered by operational [status].
+  Future<List<MachineModel>> getMachinesByStatus(String status) =>
+      getMachines(status: status);
+
   /// Updates arbitrary machine fields for `machines/{machineId}`.
   ///
   /// Validates [machineId] and checks that [fields] is not empty.
@@ -366,6 +384,42 @@ class MachineService {
         );
       }
 
+      if (updates.containsKey('modelNumber') && updates['modelNumber'] is String) {
+        updates['modelNumber'] = (updates['modelNumber'] as String).trim();
+      }
+
+      if (updates.containsKey('healthScore')) {
+        final score = updates['healthScore'];
+        if (score != null) {
+          if (score is! num || score < 0 || score > 100 || score.isNaN) {
+            throw MachineServiceException(
+              code: 'invalid-argument',
+              message: 'Health score must be a number between 0 and 100.',
+            );
+          }
+        }
+      }
+
+      if (updates.containsKey('temperature')) {
+        final temp = updates['temperature'];
+        if (temp != null && (temp is! num || temp.isNaN)) {
+          throw MachineServiceException(
+            code: 'invalid-argument',
+            message: 'Temperature must be a valid number.',
+          );
+        }
+      }
+
+      if (updates.containsKey('vibration')) {
+        final vib = updates['vibration'];
+        if (vib != null && (vib is! num || vib.isNaN)) {
+          throw MachineServiceException(
+            code: 'invalid-argument',
+            message: 'Vibration must be a valid number.',
+          );
+        }
+      }
+
       if (updates.containsKey('lastInspection') &&
           updates['lastInspection'] is DateTime) {
         updates['lastInspection'] = Timestamp.fromDate(
@@ -393,6 +447,32 @@ class MachineService {
   Future<void> updateMachineStatus(String machineId, String newStatus) async {
     final validStatus = validateStatus(newStatus);
     await updateMachine(machineId, {'status': validStatus});
+  }
+
+  /// Updates mutable fields of an existing machine using a [MachineModel] instance.
+  ///
+  /// Updates `name`, `productionLine`, `modelNumber`, `status`, `healthScore`,
+  /// `temperature`, `vibration`, and `lastInspection`.
+  /// Automatically updates `updatedAt` to server timestamp.
+  ///
+  /// Throws [MachineServiceException] if inputs are invalid, document is not found,
+  /// or user lacks modification permissions.
+  Future<void> updateMachineModel(MachineModel machine) async {
+    final fields = <String, dynamic>{
+      'name': machine.name,
+      'productionLine': machine.productionLine,
+      'modelNumber': machine.modelNumber?.trim(),
+      'status': machine.status,
+      'healthScore': machine.healthScore,
+      'temperature': machine.temperature,
+      'vibration': machine.vibration,
+    };
+
+    if (machine.lastInspection != null) {
+      fields['lastInspection'] = machine.lastInspection;
+    }
+
+    await updateMachine(machine.id, fields);
   }
 
   /// Deletes a machine document from `machines/{machineId}`.
@@ -441,12 +521,23 @@ class MachineService {
           if (error is FirebaseException) {
             throw MachineServiceException.fromFirebaseException(error);
           }
+          if (error is MachineServiceException) {
+            throw error;
+          }
           throw MachineServiceException(
             code: 'unknown',
             message: 'Stream error: $error',
           );
         });
   }
+
+  /// Streams machines belonging to a specific [productionLine].
+  Stream<List<MachineModel>> streamMachinesByLine(String productionLine) =>
+      streamMachines(productionLine: productionLine);
+
+  /// Streams machines filtered by operational [status].
+  Stream<List<MachineModel>> streamMachinesByStatus(String status) =>
+      streamMachines(status: status);
 
   /// Streams real-time updates for a single machine at `machines/{machineId}`.
   ///
@@ -464,6 +555,9 @@ class MachineService {
         .handleError((Object error) {
           if (error is FirebaseException) {
             throw MachineServiceException.fromFirebaseException(error);
+          }
+          if (error is MachineServiceException) {
+            throw error;
           }
           throw MachineServiceException(
             code: 'unknown',

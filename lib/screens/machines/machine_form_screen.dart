@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/machine_model.dart';
+import '../../providers/app_state_provider.dart';
+import '../../providers/machine_provider.dart';
+import '../../services/machine_service.dart';
 import '../../utils/app_constants.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_text_field.dart';
@@ -82,18 +86,28 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
   }
 
   Future<void> _submit() async {
-    final valid = _formKey.currentState?.validate() ?? false;
+    if (_isSaving) {
+      return;
+    }
 
+    final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) {
       return;
     }
 
-    if (widget.onSave == null) {
+    try {
+      final appState = Provider.of<AppStateProvider>(context, listen: false);
+      final role = appState.user?.role.trim().toLowerCase();
+      if (role != AppConstants.roleManager) {
+        setState(() {
+          _errorMessage = 'You do not have permission to modify machines.';
+        });
+        return;
+      }
+    } catch (_) {
       setState(() {
-        _errorMessage =
-            'Machine saving will be connected during CRUD integration.';
+        _errorMessage = 'You do not have permission to modify machines.';
       });
-
       return;
     }
 
@@ -105,27 +119,64 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
     final existing = widget.machine;
 
     final machine = MachineModel(
-      id: _idController.text.trim(),
+      id: widget.isEditing ? existing!.id : _idController.text.trim(),
       name: _nameController.text.trim(),
       productionLine: _lineController.text.trim(),
       modelNumber: _modelController.text.trim().isEmpty
           ? null
           : _modelController.text.trim(),
       status: _status,
-      healthScore: double.tryParse(_healthController.text.trim()) ?? 100,
-      temperature: _optionalDouble(_temperatureController.text),
-      vibration: _optionalDouble(_vibrationController.text),
+      healthScore: double.tryParse(_healthController.text.trim()) ?? 100.0,
+      temperature: _optionalDouble(_temperatureController.text) ?? 0.0,
+      vibration: _optionalDouble(_vibrationController.text) ?? 0.0,
       lastInspection: existing?.lastInspection,
       createdAt: existing?.createdAt,
       updatedAt: DateTime.now(),
     );
 
     try {
-      await widget.onSave!(machine);
+      if (widget.onSave != null) {
+        await widget.onSave!(machine);
+      } else {
+        MachineProvider? provider;
+        try {
+          provider = Provider.of<MachineProvider>(context, listen: false);
+        } catch (_) {}
+
+        if (provider != null) {
+          if (widget.isEditing) {
+            await provider.updateMachine(machine);
+          } else {
+            await provider.addMachine(machine);
+          }
+        } else {
+          MachineService? service;
+          try {
+            service = Provider.of<MachineService>(context, listen: false);
+          } catch (_) {}
+          service ??= MachineService();
+
+          if (widget.isEditing) {
+            await service.updateMachineModel(machine);
+          } else {
+            await service.addMachine(machine);
+          }
+        }
+      }
 
       if (!mounted) {
         return;
       }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.isEditing
+                ? 'Machine updated successfully.'
+                : 'Machine added successfully.',
+          ),
+        ),
+      );
 
       Navigator.of(context).pop(machine);
     } catch (error) {
@@ -133,8 +184,12 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
         return;
       }
 
+      final message = error is MachineServiceException
+          ? error.message
+          : error.toString();
+
       setState(() {
-        _errorMessage = error.toString();
+        _errorMessage = message;
       });
     } finally {
       if (mounted) {
@@ -220,6 +275,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                 AppTextField(
                   label: 'Machine ID',
                   controller: _idController,
+                  enabled: !widget.isEditing,
                   validator: (value) => _requiredValidator(value, 'Machine ID'),
                 ),
 
