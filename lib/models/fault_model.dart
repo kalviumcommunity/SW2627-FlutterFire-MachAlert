@@ -49,8 +49,7 @@ class FaultModel {
 
   /// Helper getters for operational statuses.
   bool get isOpen =>
-      status.trim().toLowerCase() ==
-      AppConstants.faultStatusOpen.toLowerCase();
+      status.trim().toLowerCase() == AppConstants.faultStatusOpen.toLowerCase();
 
   bool get isInProgress =>
       status.trim().toLowerCase() ==
@@ -66,8 +65,7 @@ class FaultModel {
       AppConstants.severityCritical.toLowerCase();
 
   bool get isHighSeverity =>
-      severity.trim().toLowerCase() ==
-      AppConstants.severityHigh.toLowerCase();
+      severity.trim().toLowerCase() == AppConstants.severityHigh.toLowerCase();
 
   /// Validates the current fault model instance.
   ///

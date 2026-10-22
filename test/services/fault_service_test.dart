@@ -196,7 +196,9 @@ void main() {
         plugin: 'cloud_firestore',
         code: 'PERMISSION_DENIED',
       );
-      final exception = FaultServiceException.fromFirebaseException(fbException);
+      final exception = FaultServiceException.fromFirebaseException(
+        fbException,
+      );
       expect(exception.code, 'permission-denied');
       expect(
         exception.message,
@@ -244,7 +246,8 @@ void main() {
         machineName: 'CNC Milling Machine 01',
         type: AppConstants.faultTypeThermal,
         severity: AppConstants.severityHigh,
-        description: 'Spindle temperature is exceeding safe operational threshold.',
+        description:
+            'Spindle temperature is exceeding safe operational threshold.',
         reportedBy: 'caller_supplied_uid_to_ignore',
         reportedByName: 'Operator John',
       );
@@ -299,122 +302,140 @@ void main() {
       expect(data['reportedBy'], isNot('attacker_or_spoofed_uid'));
     });
 
-    test('sets default fault status to Open when status is omitted or empty', () async {
-      final fault = FaultModel(
-        id: '',
-        machineId: 'mock-conveyor-03',
-        type: AppConstants.faultTypeElectrical,
-        severity: AppConstants.severityLow,
-        description: 'Sensor indicator light is intermittently flickering.',
-        reportedBy: 'temp',
-        status: '',
-      );
+    test(
+      'sets default fault status to Open when status is omitted or empty',
+      () async {
+        final fault = FaultModel(
+          id: '',
+          machineId: 'mock-conveyor-03',
+          type: AppConstants.faultTypeElectrical,
+          severity: AppConstants.severityLow,
+          description: 'Sensor indicator light is intermittently flickering.',
+          reportedBy: 'temp',
+          status: '',
+        );
 
-      final docId = await faultService.addFault(fault);
+        final docId = await faultService.addFault(fault);
 
-      final docSnapshot = await fakeFirestore
-          .collection(AppConstants.faultsCollection)
-          .doc(docId)
-          .get();
+        final docSnapshot = await fakeFirestore
+            .collection(AppConstants.faultsCollection)
+            .doc(docId)
+            .get();
 
-      expect(docSnapshot.data()!['status'], AppConstants.faultStatusOpen);
-    });
+        expect(docSnapshot.data()!['status'], AppConstants.faultStatusOpen);
+      },
+    );
 
-    test('accepts explicit recognized status such as In Progress if provided', () async {
-      final fault = FaultModel(
-        id: '',
-        machineId: 'mock-conveyor-03',
-        type: AppConstants.faultTypeElectrical,
-        severity: AppConstants.severityLow,
-        description: 'Sensor indicator light is intermittently flickering.',
-        reportedBy: 'temp',
-        status: AppConstants.faultStatusInProgress,
-      );
+    test(
+      'accepts explicit recognized status such as In Progress if provided',
+      () async {
+        final fault = FaultModel(
+          id: '',
+          machineId: 'mock-conveyor-03',
+          type: AppConstants.faultTypeElectrical,
+          severity: AppConstants.severityLow,
+          description: 'Sensor indicator light is intermittently flickering.',
+          reportedBy: 'temp',
+          status: AppConstants.faultStatusInProgress,
+        );
 
-      final docId = await faultService.addFault(fault);
+        final docId = await faultService.addFault(fault);
 
-      final docSnapshot = await fakeFirestore
-          .collection(AppConstants.faultsCollection)
-          .doc(docId)
-          .get();
+        final docSnapshot = await fakeFirestore
+            .collection(AppConstants.faultsCollection)
+            .doc(docId)
+            .get();
 
-      expect(docSnapshot.data()!['status'], AppConstants.faultStatusInProgress);
-    });
+        expect(
+          docSnapshot.data()!['status'],
+          AppConstants.faultStatusInProgress,
+        );
+      },
+    );
 
-    test('creation timestamp and server timestamp are handled correctly', () async {
-      final customTime = DateTime.utc(2026, 10, 20, 15, 30);
-      final faultWithCustomTime = FaultModel(
-        id: '',
-        machineId: 'mock-cnc-01',
-        type: AppConstants.faultTypeOther,
-        severity: AppConstants.severityLow,
-        description: 'Lubrication level inspection required soon.',
-        reportedBy: 'temp',
-        createdAt: customTime,
-      );
+    test(
+      'creation timestamp and server timestamp are handled correctly',
+      () async {
+        final customTime = DateTime.utc(2026, 10, 20, 15, 30);
+        final faultWithCustomTime = FaultModel(
+          id: '',
+          machineId: 'mock-cnc-01',
+          type: AppConstants.faultTypeOther,
+          severity: AppConstants.severityLow,
+          description: 'Lubrication level inspection required soon.',
+          reportedBy: 'temp',
+          createdAt: customTime,
+        );
 
-      final docIdWithCustomTime = await faultService.addFault(faultWithCustomTime);
-      final snapshotWithCustomTime = await fakeFirestore
-          .collection(AppConstants.faultsCollection)
-          .doc(docIdWithCustomTime)
-          .get();
+        final docIdWithCustomTime = await faultService.addFault(
+          faultWithCustomTime,
+        );
+        final snapshotWithCustomTime = await fakeFirestore
+            .collection(AppConstants.faultsCollection)
+            .doc(docIdWithCustomTime)
+            .get();
 
-      final storedTime = snapshotWithCustomTime.data()!['createdAt'];
-      expect(storedTime, isA<Timestamp>());
-      expect(
-        (storedTime as Timestamp).toDate().isAtSameMomentAs(customTime),
-        isTrue,
-      );
+        final storedTime = snapshotWithCustomTime.data()!['createdAt'];
+        expect(storedTime, isA<Timestamp>());
+        expect(
+          (storedTime as Timestamp).toDate().isAtSameMomentAs(customTime),
+          isTrue,
+        );
 
-      final faultWithoutTime = FaultModel(
-        id: '',
-        machineId: 'mock-cnc-01',
-        type: AppConstants.faultTypeOther,
-        severity: AppConstants.severityLow,
-        description: 'Lubrication level inspection required soon.',
-        reportedBy: 'temp',
-        createdAt: null,
-      );
+        final faultWithoutTime = FaultModel(
+          id: '',
+          machineId: 'mock-cnc-01',
+          type: AppConstants.faultTypeOther,
+          severity: AppConstants.severityLow,
+          description: 'Lubrication level inspection required soon.',
+          reportedBy: 'temp',
+          createdAt: null,
+        );
 
-      final docIdWithoutTime = await faultService.addFault(faultWithoutTime);
-      final snapshotWithoutTime = await fakeFirestore
-          .collection(AppConstants.faultsCollection)
-          .doc(docIdWithoutTime)
-          .get();
+        final docIdWithoutTime = await faultService.addFault(faultWithoutTime);
+        final snapshotWithoutTime = await fakeFirestore
+            .collection(AppConstants.faultsCollection)
+            .doc(docIdWithoutTime)
+            .get();
 
-      expect(snapshotWithoutTime.data()!['createdAt'], isNotNull);
-    });
+        expect(snapshotWithoutTime.data()!['createdAt'], isNotNull);
+      },
+    );
 
-    test('missing authenticated user is rejected without Firestore write', () async {
-      fakeAuth.setCurrentUser(null);
+    test(
+      'missing authenticated user is rejected without Firestore write',
+      () async {
+        fakeAuth.setCurrentUser(null);
 
-      final fault = FaultModel(
-        id: '',
-        machineId: 'mock-cnc-01',
-        type: AppConstants.faultTypeThermal,
-        severity: AppConstants.severityHigh,
-        description: 'Spindle temperature is exceeding safe operational threshold.',
-        reportedBy: 'temp',
-      );
+        final fault = FaultModel(
+          id: '',
+          machineId: 'mock-cnc-01',
+          type: AppConstants.faultTypeThermal,
+          severity: AppConstants.severityHigh,
+          description:
+              'Spindle temperature is exceeding safe operational threshold.',
+          reportedBy: 'temp',
+        );
 
-      expect(
-        () => faultService.addFault(fault),
-        throwsA(
-          isA<FaultServiceException>()
-              .having((e) => e.code, 'code', 'unauthenticated')
-              .having(
-                (e) => e.message,
-                'message',
-                'User is not authenticated. Please log in.',
-              ),
-        ),
-      );
+        expect(
+          () => faultService.addFault(fault),
+          throwsA(
+            isA<FaultServiceException>()
+                .having((e) => e.code, 'code', 'unauthenticated')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'User is not authenticated. Please log in.',
+                ),
+          ),
+        );
 
-      final countSnapshot = await fakeFirestore
-          .collection(AppConstants.faultsCollection)
-          .get();
-      expect(countSnapshot.docs, isEmpty);
-    });
+        final countSnapshot = await fakeFirestore
+            .collection(AppConstants.faultsCollection)
+            .get();
+        expect(countSnapshot.docs, isEmpty);
+      },
+    );
 
     test('invalid machineId is rejected without write', () async {
       final fault = FaultModel(
@@ -474,11 +495,7 @@ void main() {
         throwsA(
           isA<FaultServiceException>()
               .having((e) => e.code, 'code', 'invalid-type')
-              .having(
-                (e) => e.message,
-                'message',
-                contains('Allowed types'),
-              ),
+              .having((e) => e.message, 'message', contains('Allowed types')),
         ),
       );
 
@@ -576,7 +593,11 @@ void main() {
         throwsA(
           isA<FaultServiceException>()
               .having((e) => e.code, 'code', 'invalid-status')
-              .having((e) => e.message, 'message', contains('Allowed statuses')),
+              .having(
+                (e) => e.message,
+                'message',
+                contains('Allowed statuses'),
+              ),
         ),
       );
 
@@ -601,39 +622,39 @@ void main() {
       initialUser: FakeUser(uid: 'operator_test_user'),
     );
 
-    test('surfaces permission-denied safely without swallowing exception', () async {
-      final errorFirestore = FakeErrorFirestore(
-        FirebaseException(
-          plugin: 'cloud_firestore',
-          code: 'permission-denied',
-        ),
-      );
+    test(
+      'surfaces permission-denied safely without swallowing exception',
+      () async {
+        final errorFirestore = FakeErrorFirestore(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+          ),
+        );
 
-      final service = FaultService(
-        firestore: errorFirestore,
-        firebaseAuth: fakeAuth,
-      );
+        final service = FaultService(
+          firestore: errorFirestore,
+          firebaseAuth: fakeAuth,
+        );
 
-      expect(
-        () => service.addFault(validFault),
-        throwsA(
-          isA<FaultServiceException>()
-              .having((e) => e.code, 'code', 'permission-denied')
-              .having(
-                (e) => e.message,
-                'message',
-                'You do not have permission to access or report this fault.',
-              ),
-        ),
-      );
-    });
+        expect(
+          () => service.addFault(validFault),
+          throwsA(
+            isA<FaultServiceException>()
+                .having((e) => e.code, 'code', 'permission-denied')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'You do not have permission to access or report this fault.',
+                ),
+          ),
+        );
+      },
+    );
 
     test('surfaces unavailable network error safely', () async {
       final errorFirestore = FakeErrorFirestore(
-        FirebaseException(
-          plugin: 'cloud_firestore',
-          code: 'unavailable',
-        ),
+        FirebaseException(plugin: 'cloud_firestore', code: 'unavailable'),
       );
 
       final service = FaultService(
@@ -657,10 +678,7 @@ void main() {
 
     test('surfaces deadline-exceeded timeout error safely', () async {
       final errorFirestore = FakeErrorFirestore(
-        FirebaseException(
-          plugin: 'cloud_firestore',
-          code: 'deadline-exceeded',
-        ),
+        FirebaseException(plugin: 'cloud_firestore', code: 'deadline-exceeded'),
       );
 
       final service = FaultService(
@@ -720,7 +738,9 @@ void main() {
     });
 
     test('getFaultById returns null when document does not exist', () async {
-      final retrieved = await faultService.getFaultById('non_existent_fault_id');
+      final retrieved = await faultService.getFaultById(
+        'non_existent_fault_id',
+      );
       expect(retrieved, isNull);
     });
 
@@ -728,8 +748,11 @@ void main() {
       expect(
         () => faultService.getFaultById('   '),
         throwsA(
-          isA<FaultServiceException>()
-              .having((e) => e.code, 'code', 'invalid-id'),
+          isA<FaultServiceException>().having(
+            (e) => e.code,
+            'code',
+            'invalid-id',
+          ),
         ),
       );
     });
@@ -775,7 +798,9 @@ void main() {
       final cncFaults = await faultService.getFaults(machineId: 'mock-cnc-01');
       expect(cncFaults.length, 2);
 
-      final openFaults = await faultService.getFaults(status: AppConstants.faultStatusOpen);
+      final openFaults = await faultService.getFaults(
+        status: AppConstants.faultStatusOpen,
+      );
       expect(openFaults.length, 2);
 
       final cncResolved = await faultService.getFaults(
@@ -789,13 +814,7 @@ void main() {
     test('streamFaults emits real-time updates', () async {
       final stream = faultService.streamFaults();
 
-      expect(
-        stream,
-        emitsInOrder([
-          isEmpty,
-          hasLength(1),
-        ]),
-      );
+      expect(stream, emitsInOrder([isEmpty, hasLength(1)]));
 
       await Future<void>.delayed(Duration.zero);
 

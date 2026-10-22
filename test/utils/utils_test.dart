@@ -184,7 +184,8 @@ void main() {
           expect(
             Validators.faultType(invalid),
             'Please select a valid fault type',
-            reason: 'Type "$invalid" should be rejected as not in AppConstants.faultTypes',
+            reason:
+                'Type "$invalid" should be rejected as not in AppConstants.faultTypes',
           );
         }
       });
@@ -238,16 +239,19 @@ void main() {
         expect(Validators.faultStatus('   '), 'Status is required');
       });
 
-      test('returns error when status is not in AppConstants.faultStatuses', () {
-        expect(
-          Validators.faultStatus('Archived'),
-          'Please select a valid fault status',
-        );
-        expect(
-          Validators.faultStatus('Pending'),
-          'Please select a valid fault status',
-        );
-      });
+      test(
+        'returns error when status is not in AppConstants.faultStatuses',
+        () {
+          expect(
+            Validators.faultStatus('Archived'),
+            'Please select a valid fault status',
+          );
+          expect(
+            Validators.faultStatus('Pending'),
+            'Please select a valid fault status',
+          );
+        },
+      );
 
       test('returns null when status is valid', () {
         for (final status in AppConstants.faultStatuses) {
@@ -259,21 +263,33 @@ void main() {
 
     group('faultDescription validator', () {
       test('returns error when value is null, empty, or whitespace', () {
-        expect(Validators.faultDescription(null), 'Fault description is required');
-        expect(Validators.faultDescription(''), 'Fault description is required');
-        expect(Validators.faultDescription('   '), 'Fault description is required');
+        expect(
+          Validators.faultDescription(null),
+          'Fault description is required',
+        );
+        expect(
+          Validators.faultDescription(''),
+          'Fault description is required',
+        );
+        expect(
+          Validators.faultDescription('   '),
+          'Fault description is required',
+        );
       });
 
-      test('returns error when description is shorter than default minLength (10)', () {
-        expect(
-          Validators.faultDescription('Broken'),
-          'Description must be at least 10 characters',
-        );
-        expect(
-          Validators.faultDescription('123456789'),
-          'Description must be at least 10 characters',
-        );
-      });
+      test(
+        'returns error when description is shorter than default minLength (10)',
+        () {
+          expect(
+            Validators.faultDescription('Broken'),
+            'Description must be at least 10 characters',
+          );
+          expect(
+            Validators.faultDescription('123456789'),
+            'Description must be at least 10 characters',
+          );
+        },
+      );
 
       test('returns null when description is at least default minLength', () {
         expect(Validators.faultDescription('1234567890'), isNull);
@@ -289,7 +305,10 @@ void main() {
           'Description must be at least 15 characters',
         );
         expect(
-          Validators.faultDescription('Short text with enough length', minLength: 15),
+          Validators.faultDescription(
+            'Short text with enough length',
+            minLength: 15,
+          ),
           isNull,
         );
       });

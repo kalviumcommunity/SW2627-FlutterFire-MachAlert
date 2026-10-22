@@ -87,10 +87,7 @@ Future<void> enterDescription(WidgetTester tester, String text) async {
 }
 
 Future<void> tapSubmit(WidgetTester tester) async {
-  final submitButton = find.widgetWithText(
-    FilledButton,
-    'Submit Fault Report',
-  );
+  final submitButton = find.widgetWithText(FilledButton, 'Submit Fault Report');
   await tester.ensureVisible(submitButton);
   await tester.pumpAndSettle();
   await tester.tap(submitButton);
@@ -156,12 +153,13 @@ void main() {
     expect(find.text('Please select a machine first.'), findsOneWidget);
   });
 
-  testWidgets('FaultReportingScreen can be instantiated with default faultService', (
-    tester,
-  ) async {
-    const screen = FaultReportingScreen();
-    expect(screen.faultService, isNull);
-  });
+  testWidgets(
+    'FaultReportingScreen can be instantiated with default faultService',
+    (tester) async {
+      const screen = FaultReportingScreen();
+      expect(screen.faultService, isNull);
+    },
+  );
 
   testWidgets(
     'successful submission invokes the service once with the correct machine, type, severity and trimmed description',
@@ -202,10 +200,7 @@ void main() {
       expect(submitted.reportedBy, isEmpty);
       expect(submitted.createdAt, isNull);
 
-      expect(
-        find.text('Fault report submitted successfully.'),
-        findsOneWidget,
-      );
+      expect(find.text('Fault report submitted successfully.'), findsOneWidget);
     },
   );
 
@@ -265,10 +260,7 @@ void main() {
 
       await selectFaultType(tester, 'Mechanical');
       await selectSeverity(tester, 'Medium');
-      await enterDescription(
-        tester,
-        'Conveyor belt slipping intermittently.',
-      );
+      await enterDescription(tester, 'Conveyor belt slipping intermittently.');
 
       await tapSubmit(tester);
       await tester.pumpAndSettle();
@@ -288,8 +280,7 @@ void main() {
       final fakeService = FakeFaultService();
       fakeService.exceptionToThrow = FaultServiceException(
         code: 'unavailable',
-        message:
-            'Firestore is currently unavailable. Please check your network connection.',
+        message: 'Firestore is currently unavailable. Please check your network connection.',
       );
 
       const enteredDescription =
@@ -328,8 +319,9 @@ void main() {
     'generic unexpected failure displays safe error and retains description',
     (tester) async {
       final fakeService = FakeFaultService();
-      fakeService.exceptionToThrow =
-          Exception('Internal server error with sensitive details');
+      fakeService.exceptionToThrow = Exception(
+        'Internal server error with sensitive details',
+      );
 
       const enteredDescription = 'Hydraulic pressure drop on main actuator.';
       final machine = createMachine();
@@ -410,10 +402,7 @@ void main() {
       completer.complete('fault-doc-complete-1');
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('Fault report submitted successfully.'),
-        findsOneWidget,
-      );
+      expect(find.text('Fault report submitted successfully.'), findsOneWidget);
     },
   );
 
@@ -461,10 +450,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(popResult, equals('doc-nav-pop-456'));
-      expect(
-        find.text('Fault report submitted successfully.'),
-        findsOneWidget,
-      );
+      expect(find.text('Fault report submitted successfully.'), findsOneWidget);
     },
   );
 }

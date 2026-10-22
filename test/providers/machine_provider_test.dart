@@ -59,26 +59,49 @@ void main() {
       expect(provider.isDisposed, isFalse);
     });
 
-    test('setMachines sets machine inventory directly and resets loading/error', () {
-      final machines = [
-        testMachine(id: 'M1', name: 'CNC Lathe', line: 'Line 1', status: 'Operational'),
-        testMachine(id: 'M2', name: 'Press 1', line: 'Line 2', status: 'Warning'),
-      ];
+    test(
+      'setMachines sets machine inventory directly and resets loading/error',
+      () {
+        final machines = [
+          testMachine(
+            id: 'M1',
+            name: 'CNC Lathe',
+            line: 'Line 1',
+            status: 'Operational',
+          ),
+          testMachine(
+            id: 'M2',
+            name: 'Press 1',
+            line: 'Line 2',
+            status: 'Warning',
+          ),
+        ];
 
-      int notifyCount = 0;
-      provider.addListener(() => notifyCount++);
+        int notifyCount = 0;
+        provider.addListener(() => notifyCount++);
 
-      provider.setMachines(machines);
+        provider.setMachines(machines);
 
-      expect(provider.machines.length, 2);
-      expect(provider.filteredMachines.length, 2);
-      expect(provider.isEmpty, isFalse);
-      expect(notifyCount, 1);
-    });
+        expect(provider.machines.length, 2);
+        expect(provider.filteredMachines.length, 2);
+        expect(provider.isEmpty, isFalse);
+        expect(notifyCount, 1);
+      },
+    );
 
     test('selectMachine, selectMachineById, and clearSelectedMachine manage selected machine', () {
-      final m1 = testMachine(id: 'M1', name: 'CNC Lathe', line: 'Line 1', status: 'Operational');
-      final m2 = testMachine(id: 'M2', name: 'Press 1', line: 'Line 2', status: 'Warning');
+      final m1 = testMachine(
+        id: 'M1',
+        name: 'CNC Lathe',
+        line: 'Line 1',
+        status: 'Operational',
+      );
+      final m2 = testMachine(
+        id: 'M2',
+        name: 'Press 1',
+        line: 'Line 2',
+        status: 'Warning',
+      );
       provider.setMachines([m1, m2]);
 
       int notifyCount = 0;
@@ -116,10 +139,30 @@ void main() {
     group('Filtering logic', () {
       setUp(() {
         provider.setMachines([
-          testMachine(id: 'M1', name: 'CNC Milling 01', line: 'Line 1', status: 'Operational'),
-          testMachine(id: 'M2', name: 'CNC Lathe 02', line: 'Line 1', status: 'Warning'),
-          testMachine(id: 'M3', name: 'Hydraulic Press', line: 'Line 2', status: 'Critical'),
-          testMachine(id: 'M4', name: 'Assembly Conveyor', line: 'Line 3', status: 'Under Maintenance'),
+          testMachine(
+            id: 'M1',
+            name: 'CNC Milling 01',
+            line: 'Line 1',
+            status: 'Operational',
+          ),
+          testMachine(
+            id: 'M2',
+            name: 'CNC Lathe 02',
+            line: 'Line 1',
+            status: 'Warning',
+          ),
+          testMachine(
+            id: 'M3',
+            name: 'Hydraulic Press',
+            line: 'Line 2',
+            status: 'Critical',
+          ),
+          testMachine(
+            id: 'M4',
+            name: 'Assembly Conveyor',
+            line: 'Line 3',
+            status: 'Under Maintenance',
+          ),
         ]);
       });
 
@@ -129,7 +172,10 @@ void main() {
         expect(provider.selectedLine, 'Line 1');
         expect(provider.machines.length, 4); // Underlying full list preserved
         expect(provider.filteredMachines.length, 2);
-        expect(provider.filteredMachines.every((m) => m.productionLine == 'Line 1'), isTrue);
+        expect(
+          provider.filteredMachines.every((m) => m.productionLine == 'Line 1'),
+          isTrue,
+        );
       });
 
       test('filters by operational status', () {
@@ -140,18 +186,21 @@ void main() {
         expect(provider.filteredMachines.first.id, 'M3');
       });
 
-      test('filters by text search query across id, name, line, and status', () {
-        provider.setSearchQuery('CNC');
-        expect(provider.filteredMachines.length, 2);
+      test(
+        'filters by text search query across id, name, line, and status',
+        () {
+          provider.setSearchQuery('CNC');
+          expect(provider.filteredMachines.length, 2);
 
-        provider.setSearchQuery('Press');
-        expect(provider.filteredMachines.length, 1);
-        expect(provider.filteredMachines.first.id, 'M3');
+          provider.setSearchQuery('Press');
+          expect(provider.filteredMachines.length, 1);
+          expect(provider.filteredMachines.first.id, 'M3');
 
-        provider.setSearchQuery('M4');
-        expect(provider.filteredMachines.length, 1);
-        expect(provider.filteredMachines.first.name, 'Assembly Conveyor');
-      });
+          provider.setSearchQuery('M4');
+          expect(provider.filteredMachines.length, 1);
+          expect(provider.filteredMachines.first.name, 'Assembly Conveyor');
+        },
+      );
 
       test('combines line, status, and search filters accurately', () {
         provider.setProductionLineFilter('Line 1');
@@ -219,7 +268,12 @@ void main() {
 
         // Add a machine to Firestore
         await machineService.addMachine(
-          testMachine(id: 'STR-1', name: 'Laser Welder', line: 'Line 2', status: 'Operational'),
+          testMachine(
+            id: 'STR-1',
+            name: 'Laser Welder',
+            line: 'Line 2',
+            status: 'Operational',
+          ),
         );
 
         await Future<void>.delayed(const Duration(milliseconds: 15));
@@ -228,54 +282,77 @@ void main() {
         expect(provider.isEmpty, isFalse);
       });
 
-      test('reconciles selected machine when stream receives updated data', () async {
-        await machineService.addMachine(
-          testMachine(id: 'REC-1', name: 'Saw', line: 'Line 1', status: 'Operational'),
-        );
+      test(
+        'reconciles selected machine when stream receives updated data',
+        () async {
+          await machineService.addMachine(
+            testMachine(
+              id: 'REC-1',
+              name: 'Saw',
+              line: 'Line 1',
+              status: 'Operational',
+            ),
+          );
 
-        provider.subscribeToMachines();
-        await Future<void>.delayed(const Duration(milliseconds: 15));
+          provider.subscribeToMachines();
+          await Future<void>.delayed(const Duration(milliseconds: 15));
 
-        provider.selectMachineById('REC-1');
-        expect(provider.selectedMachine!.status, 'Operational');
+          provider.selectMachineById('REC-1');
+          expect(provider.selectedMachine!.status, 'Operational');
 
-        // External update to the same machine
-        await machineService.updateMachineStatus('REC-1', AppConstants.machineStatusWarning);
+          // External update to the same machine
+          await machineService.updateMachineStatus(
+            'REC-1',
+            AppConstants.machineStatusWarning,
+          );
 
-        await Future<void>.delayed(const Duration(milliseconds: 15));
-        expect(provider.selectedMachine!.status, AppConstants.machineStatusWarning);
-      });
+          await Future<void>.delayed(const Duration(milliseconds: 15));
+          expect(
+            provider.selectedMachine!.status,
+            AppConstants.machineStatusWarning,
+          );
+        },
+      );
 
-      test('avoids duplicate subscriptions when called with same parameters', () {
-        provider.subscribeToMachines(productionLine: 'Line 1');
+      test(
+        'avoids duplicate subscriptions when called with same parameters',
+        () {
+          provider.subscribeToMachines(productionLine: 'Line 1');
 
-        int notifyCount = 0;
-        provider.addListener(() => notifyCount++);
+          int notifyCount = 0;
+          provider.addListener(() => notifyCount++);
 
-        // Same parameters should be a no-op
-        provider.subscribeToMachines(productionLine: 'Line 1');
-        expect(notifyCount, 0);
-      });
+          // Same parameters should be a no-op
+          provider.subscribeToMachines(productionLine: 'Line 1');
+          expect(notifyCount, 0);
+        },
+      );
 
-      test('handles stream errors gracefully via subscribeToMachineStream', () async {
-        final streamController = StreamController<List<MachineModel>>();
-        provider.subscribeToMachineStream(streamController.stream);
+      test(
+        'handles stream errors gracefully via subscribeToMachineStream',
+        () async {
+          final streamController = StreamController<List<MachineModel>>();
+          provider.subscribeToMachineStream(streamController.stream);
 
-        expect(provider.isLoading, isTrue);
+          expect(provider.isLoading, isTrue);
 
-        // Emit an error
-        streamController.addError(
-          MachineServiceException(code: 'permission-denied', message: 'Stream denied'),
-        );
+          // Emit an error
+          streamController.addError(
+            MachineServiceException(
+              code: 'permission-denied',
+              message: 'Stream denied',
+            ),
+          );
 
-        await Future<void>.delayed(const Duration(milliseconds: 10));
+          await Future<void>.delayed(const Duration(milliseconds: 10));
 
-        expect(provider.isLoading, isFalse);
-        expect(provider.hasError, isTrue);
-        expect(provider.errorMessage, 'Stream denied');
+          expect(provider.isLoading, isFalse);
+          expect(provider.hasError, isTrue);
+          expect(provider.errorMessage, 'Stream denied');
 
-        await streamController.close();
-      });
+          await streamController.close();
+        },
+      );
     });
 
     group('updateMachineStatus operation', () {
@@ -291,34 +368,57 @@ void main() {
         provider.selectMachineById('UPD-01');
       });
 
-      test('successfully updates machine status and reconciles local state', () async {
-        expect(provider.selectedMachine!.status, 'Operational');
+      test(
+        'successfully updates machine status and reconciles local state',
+        () async {
+          expect(provider.selectedMachine!.status, 'Operational');
 
-        await provider.updateMachineStatus('UPD-01', AppConstants.machineStatusUnderMaintenance);
+          await provider.updateMachineStatus(
+            'UPD-01',
+            AppConstants.machineStatusUnderMaintenance,
+          );
 
-        expect(provider.selectedMachine!.status, AppConstants.machineStatusUnderMaintenance);
-        expect(provider.machines.first.status, AppConstants.machineStatusUnderMaintenance);
+          expect(
+            provider.selectedMachine!.status,
+            AppConstants.machineStatusUnderMaintenance,
+          );
+          expect(
+            provider.machines.first.status,
+            AppConstants.machineStatusUnderMaintenance,
+          );
 
-        // Verify in Firestore
-        final doc = await fakeFirestore.collection('machines').doc('UPD-01').get();
-        expect(doc.data()!['status'], AppConstants.machineStatusUnderMaintenance);
-      });
+          // Verify in Firestore
+          final doc = await fakeFirestore
+              .collection('machines')
+              .doc('UPD-01')
+              .get();
+          expect(
+            doc.data()!['status'],
+            AppConstants.machineStatusUnderMaintenance,
+          );
+        },
+      );
 
-      test('handles failure and preserves error message on invalid status update', () async {
-        await expectLater(
-          provider.updateMachineStatus('UPD-01', 'bad_status'),
-          throwsA(isA<MachineServiceException>()),
-        );
+      test(
+        'handles failure and preserves error message on invalid status update',
+        () async {
+          await expectLater(
+            provider.updateMachineStatus('UPD-01', 'bad_status'),
+            throwsA(isA<MachineServiceException>()),
+          );
 
-        expect(provider.hasError, isTrue);
-        expect(provider.errorMessage, contains('invalid'));
-      });
+          expect(provider.hasError, isTrue);
+          expect(provider.errorMessage, contains('invalid'));
+        },
+      );
     });
 
     test('clearError clears error message and notifies listeners', () async {
       final streamController = StreamController<List<MachineModel>>();
       provider.subscribeToMachineStream(streamController.stream);
-      streamController.addError(MachineServiceException(code: 'unknown', message: 'An error'));
+      streamController.addError(
+        MachineServiceException(code: 'unknown', message: 'An error'),
+      );
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
       expect(provider.errorMessage, isNotNull);
@@ -343,36 +443,45 @@ void main() {
       expect(provider.machines.length, 1);
       expect(provider.machines.first.id, 'ADD-01');
 
-      final doc = await fakeFirestore.collection('machines').doc('ADD-01').get();
+      final doc = await fakeFirestore
+          .collection('machines')
+          .doc('ADD-01')
+          .get();
       expect(doc.exists, isTrue);
       expect(doc.data()!['name'], 'New Stamping Press');
     });
 
-    test('updateMachine updates mutable fields and reconciles selectedMachine', () async {
-      final m1 = testMachine(
-        id: 'EDIT-01',
-        name: 'Original Lathe',
-        line: 'Line 1',
-        status: 'Operational',
-      );
-      await provider.addMachine(m1);
-      provider.selectMachine(m1);
+    test(
+      'updateMachine updates mutable fields and reconciles selectedMachine',
+      () async {
+        final m1 = testMachine(
+          id: 'EDIT-01',
+          name: 'Original Lathe',
+          line: 'Line 1',
+          status: 'Operational',
+        );
+        await provider.addMachine(m1);
+        provider.selectMachine(m1);
 
-      final updated = m1.copyWith(
-        name: 'Refurbished Lathe',
-        status: 'Warning',
-        healthScore: 75.0,
-      );
+        final updated = m1.copyWith(
+          name: 'Refurbished Lathe',
+          status: 'Warning',
+          healthScore: 75.0,
+        );
 
-      await provider.updateMachine(updated);
+        await provider.updateMachine(updated);
 
-      expect(provider.machines.first.name, 'Refurbished Lathe');
-      expect(provider.machines.first.status, 'Warning');
-      expect(provider.selectedMachine?.name, 'Refurbished Lathe');
+        expect(provider.machines.first.name, 'Refurbished Lathe');
+        expect(provider.machines.first.status, 'Warning');
+        expect(provider.selectedMachine?.name, 'Refurbished Lathe');
 
-      final doc = await fakeFirestore.collection('machines').doc('EDIT-01').get();
-      expect(doc.data()!['name'], 'Refurbished Lathe');
-    });
+        final doc = await fakeFirestore
+            .collection('machines')
+            .doc('EDIT-01')
+            .get();
+        expect(doc.data()!['name'], 'Refurbished Lathe');
+      },
+    );
 
     test('deleteMachine removes machine from Firestore and reconciles selectedMachine', () async {
       final m1 = testMachine(
@@ -392,28 +501,39 @@ void main() {
       expect(provider.machines, isEmpty);
       expect(provider.selectedMachine, isNull);
 
-      final doc = await fakeFirestore.collection('machines').doc('DEL-01').get();
+      final doc = await fakeFirestore
+          .collection('machines')
+          .doc('DEL-01')
+          .get();
       expect(doc.exists, isFalse);
     });
 
     test('getMachineById finds machine in memory or returns null', () {
-      final m1 = testMachine(id: 'FIND-01', name: 'M1', line: 'L1', status: 'Operational');
+      final m1 = testMachine(
+        id: 'FIND-01',
+        name: 'M1',
+        line: 'L1',
+        status: 'Operational',
+      );
       provider.setMachines([m1]);
 
       expect(provider.getMachineById('FIND-01')?.name, 'M1');
       expect(provider.getMachineById('NON-EXISTENT'), isNull);
     });
 
-    test('dispose cancels active subscriptions and silences future notifications', () async {
-      provider.subscribeToMachines();
-      expect(provider.hasActiveSubscription, isTrue);
+    test(
+      'dispose cancels active subscriptions and silences future notifications',
+      () async {
+        provider.subscribeToMachines();
+        expect(provider.hasActiveSubscription, isTrue);
 
-      provider.dispose();
-      expect(provider.isDisposed, isTrue);
-      expect(provider.hasActiveSubscription, isFalse);
+        provider.dispose();
+        expect(provider.isDisposed, isTrue);
+        expect(provider.hasActiveSubscription, isFalse);
 
-      // Subsequent notifications should not throw
-      provider.notifyListeners();
-    });
+        // Subsequent notifications should not throw
+        provider.notifyListeners();
+      },
+    );
   });
 }

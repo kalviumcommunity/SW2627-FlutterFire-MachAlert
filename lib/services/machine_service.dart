@@ -384,7 +384,8 @@ class MachineService {
         );
       }
 
-      if (updates.containsKey('modelNumber') && updates['modelNumber'] is String) {
+      if (updates.containsKey('modelNumber') &&
+          updates['modelNumber'] is String) {
         updates['modelNumber'] = (updates['modelNumber'] as String).trim();
       }
 
