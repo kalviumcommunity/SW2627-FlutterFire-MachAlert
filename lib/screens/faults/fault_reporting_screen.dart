@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../../models/fault_model.dart';
 import '../../models/machine_model.dart';
+import '../../services/fault_service.dart';
 import '../../utils/app_constants.dart';
 
 class FaultReportingScreen extends StatefulWidget {
   final List<MachineModel> machines;
   final MachineModel? initialMachine;
+  final FaultService? faultService;
 
   const FaultReportingScreen({
     super.key,
     this.machines = const [],
     this.initialMachine,
+    this.faultService,
   });
 
   @override
@@ -84,11 +88,24 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
     );
   }
 
-  Future<void> _submitPlaceholder() async {
+  FaultService get _effectiveFaultService =>
+      widget.faultService ?? FaultService();
+
+  Future<void> _submit() async {
+    if (_isSubmitting) {
+      return;
+    }
+
     final formValid = _formKey.currentState?.validate() ?? false;
 
-    final hasMachine = _selectedMachineId != null;
-    final hasSeverity = _selectedSeverity != null;
+    final hasMachine =
+        _selectedMachineId != null && _selectedMachineId!.trim().isNotEmpty;
+    final hasFaultType =
+        _selectedFaultType != null && _selectedFaultType!.trim().isNotEmpty;
+    final hasSeverity =
+        _selectedSeverity != null && _selectedSeverity!.trim().isNotEmpty;
+    final trimmedDescription = _descriptionController.text.trim();
+    final hasDescription = trimmedDescription.length >= 10;
 
     setState(() {
       _showSeverityError = !hasSeverity;
@@ -100,7 +117,11 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       );
     }
 
-    if (!formValid || !hasMachine || !hasSeverity) {
+    if (!formValid ||
+        !hasMachine ||
+        !hasFaultType ||
+        !hasSeverity ||
+        !hasDescription) {
       return;
     }
 
@@ -108,23 +129,62 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       _isSubmitting = true;
     });
 
-    await Future<void>.delayed(const Duration(milliseconds: 250));
+    try {
+      final fault = FaultModel(
+        id: '',
+        machineId: _selectedMachineId!.trim(),
+        machineName: _selectedMachine?.name,
+        type: _selectedFaultType!.trim(),
+        severity: _selectedSeverity!.trim(),
+        description: trimmedDescription,
+        reportedBy: '',
+        status: AppConstants.faultStatusOpen,
+      );
 
-    if (!mounted) {
-      return;
-    }
+      final docId = await _effectiveFaultService.addFault(fault);
 
-    setState(() {
-      _isSubmitting = false;
-    });
+      if (!mounted) {
+        return;
+      }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Fault form is ready. Firestore submission will be connected during integration.',
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fault report submitted successfully.'),
         ),
-      ),
-    );
+      );
+
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop(docId);
+      }
+    } on FaultServiceException catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Failed to submit fault report. Please try again.',
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   @override
@@ -173,7 +233,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
                 const SizedBox(height: 28),
 
                 FilledButton.icon(
-                  onPressed: _isSubmitting ? null : _submitPlaceholder,
+                  onPressed: _isSubmitting ? null : _submit,
                   icon: _isSubmitting
                       ? const SizedBox(
                           width: 18,
