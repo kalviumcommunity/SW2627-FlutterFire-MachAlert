@@ -811,6 +811,64 @@ void main() {
       expect(cncResolved.first.description, 'Fault 2');
     });
 
+    test('getFaults returns empty list on empty database', () async {
+      final results = await faultService.getFaults();
+      expect(results, isEmpty);
+      expect(results, isA<List<FaultModel>>());
+    });
+
+    test(
+      'getFaults ignores whitespace-only filters and returns matching records',
+      () async {
+        final fault = FaultModel(
+          id: '',
+          machineId: 'mock-cnc-01',
+          type: AppConstants.faultTypeThermal,
+          severity: AppConstants.severityHigh,
+          description: 'Spindle overheating',
+          reportedBy: 'user_1',
+        );
+        await faultService.addFault(fault);
+
+        final results = await faultService.getFaults(
+          machineId: '   ',
+          status: '   ',
+        );
+        expect(results.length, 1);
+        expect(results.first.machineId, 'mock-cnc-01');
+      },
+    );
+
+    test(
+      'getFaults surfaces Firestore permission-denied error safely',
+      () async {
+        final errorFirestore = FakeErrorFirestore(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'PERMISSION_DENIED',
+          ),
+        );
+
+        final service = FaultService(
+          firestore: errorFirestore,
+          firebaseAuth: fakeAuth,
+        );
+
+        expect(
+          () => service.getFaults(),
+          throwsA(
+            isA<FaultServiceException>()
+                .having((e) => e.code, 'code', 'permission-denied')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'You do not have permission to access or report this fault.',
+                ),
+          ),
+        );
+      },
+    );
+
     test('streamFaults emits real-time updates', () async {
       final stream = faultService.streamFaults();
 
