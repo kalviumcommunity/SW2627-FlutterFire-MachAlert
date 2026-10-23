@@ -5,6 +5,7 @@ import '../../models/machine_model.dart';
 import '../../providers/app_state_provider.dart';
 import '../../providers/machine_provider.dart';
 import '../../services/auth_service.dart';
+import '../../services/fault_service.dart';
 import '../../utils/app_constants.dart';
 import '../../utils/app_routes.dart';
 import '../../widgets/app_button.dart';
@@ -12,7 +13,9 @@ import '../../widgets/dashboard_action_card.dart';
 import '../../widgets/dashboard_stat_card.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final FaultService? faultService;
+
+  const HomeScreen({super.key, this.faultService});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -75,6 +78,18 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
 
     Navigator.of(context).push<void>(AppRoutes.reportFault(machines: machines));
+  }
+
+  void _openFaultHistory() {
+    FaultService? faultService = widget.faultService;
+    if (faultService == null) {
+      try {
+        faultService = context.read<FaultService>();
+      } catch (_) {}
+    }
+
+    Navigator.of(context)
+        .push<void>(AppRoutes.faultHistory(faultService: faultService));
   }
 
   void _showComingSoon(String feature) {
@@ -214,6 +229,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
 
         DashboardActionCard(
+          title: 'Fault History',
+          subtitle: 'View history of reported faults',
+          icon: Icons.history,
+          onTap: _openFaultHistory,
+        ),
+
+        DashboardActionCard(
           title: 'Faults',
           subtitle: 'Monitor active machine faults',
           icon: Icons.warning,
@@ -288,6 +310,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
 
         DashboardActionCard(
+          title: 'Fault History',
+          subtitle: 'View history of reported faults',
+          icon: Icons.history,
+          onTap: _openFaultHistory,
+        ),
+
+        DashboardActionCard(
           title: 'Machines',
           subtitle: 'View machine information',
           icon: Icons.precision_manufacturing,
@@ -320,6 +349,13 @@ class _HomeScreenState extends State<HomeScreen> {
           subtitle: 'Report a machine problem immediately',
           icon: Icons.report_problem,
           onTap: _openFaultReporting,
+        ),
+
+        DashboardActionCard(
+          title: 'Fault History',
+          subtitle: 'View history of reported faults',
+          icon: Icons.history,
+          onTap: _openFaultHistory,
         ),
 
         DashboardActionCard(
