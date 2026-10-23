@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/user_model.dart';
 import '../utils/app_constants.dart';
@@ -207,11 +208,24 @@ class UserService {
     String? role,
   }) async {
     try {
-      final docRef = userDoc(uid);
+      final trimmedUid = uid.trim();
+      final docRef = userDoc(trimmedUid);
+
+      if (kDebugMode) {
+        debugPrint(
+          '[UserService] createProfileIfAbsent: checking profile for UID: $trimmedUid (target: users/$trimmedUid)',
+        );
+      }
+
       final snapshot = await docRef.get();
 
       if (snapshot.exists && snapshot.data() != null) {
         // Profile already exists: do not overwrite!
+        if (kDebugMode) {
+          debugPrint(
+            '[UserService] Profile already exists for UID: $trimmedUid with role: ${snapshot.data()?['role']}. Preserving existing profile.',
+          );
+        }
         return UserModel.fromFirestore(snapshot);
       }
 
@@ -219,9 +233,15 @@ class UserService {
       final trimmedName = displayName?.trim() ?? '';
       final trimmedEmail = email.trim();
 
+      if (kDebugMode) {
+        debugPrint(
+          '[UserService] No existing profile for UID: $trimmedUid. Writing profile with role: $assignedRole to users/$trimmedUid',
+        );
+      }
+
       final data = <String, dynamic>{
-        'uid': uid.trim(),
-        'userId': uid.trim(),
+        'uid': trimmedUid,
+        'userId': trimmedUid,
         'displayName': trimmedName,
         'name': trimmedName,
         'email': trimmedEmail,
@@ -232,8 +252,14 @@ class UserService {
 
       await docRef.set(data);
 
+      if (kDebugMode) {
+        debugPrint(
+          '[UserService] Successfully created user profile at users/$trimmedUid',
+        );
+      }
+
       return UserModel(
-        id: uid.trim(),
+        id: trimmedUid,
         name: trimmedName,
         email: trimmedEmail,
         role: assignedRole,
@@ -241,8 +267,18 @@ class UserService {
         updatedAt: DateTime.now(),
       );
     } on FirebaseException catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+          '[UserService] FirebaseException creating profile for UID: $uid: code=${e.code}, message=${e.message}',
+        );
+      }
       throw UserServiceException.fromFirebaseException(e);
     } catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+          '[UserService] Unexpected error creating profile for UID: $uid: $e',
+        );
+      }
       if (e is UserServiceException) rethrow;
       throw UserServiceException(
         code: 'unknown',

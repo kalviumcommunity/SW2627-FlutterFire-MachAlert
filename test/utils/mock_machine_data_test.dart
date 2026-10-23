@@ -15,8 +15,11 @@ void main() {
       final machines = MockMachineData.sampleMachines;
       final ids = machines.map((m) => m.id).toList();
 
-      expect(ids.toSet().length, machines.length,
-          reason: 'All machine IDs must be strictly unique.');
+      expect(
+        ids.toSet().length,
+        machines.length,
+        reason: 'All machine IDs must be strictly unique.',
+      );
 
       for (final id in ids) {
         expect(id.trim(), isNotEmpty);
@@ -36,22 +39,14 @@ void main() {
         expect(
           machine.hasRecognizedStatus,
           isTrue,
-          reason: 'Machine "${machine.name}" has invalid status: "${machine.status}"',
+          reason:
+              'Machine "${machine.name}" has invalid status: "${machine.status}"',
         );
 
-        expect(
-          AppConstants.machineStatuses,
-          contains(machine.status),
-        );
+        expect(AppConstants.machineStatuses, contains(machine.status));
 
-        expect(
-          machine.healthScore,
-          greaterThanOrEqualTo(0.0),
-        );
-        expect(
-          machine.healthScore,
-          lessThanOrEqualTo(100.0),
-        );
+        expect(machine.healthScore, greaterThanOrEqualTo(0.0));
+        expect(machine.healthScore, lessThanOrEqualTo(100.0));
 
         if (machine.temperature != null) {
           expect(machine.temperature!, greaterThan(0.0));
@@ -114,25 +109,28 @@ void main() {
       });
     });
 
-    test('is idempotent: running seed again without overwrite skips duplicates', () async {
-      final firstRunCount = await MockMachineSeeder.seedFirestore(
-        fakeFirestore,
-        isDevelopmentOnly: true,
-      );
-      expect(firstRunCount, 5);
+    test(
+      'is idempotent: running seed again without overwrite skips duplicates',
+      () async {
+        final firstRunCount = await MockMachineSeeder.seedFirestore(
+          fakeFirestore,
+          isDevelopmentOnly: true,
+        );
+        expect(firstRunCount, 5);
 
-      final secondRunCount = await MockMachineSeeder.seedFirestore(
-        fakeFirestore,
-        overwrite: false,
-        isDevelopmentOnly: true,
-      );
-      expect(secondRunCount, 0);
+        final secondRunCount = await MockMachineSeeder.seedFirestore(
+          fakeFirestore,
+          overwrite: false,
+          isDevelopmentOnly: true,
+        );
+        expect(secondRunCount, 0);
 
-      final snapshot = await fakeFirestore
-          .collection(AppConstants.machinesCollection)
-          .get();
-      expect(snapshot.docs.length, 5);
-    });
+        final snapshot = await fakeFirestore
+            .collection(AppConstants.machinesCollection)
+            .get();
+        expect(snapshot.docs.length, 5);
+      },
+    );
 
     test('overwrites existing documents when overwrite is true', () async {
       await MockMachineSeeder.seedFirestore(
@@ -180,21 +178,22 @@ void main() {
       );
     });
 
-    test('seedEmulator runs safely against local emulator when reachable', () async {
-      final isRunning = await MockMachineSeeder.isEmulatorRunning();
-      if (!isRunning) {
-        return; // Emulator not running, tested via socket mock / unit tests
-      }
+    test(
+      'seedEmulator runs safely against local emulator when reachable',
+      () async {
+        final isRunning = await MockMachineSeeder.isEmulatorRunning();
+        if (!isRunning) {
+          return; // Emulator not running, tested via socket mock / unit tests
+        }
 
-      final count = await MockMachineSeeder.seedEmulator(
-        overwrite: true,
-      );
-      expect(count, 5);
+        final count = await MockMachineSeeder.seedEmulator(overwrite: true);
+        expect(count, 5);
 
-      final secondCount = await MockMachineSeeder.seedEmulator(
-        overwrite: false,
-      );
-      expect(secondCount, 0);
-    });
+        final secondCount = await MockMachineSeeder.seedEmulator(
+          overwrite: false,
+        );
+        expect(secondCount, 0);
+      },
+    );
   });
 }

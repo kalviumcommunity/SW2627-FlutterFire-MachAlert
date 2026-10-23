@@ -1,0 +1,136 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+
+/// Centralized configuration for local Firebase and Firestore emulators.
+class EmulatorConfig {
+  EmulatorConfig._();
+
+  /// Default Firestore emulator port as configured in firebase.json.
+  static const int defaultFirestorePort = 8080;
+
+  /// Android emulator loopback alias pointing to the development host machine.
+  static const String androidHost = '10.0.2.2';
+
+  /// Standard loopback address for macOS, iOS, web, and desktop.
+  static const String defaultHost = '127.0.0.1';
+
+  /// Resolves the platform-aware Firestore emulator host.
+  ///
+  /// The Android emulator runs in a separate virtual network space and must use
+  /// `10.0.2.2` to access the Mac host's `127.0.0.1`.
+  /// macOS desktop, iOS simulators, and other platforms use `127.0.0.1`.
+  static String get firestoreHost {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return androidHost;
+    }
+    return defaultHost;
+  }
+
+  /// Compile-time environment flag for enabling/disabling the local emulator.
+  /// Set with: `--dart-define=USE_FIREBASE_EMULATOR=false`
+  static const bool useEmulatorFlag = bool.fromEnvironment(
+    'USE_FIREBASE_EMULATOR',
+    defaultValue: true,
+  );
+
+  /// Compile-time environment flag for explicitly requesting cloud mode.
+  /// Set with: `--dart-define=USE_CLOUD_FIRESTORE=true`
+  static const bool useCloudFirestoreFlag = bool.fromEnvironment(
+    'USE_CLOUD_FIRESTORE',
+    defaultValue: false,
+  );
+
+  /// Compile-time environment mode string ('emulator' or 'cloud').
+  /// Set with: `--dart-define=FIRESTORE_MODE=cloud`
+  static const String firestoreMode = String.fromEnvironment(
+    'FIRESTORE_MODE',
+    defaultValue: '',
+  );
+
+  /// Programmatic override for tests or dependency injection.
+  /// If set to non-null, overrides compile-time flags and defaults.
+  static bool? overrideUseEmulator;
+
+  /// Returns true if Firestore should connect to the local emulator.
+  ///
+  /// Guarantees:
+  /// - Only enabled when running in [kDebugMode] (release builds never use the emulator).
+  /// - Defaults to `true` in debug mode for safe local development/testing.
+  /// - Returns `false` when explicitly configured for cloud mode:
+  ///   - `--dart-define=USE_FIREBASE_EMULATOR=false`
+  ///   - `--dart-define=USE_CLOUD_FIRESTORE=true`
+  ///   - `--dart-define=FIRESTORE_MODE=cloud`
+  /// - Programmatic [overrideUseEmulator] takes highest precedence when set.
+  static bool get shouldUseEmulator {
+    if (!kDebugMode) {
+      return false;
+    }
+
+    if (overrideUseEmulator != null) {
+      return overrideUseEmulator!;
+    }
+
+    if (useCloudFirestoreFlag || firestoreMode.toLowerCase() == 'cloud') {
+      return false;
+    }
+
+    return useEmulatorFlag;
+  }
+
+  /// Returns true if the app is currently configured to connect to the real Cloud Firestore database.
+  static bool get isCloudMode => !shouldUseEmulator;
+
+  /// Configures [FirebaseFirestore] targeting either the local emulator or Cloud Firestore.
+  ///
+  /// - When emulator mode is selected (safe debug default):
+  ///   redirects Firestore traffic to local emulator at [host] and [port].
+  /// - When cloud mode is selected (explicit cloud flag or release build):
+  ///   does NOT call [useFirestoreEmulator], allowing Firestore to connect directly
+  ///   to the real Firebase Cloud Firestore database.
+  ///
+  /// Returns `true` if connected to the local emulator, or `false` if connected to Cloud Firestore.
+  static bool configureFirestore({
+    FirebaseFirestore? firestore,
+    String? host,
+    int port = defaultFirestorePort,
+    bool? useEmulator,
+  }) {
+    final activeUseEmulator = useEmulator ?? shouldUseEmulator;
+
+    if (!activeUseEmulator) {
+      if (kDebugMode) {
+        debugPrint(
+          '[EmulatorConfig] Firestore configured for REAL CLOUD DATABASE (machalert).',
+        );
+      }
+      return false;
+    }
+
+    final targetFirestore = firestore ?? FirebaseFirestore.instance;
+    final targetHost = host ?? firestoreHost;
+
+    if (kDebugMode) {
+      debugPrint(
+        '[EmulatorConfig] Firestore configured for LOCAL EMULATOR at $targetHost:$port.',
+      );
+    }
+
+    targetFirestore.useFirestoreEmulator(targetHost, port, sslEnabled: false);
+    return true;
+  }
+
+  /// Backward-compatible alias for [configureFirestore].
+  static bool configureFirestoreEmulator({
+    FirebaseFirestore? firestore,
+    String? host,
+    int port = defaultFirestorePort,
+    bool? useEmulator,
+  }) {
+    return configureFirestore(
+      firestore: firestore,
+      host: host,
+      port: port,
+      useEmulator: useEmulator,
+    );
+  }
+}

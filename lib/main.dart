@@ -9,11 +9,14 @@ import 'screens/auth/auth_gate.dart';
 import 'services/auth_service.dart';
 import 'services/machine_service.dart';
 import 'services/user_service.dart';
+import 'utils/emulator_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  EmulatorConfig.configureFirestore();
 
   runApp(const MachAlertApp());
 }
@@ -68,9 +71,7 @@ class MachAlertApp extends StatelessWidget {
             },
           ),
         if (machineProvider != null)
-          ChangeNotifierProvider<MachineProvider>.value(
-            value: machineProvider!,
-          )
+          ChangeNotifierProvider<MachineProvider>.value(value: machineProvider!)
         else
           ChangeNotifierProvider<MachineProvider>(
             create: (context) {

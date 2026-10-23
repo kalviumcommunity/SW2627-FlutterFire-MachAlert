@@ -148,9 +148,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Fault report submitted successfully.'),
-        ),
+        const SnackBar(content: Text('Fault report submitted successfully.')),
       );
 
       if (Navigator.of(context).canPop()) {

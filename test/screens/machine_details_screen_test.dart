@@ -136,9 +136,13 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<AppStateProvider>.value(value: appState),
-            ChangeNotifierProvider<MachineProvider>.value(value: machineProvider),
+            ChangeNotifierProvider<MachineProvider>.value(
+              value: machineProvider,
+            ),
           ],
-          child: MaterialApp(home: MachineDetailsScreen(machine: createMachine())),
+          child: MaterialApp(
+            home: MachineDetailsScreen(machine: createMachine()),
+          ),
         ),
       );
 
@@ -147,7 +151,9 @@ void main() {
       appState.dispose();
     });
 
-    testWidgets('hides popup menu for operator or technician role', (tester) async {
+    testWidgets('hides popup menu for operator or technician role', (
+      tester,
+    ) async {
       final appState = AppStateProvider()
         ..setAuthenticated(
           UserModel(
@@ -162,9 +168,13 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<AppStateProvider>.value(value: appState),
-            ChangeNotifierProvider<MachineProvider>.value(value: machineProvider),
+            ChangeNotifierProvider<MachineProvider>.value(
+              value: machineProvider,
+            ),
           ],
-          child: MaterialApp(home: MachineDetailsScreen(machine: createMachine())),
+          child: MaterialApp(
+            home: MachineDetailsScreen(machine: createMachine()),
+          ),
         ),
       );
 
@@ -174,18 +184,19 @@ void main() {
     });
 
     AppStateProvider createManagerAppState() {
-      return AppStateProvider()
-        ..setAuthenticated(
-          UserModel(
-            id: 'mgr-01',
-            name: 'Manager Mary',
-            email: 'mary@plant.com',
-            role: AppConstants.roleManager,
-          ),
-        );
+      return AppStateProvider()..setAuthenticated(
+        UserModel(
+          id: 'mgr-01',
+          name: 'Manager Mary',
+          email: 'mary@plant.com',
+          role: AppConstants.roleManager,
+        ),
+      );
     }
 
-    testWidgets('cancelling delete dialog does not delete machine', (tester) async {
+    testWidgets('cancelling delete dialog does not delete machine', (
+      tester,
+    ) async {
       final m = createMachine();
       await machineService.addMachine(m);
       machineProvider.setMachines([m]);
@@ -195,7 +206,9 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<AppStateProvider>.value(value: appState),
-            ChangeNotifierProvider<MachineProvider>.value(value: machineProvider),
+            ChangeNotifierProvider<MachineProvider>.value(
+              value: machineProvider,
+            ),
           ],
           child: MaterialApp(
             home: MachineDetailsScreen(machine: m, canManage: true),
@@ -220,7 +233,9 @@ void main() {
       appState.dispose();
     });
 
-    testWidgets('confirming delete dialog deletes machine and navigates back', (tester) async {
+    testWidgets('confirming delete dialog deletes machine and navigates back', (
+      tester,
+    ) async {
       final m = createMachine();
       await machineService.addMachine(m);
       machineProvider.setMachines([m]);
@@ -230,12 +245,15 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<AppStateProvider>.value(value: appState),
-            ChangeNotifierProvider<MachineProvider>.value(value: machineProvider),
+            ChangeNotifierProvider<MachineProvider>.value(
+              value: machineProvider,
+            ),
           ],
           child: MaterialApp(
             home: Navigator(
               onGenerateRoute: (settings) => MaterialPageRoute(
-                builder: (_) => MachineDetailsScreen(machine: m, canManage: true),
+                builder: (_) =>
+                    MachineDetailsScreen(machine: m, canManage: true),
               ),
             ),
           ),
@@ -257,7 +275,9 @@ void main() {
       appState.dispose();
     });
 
-    testWidgets('selecting Edit Machine opens MachineFormScreen', (tester) async {
+    testWidgets('selecting Edit Machine opens MachineFormScreen', (
+      tester,
+    ) async {
       final m = createMachine();
       final appState = createManagerAppState();
 
@@ -265,7 +285,9 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<AppStateProvider>.value(value: appState),
-            ChangeNotifierProvider<MachineProvider>.value(value: machineProvider),
+            ChangeNotifierProvider<MachineProvider>.value(
+              value: machineProvider,
+            ),
           ],
           child: MaterialApp(
             home: MachineDetailsScreen(machine: m, canManage: true),
@@ -299,7 +321,9 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<AppStateProvider>.value(value: appState),
-            ChangeNotifierProvider<MachineProvider>.value(value: failingProvider),
+            ChangeNotifierProvider<MachineProvider>.value(
+              value: failingProvider,
+            ),
           ],
           child: MaterialApp(
             home: MachineDetailsScreen(machine: m, canManage: true),
@@ -317,33 +341,46 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Failed to delete machine: Database offline'), findsOneWidget);
+      expect(
+        find.text('Failed to delete machine: Database offline'),
+        findsOneWidget,
+      );
 
       failingProvider.dispose();
       appState.dispose();
     });
 
-    testWidgets('canManage: true combined with unauthenticated app state hides popup menu and blocks actions', (tester) async {
-      final m = createMachine();
-      final unauthAppState = AppStateProvider(); // unauthenticated (user is null)
+    testWidgets(
+      'canManage: true combined with unauthenticated app state hides popup menu and blocks actions',
+      (tester) async {
+        final m = createMachine();
+        final unauthAppState =
+            AppStateProvider(); // unauthenticated (user is null)
 
-      await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider<AppStateProvider>.value(value: unauthAppState),
-            ChangeNotifierProvider<MachineProvider>.value(value: machineProvider),
-          ],
-          child: MaterialApp(
-            home: MachineDetailsScreen(machine: m, canManage: true),
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider<AppStateProvider>.value(
+                value: unauthAppState,
+              ),
+              ChangeNotifierProvider<MachineProvider>.value(
+                value: machineProvider,
+              ),
+            ],
+            child: MaterialApp(
+              home: MachineDetailsScreen(machine: m, canManage: true),
+            ),
           ),
-        ),
-      );
+        );
 
-      expect(find.byType(PopupMenuButton<String>), findsNothing);
-      unauthAppState.dispose();
-    });
+        expect(find.byType(PopupMenuButton<String>), findsNothing);
+        unauthAppState.dispose();
+      },
+    );
 
-    testWidgets('canManage: true without AppStateProvider hides popup menu', (tester) async {
+    testWidgets('canManage: true without AppStateProvider hides popup menu', (
+      tester,
+    ) async {
       final m = createMachine();
 
       await tester.pumpWidget(

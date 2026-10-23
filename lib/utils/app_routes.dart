@@ -53,15 +53,16 @@ class AppRoutes {
       builder: (_) => MachineFormScreen(machine: machine, onSave: onSave),
     );
   }
+
   static Route<void> reportFault({
-  List<MachineModel> machines = const [],
-  MachineModel? initialMachine,
-}) {
-  return MaterialPageRoute<void>(
-    builder: (_) => FaultReportingScreen(
-      machines: machines,
-      initialMachine: initialMachine,
-    ),
-  );
-}
+    List<MachineModel> machines = const [],
+    MachineModel? initialMachine,
+  }) {
+    return MaterialPageRoute<void>(
+      builder: (_) => FaultReportingScreen(
+        machines: machines,
+        initialMachine: initialMachine,
+      ),
+    );
+  }
 }

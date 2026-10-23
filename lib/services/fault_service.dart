@@ -91,11 +91,9 @@ class FaultService {
   ///
   /// Optionally accepts [FirebaseFirestore] and [FirebaseAuth] instances for dependency injection in tests.
   /// Defaults to [FirebaseFirestore.instance] and [FirebaseAuth.instance].
-  FaultService({
-    FirebaseFirestore? firestore,
-    FirebaseAuth? firebaseAuth,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance;
+  FaultService({FirebaseFirestore? firestore, FirebaseAuth? firebaseAuth})
+    : _firestore = firestore ?? FirebaseFirestore.instance,
+      _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance;
 
   /// Internal access to the underlying [FirebaseFirestore] instance.
   FirebaseFirestore get firestore => _firestore;
@@ -299,10 +297,7 @@ class FaultService {
   /// Streams real-time updates for the faults collection.
   ///
   /// Optionally filters by [machineId] and/or [status].
-  Stream<List<FaultModel>> streamFaults({
-    String? machineId,
-    String? status,
-  }) {
+  Stream<List<FaultModel>> streamFaults({String? machineId, String? status}) {
     Query<Map<String, dynamic>> query = _faultsCollection;
 
     if (machineId != null && machineId.trim().isNotEmpty) {
