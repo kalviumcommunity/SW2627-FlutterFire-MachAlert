@@ -6,7 +6,9 @@ import '../screens/dashboard/home_screen.dart';
 import '../screens/machines/machine_details_screen.dart';
 import '../screens/machines/machine_form_screen.dart';
 import '../screens/machines/machine_list_screen.dart';
+import '../screens/faults/fault_history_screen.dart';
 import '../screens/faults/fault_reporting_screen.dart';
+import '../services/fault_service.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -63,6 +65,16 @@ class AppRoutes {
         machines: machines,
         initialMachine: initialMachine,
       ),
+    );
+  }
+
+  static Route<void> faultHistory({
+    FaultService? faultService,
+    String? machineId,
+  }) {
+    return MaterialPageRoute<void>(
+      builder: (_) =>
+          FaultHistoryScreen(faultService: faultService, machineId: machineId),
     );
   }
 }
