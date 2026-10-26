@@ -13,11 +13,7 @@ String _createMockJwt(String uid) {
   final payload = base64Url
       .encode(
         utf8.encode(
-          jsonEncode({
-            'sub': uid,
-            'user_id': uid,
-            'aud': 'machalert',
-          }),
+          jsonEncode({'sub': uid, 'user_id': uid, 'aud': 'machalert'}),
         ),
       )
       .replaceAll('=', '');
@@ -52,7 +48,8 @@ class FirestoreEmulatorTestClient {
     this.projectId = 'machalert',
   });
 
-  String get basePath => '/v1/projects/$projectId/databases/(default)/documents';
+  String get basePath =>
+      '/v1/projects/$projectId/databases/(default)/documents';
 
   void close() => _httpClient.close(force: true);
 
@@ -163,29 +160,32 @@ void main() {
       ]);
     });
 
-    test('FaultModel creates with all required fields matching PRD Section 15.3', () {
-      final fault = FaultModel(
-        id: 'flt_test_01',
-        machineId: 'MCH-LINE1-CNC03',
-        machineName: 'CNC Milling Machine 03',
-        type: AppConstants.faultTypeThermal,
-        severity: AppConstants.severityHigh,
-        description: 'Spindle overheating and emitting smoke',
-        reportedBy: 'user_operator_1',
-        reportedByName: 'Rajesh Sharma',
-        status: AppConstants.faultStatusOpen,
-        imageUrl: 'https://example.com/fault.jpg',
-        createdAt: DateTime(2026, 10, 21, 10, 0),
-      );
+    test(
+      'FaultModel creates with all required fields matching PRD Section 15.3',
+      () {
+        final fault = FaultModel(
+          id: 'flt_test_01',
+          machineId: 'MCH-LINE1-CNC03',
+          machineName: 'CNC Milling Machine 03',
+          type: AppConstants.faultTypeThermal,
+          severity: AppConstants.severityHigh,
+          description: 'Spindle overheating and emitting smoke',
+          reportedBy: 'user_operator_1',
+          reportedByName: 'Rajesh Sharma',
+          status: AppConstants.faultStatusOpen,
+          imageUrl: 'https://example.com/fault.jpg',
+          createdAt: DateTime(2026, 10, 21, 10, 0),
+        );
 
-      final map = fault.toMap();
-      expect(map['machineId'], 'MCH-LINE1-CNC03');
-      expect(map['type'], 'Thermal');
-      expect(map['severity'], 'High');
-      expect(map['description'], isNotEmpty);
-      expect(map['reportedBy'], 'user_operator_1');
-      expect(map['status'], 'Open');
-    });
+        final map = fault.toMap();
+        expect(map['machineId'], 'MCH-LINE1-CNC03');
+        expect(map['type'], 'Thermal');
+        expect(map['severity'], 'High');
+        expect(map['description'], isNotEmpty);
+        expect(map['reportedBy'], 'user_operator_1');
+        expect(map['status'], 'Open');
+      },
+    );
   });
 
   group('Firestore Security Rules - Faults Collection Emulator Tests', () {
@@ -252,20 +252,16 @@ void main() {
         return;
       }
 
-      final status = await client.createDocument(
-        'faults',
-        {
-          'machineId': 'MCH-01',
-          'type': 'Thermal',
-          'severity': 'High',
-          'description': 'Overheating spindle',
-          'reportedBy': 'sec_op_1',
-          'status': 'Open',
-          'machineName': 'Milling Machine 01',
-          'reportedByName': 'Operator One',
-        },
-        token: tokenOp1,
-      );
+      final status = await client.createDocument('faults', {
+        'machineId': 'MCH-01',
+        'type': 'Thermal',
+        'severity': 'High',
+        'description': 'Overheating spindle',
+        'reportedBy': 'sec_op_1',
+        'status': 'Open',
+        'machineName': 'Milling Machine 01',
+        'reportedByName': 'Operator One',
+      }, token: tokenOp1);
 
       expect(status, 200);
     });
@@ -275,17 +271,13 @@ void main() {
         return;
       }
 
-      final status = await client.createDocument(
-        'faults',
-        {
-          'type': 'Thermal',
-          'severity': 'High',
-          'description': 'Overheating spindle',
-          'reportedBy': 'sec_op_1',
-          'status': 'Open',
-        },
-        token: tokenOp1,
-      );
+      final status = await client.createDocument('faults', {
+        'type': 'Thermal',
+        'severity': 'High',
+        'description': 'Overheating spindle',
+        'reportedBy': 'sec_op_1',
+        'status': 'Open',
+      }, token: tokenOp1);
 
       expect(status, 403);
     });
@@ -295,18 +287,14 @@ void main() {
         return;
       }
 
-      final status = await client.createDocument(
-        'faults',
-        {
-          'machineId': '',
-          'type': 'Thermal',
-          'severity': 'High',
-          'description': 'Overheating spindle',
-          'reportedBy': 'sec_op_1',
-          'status': 'Open',
-        },
-        token: tokenOp1,
-      );
+      final status = await client.createDocument('faults', {
+        'machineId': '',
+        'type': 'Thermal',
+        'severity': 'High',
+        'description': 'Overheating spindle',
+        'reportedBy': 'sec_op_1',
+        'status': 'Open',
+      }, token: tokenOp1);
 
       expect(status, 403);
     });
@@ -316,17 +304,13 @@ void main() {
         return;
       }
 
-      final status = await client.createDocument(
-        'faults',
-        {
-          'machineId': 'MCH-01',
-          'type': 'Thermal',
-          'severity': 'High',
-          'reportedBy': 'sec_op_1',
-          'status': 'Open',
-        },
-        token: tokenOp1,
-      );
+      final status = await client.createDocument('faults', {
+        'machineId': 'MCH-01',
+        'type': 'Thermal',
+        'severity': 'High',
+        'reportedBy': 'sec_op_1',
+        'status': 'Open',
+      }, token: tokenOp1);
 
       expect(status, 403);
     });
@@ -336,18 +320,14 @@ void main() {
         return;
       }
 
-      final status = await client.createDocument(
-        'faults',
-        {
-          'machineId': 'MCH-01',
-          'type': 'Thermal',
-          'severity': 'High',
-          'description': '',
-          'reportedBy': 'sec_op_1',
-          'status': 'Open',
-        },
-        token: tokenOp1,
-      );
+      final status = await client.createDocument('faults', {
+        'machineId': 'MCH-01',
+        'type': 'Thermal',
+        'severity': 'High',
+        'description': '',
+        'reportedBy': 'sec_op_1',
+        'status': 'Open',
+      }, token: tokenOp1);
 
       expect(status, 403);
     });
@@ -357,18 +337,14 @@ void main() {
         return;
       }
 
-      final status = await client.createDocument(
-        'faults',
-        {
-          'machineId': 12345, // integer instead of string
-          'type': 'Thermal',
-          'severity': 'High',
-          'description': 'Overheating spindle',
-          'reportedBy': 'sec_op_1',
-          'status': 'Open',
-        },
-        token: tokenOp1,
-      );
+      final status = await client.createDocument('faults', {
+        'machineId': 12345, // integer instead of string
+        'type': 'Thermal',
+        'severity': 'High',
+        'description': 'Overheating spindle',
+        'reportedBy': 'sec_op_1',
+        'status': 'Open',
+      }, token: tokenOp1);
 
       expect(status, 403);
     });
@@ -378,18 +354,14 @@ void main() {
         return;
       }
 
-      final status = await client.createDocument(
-        'faults',
-        {
-          'machineId': 'MCH-01',
-          'type': 'Thermal',
-          'severity': 'SuperCritical', // Not in AppConstants.severities
-          'description': 'Overheating spindle',
-          'reportedBy': 'sec_op_1',
-          'status': 'Open',
-        },
-        token: tokenOp1,
-      );
+      final status = await client.createDocument('faults', {
+        'machineId': 'MCH-01',
+        'type': 'Thermal',
+        'severity': 'SuperCritical', // Not in AppConstants.severities
+        'description': 'Overheating spindle',
+        'reportedBy': 'sec_op_1',
+        'status': 'Open',
+      }, token: tokenOp1);
 
       expect(status, 403);
     });
@@ -399,18 +371,14 @@ void main() {
         return;
       }
 
-      final status = await client.createDocument(
-        'faults',
-        {
-          'machineId': 'MCH-01',
-          'type': 'AlienInvasion', // Not in AppConstants.faultTypes
-          'severity': 'Critical',
-          'description': 'Strange alien noise',
-          'reportedBy': 'sec_op_1',
-          'status': 'Open',
-        },
-        token: tokenOp1,
-      );
+      final status = await client.createDocument('faults', {
+        'machineId': 'MCH-01',
+        'type': 'AlienInvasion', // Not in AppConstants.faultTypes
+        'severity': 'Critical',
+        'description': 'Strange alien noise',
+        'reportedBy': 'sec_op_1',
+        'status': 'Open',
+      }, token: tokenOp1);
 
       expect(status, 403);
     });
@@ -420,18 +388,14 @@ void main() {
         return;
       }
 
-      final status = await client.createDocument(
-        'faults',
-        {
-          'machineId': 'MCH-01',
-          'type': 'Electrical',
-          'severity': 'Low',
-          'description': 'Flickering indicator',
-          'reportedBy': 'sec_op_1',
-          'status': 'PendingApproval', // Not in AppConstants.faultStatuses
-        },
-        token: tokenOp1,
-      );
+      final status = await client.createDocument('faults', {
+        'machineId': 'MCH-01',
+        'type': 'Electrical',
+        'severity': 'Low',
+        'description': 'Flickering indicator',
+        'reportedBy': 'sec_op_1',
+        'status': 'PendingApproval', // Not in AppConstants.faultStatuses
+      }, token: tokenOp1);
 
       expect(status, 403);
     });
@@ -442,18 +406,14 @@ void main() {
       }
 
       // tokenOp1 (sec_op_1) attempts to submit reportedBy = sec_op_2
-      final status = await client.createDocument(
-        'faults',
-        {
-          'machineId': 'MCH-01',
-          'type': 'Thermal',
-          'severity': 'High',
-          'description': 'Attempting impersonation',
-          'reportedBy': 'sec_op_2',
-          'status': 'Open',
-        },
-        token: tokenOp1,
-      );
+      final status = await client.createDocument('faults', {
+        'machineId': 'MCH-01',
+        'type': 'Thermal',
+        'severity': 'High',
+        'description': 'Attempting impersonation',
+        'reportedBy': 'sec_op_2',
+        'status': 'Open',
+      }, token: tokenOp1);
 
       expect(status, 403);
     });
@@ -475,11 +435,9 @@ void main() {
       });
 
       // Manager attempts to change reportedBy to another user -> 403
-      final status = await client.updateDocument(
-        faultPath,
-        {'reportedBy': 'sec_op_2'},
-        token: tokenMgr,
-      );
+      final status = await client.updateDocument(faultPath, {
+        'reportedBy': 'sec_op_2',
+      }, token: tokenMgr);
       expect(status, 403);
     });
 
@@ -488,19 +446,15 @@ void main() {
         return;
       }
 
-      final status = await client.createDocument(
-        'faults',
-        {
-          'machineId': 'MCH-01',
-          'type': 'Thermal',
-          'severity': 'High',
-          'description': 'ISO date created fault',
-          'reportedBy': 'sec_op_1',
-          'status': 'Open',
-          'createdAt': DateTime(2026, 10, 21, 12, 0).toIso8601String(),
-        },
-        token: tokenOp1,
-      );
+      final status = await client.createDocument('faults', {
+        'machineId': 'MCH-01',
+        'type': 'Thermal',
+        'severity': 'High',
+        'description': 'ISO date created fault',
+        'reportedBy': 'sec_op_1',
+        'status': 'Open',
+        'createdAt': DateTime(2026, 10, 21, 12, 0).toIso8601String(),
+      }, token: tokenOp1);
 
       expect(status, 200);
     });
@@ -523,35 +477,27 @@ void main() {
       });
 
       // 2. Unrelated Operator 2 attempts update -> 403
-      final op2UpdateStatus = await client.updateDocument(
-        faultPath,
-        {'description': 'Unauthorized edit'},
-        token: tokenOp2,
-      );
+      final op2UpdateStatus = await client.updateDocument(faultPath, {
+        'description': 'Unauthorized edit',
+      }, token: tokenOp2);
       expect(op2UpdateStatus, 403);
 
       // 3. Original Reporter (Operator 1) updates own report -> 200
-      final op1UpdateStatus = await client.updateDocument(
-        faultPath,
-        {'description': 'Updated notes by reporter'},
-        token: tokenOp1,
-      );
+      final op1UpdateStatus = await client.updateDocument(faultPath, {
+        'description': 'Updated notes by reporter',
+      }, token: tokenOp1);
       expect(op1UpdateStatus, 200);
 
       // 4. Technician updates status to "In Progress" -> 200
-      final techUpdateStatus = await client.updateDocument(
-        faultPath,
-        {'status': 'In Progress'},
-        token: tokenTech,
-      );
+      final techUpdateStatus = await client.updateDocument(faultPath, {
+        'status': 'In Progress',
+      }, token: tokenTech);
       expect(techUpdateStatus, 200);
 
       // 5. Manager updates status to "Resolved" -> 200
-      final mgrUpdateStatus = await client.updateDocument(
-        faultPath,
-        {'status': 'Resolved'},
-        token: tokenMgr,
-      );
+      final mgrUpdateStatus = await client.updateDocument(faultPath, {
+        'status': 'Resolved',
+      }, token: tokenMgr);
       expect(mgrUpdateStatus, 200);
 
       // 6. Operator attempts delete -> 403

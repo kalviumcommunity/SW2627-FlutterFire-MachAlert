@@ -21,6 +21,8 @@ class FakeUserCredential extends Fake implements UserCredential {
   FakeUserCredential({this.user});
 }
 
+class FakeAuthCredential extends Fake implements AuthCredential {}
+
 class FakeFirebaseAuth extends Fake implements FirebaseAuth {
   User? _currentUser;
   final StreamController<User?> _authStateController =
@@ -30,6 +32,7 @@ class FakeFirebaseAuth extends Fake implements FirebaseAuth {
   String? lastCreatedPassword;
   String? lastSignedInEmail;
   String? lastSignedInPassword;
+  AuthCredential? lastSignedInCredential;
   bool signOutCalled = false;
   Object? errorToThrow;
 
@@ -40,6 +43,18 @@ class FakeFirebaseAuth extends Fake implements FirebaseAuth {
 
   @override
   Stream<User?> authStateChanges() => _authStateController.stream;
+
+  @override
+  Future<UserCredential> signInWithCredential(AuthCredential credential) async {
+    if (errorToThrow != null) {
+      throw errorToThrow!;
+    }
+    lastSignedInCredential = credential;
+    final user = FakeUser(uid: 'google_user_123', email: 'google@test.com');
+    _currentUser = user;
+    _authStateController.add(user);
+    return FakeUserCredential(user: user);
+  }
 
   @override
   Future<UserCredential> createUserWithEmailAndPassword({
@@ -439,22 +454,19 @@ void main() {
     });
 
     group('Persistent Authentication & Session Lifecycle', () {
-      test(
-        'restores existing user session on startup without requiring re-authentication',
-        () {
-          final persistedUser = FakeUser(
-            uid: 'persisted_operator_001',
-            email: 'operator@machalert.com',
-          );
-          final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
-          addTearDown(persistentAuth.dispose);
-          final service = AuthService(firebaseAuth: persistentAuth);
+      test('restores existing user session on startup without requiring re-authentication', () {
+        final persistedUser = FakeUser(
+          uid: 'persisted_operator_001',
+          email: 'operator@machalert.com',
+        );
+        final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
+        addTearDown(persistentAuth.dispose);
+        final service = AuthService(firebaseAuth: persistentAuth);
 
-          expect(service.currentUser, isNotNull);
-          expect(service.currentUser?.uid, 'persisted_operator_001');
-          expect(service.currentUser?.email, 'operator@machalert.com');
-        },
-      );
+        expect(service.currentUser, isNotNull);
+        expect(service.currentUser?.uid, 'persisted_operator_001');
+        expect(service.currentUser?.email, 'operator@machalert.com');
+      });
 
       test(
         'returns null currentUser on startup when no session was persisted',
@@ -467,95 +479,83 @@ void main() {
         },
       );
 
-      test(
-        'emits restored user session immediately on startup via authStateChanges',
-        () async {
-          final persistedUser = FakeUser(
-            uid: 'persisted_tech_002',
-            email: 'tech@machalert.com',
-          );
-          final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
-          addTearDown(persistentAuth.dispose);
-          final service = AuthService(firebaseAuth: persistentAuth);
+      test('emits restored user session immediately on startup via authStateChanges', () async {
+        final persistedUser = FakeUser(
+          uid: 'persisted_tech_002',
+          email: 'tech@machalert.com',
+        );
+        final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
+        addTearDown(persistentAuth.dispose);
+        final service = AuthService(firebaseAuth: persistentAuth);
 
-          final authFuture = expectLater(
-            service.authStateChanges(),
-            emits(persistedUser),
-          );
+        final authFuture = expectLater(
+          service.authStateChanges(),
+          emits(persistedUser),
+        );
 
-          persistentAuth.emitAuthState(persistedUser);
-          await authFuture;
-        },
-      );
+        persistentAuth.emitAuthState(persistedUser);
+        await authFuture;
+      });
 
-      test(
-        'emits null via authStateChanges when startup resolves as unauthenticated',
-        () async {
-          final persistentAuth = FakeFirebaseAuth(initialUser: null);
-          addTearDown(persistentAuth.dispose);
-          final service = AuthService(firebaseAuth: persistentAuth);
+      test('emits null via authStateChanges when startup resolves as unauthenticated', () async {
+        final persistentAuth = FakeFirebaseAuth(initialUser: null);
+        addTearDown(persistentAuth.dispose);
+        final service = AuthService(firebaseAuth: persistentAuth);
 
-          final authFuture = expectLater(
-            service.authStateChanges(),
-            emits(isNull),
-          );
+        final authFuture = expectLater(
+          service.authStateChanges(),
+          emits(isNull),
+        );
 
-          persistentAuth.emitAuthState(null);
-          await authFuture;
-        },
-      );
+        persistentAuth.emitAuthState(null);
+        await authFuture;
+      });
 
-      test(
-        'multiple listeners receive session restoration broadcasts independently',
-        () async {
-          final persistedUser = FakeUser(
-            uid: 'multi_listener_user',
-            email: 'multi@machalert.com',
-          );
-          final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
-          addTearDown(persistentAuth.dispose);
-          final service = AuthService(firebaseAuth: persistentAuth);
+      test('multiple listeners receive session restoration broadcasts independently', () async {
+        final persistedUser = FakeUser(
+          uid: 'multi_listener_user',
+          email: 'multi@machalert.com',
+        );
+        final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
+        addTearDown(persistentAuth.dispose);
+        final service = AuthService(firebaseAuth: persistentAuth);
 
-          final listener1 = expectLater(
-            service.authStateChanges(),
-            emits(persistedUser),
-          );
-          final listener2 = expectLater(
-            service.authStateChanges(),
-            emits(persistedUser),
-          );
+        final listener1 = expectLater(
+          service.authStateChanges(),
+          emits(persistedUser),
+        );
+        final listener2 = expectLater(
+          service.authStateChanges(),
+          emits(persistedUser),
+        );
 
-          persistentAuth.emitAuthState(persistedUser);
+        persistentAuth.emitAuthState(persistedUser);
 
-          await Future.wait([listener1, listener2]);
-        },
-      );
+        await Future.wait([listener1, listener2]);
+      });
 
-      test(
-        'signOut terminates persisted session and updates currentUser and stream to null',
-        () async {
-          final persistedUser = FakeUser(
-            uid: 'session_user_logout',
-            email: 'logout@machalert.com',
-          );
-          final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
-          addTearDown(persistentAuth.dispose);
-          final service = AuthService(firebaseAuth: persistentAuth);
+      test('signOut terminates persisted session and updates currentUser and stream to null', () async {
+        final persistedUser = FakeUser(
+          uid: 'session_user_logout',
+          email: 'logout@machalert.com',
+        );
+        final persistentAuth = FakeFirebaseAuth(initialUser: persistedUser);
+        addTearDown(persistentAuth.dispose);
+        final service = AuthService(firebaseAuth: persistentAuth);
 
-          expect(service.currentUser, isNotNull);
+        expect(service.currentUser, isNotNull);
 
-          final expectation = expectLater(
-            service.authStateChanges(),
-            emits(isNull),
-          );
+        final expectation = expectLater(
+          service.authStateChanges(),
+          emits(isNull),
+        );
 
-          await service.signOut();
+        await service.signOut();
 
-          expect(persistentAuth.signOutCalled, isTrue);
-          expect(service.currentUser, isNull);
-          await expectation;
-        },
-      );
+        expect(persistentAuth.signOutCalled, isTrue);
+        expect(service.currentUser, isNull);
+        await expectation;
+      });
 
       test(
         'persisted session survives new AuthService wrapper instantiation',
@@ -580,6 +580,118 @@ void main() {
           );
         },
       );
+    });
+
+    group('Google Sign-In Tests', () {
+      test(
+        'signInWithGoogle signs in using injected credential provider',
+        () async {
+          final fakeCredential = FakeAuthCredential();
+          final fakeAuth = FakeFirebaseAuth();
+          addTearDown(fakeAuth.dispose);
+
+          final service = AuthService(
+            firebaseAuth: fakeAuth,
+            googleCredentialProvider: () async => fakeCredential,
+          );
+
+          final result = await service.signInWithGoogle();
+
+          expect(result, isNotNull);
+          expect(result!.user?.uid, 'google_user_123');
+          expect(fakeAuth.lastSignedInCredential, same(fakeCredential));
+          expect(service.currentUser?.uid, 'google_user_123');
+        },
+      );
+
+      test('signInWithGoogle returns null when credential provider returns null (cancelled)', () async {
+        final fakeAuth = FakeFirebaseAuth();
+        addTearDown(fakeAuth.dispose);
+
+        final service = AuthService(
+          firebaseAuth: fakeAuth,
+          googleCredentialProvider: () async => null,
+        );
+
+        final result = await service.signInWithGoogle();
+
+        expect(result, isNull);
+        expect(fakeAuth.lastSignedInCredential, isNull);
+      });
+
+      test(
+        'signInWithGoogle maps FirebaseAuthException to AuthServiceException',
+        () async {
+          final fakeAuth = FakeFirebaseAuth();
+          fakeAuth.errorToThrow = FirebaseAuthException(
+            code: 'account-exists-with-different-credential',
+            message: 'Account exists with different credential.',
+          );
+          addTearDown(fakeAuth.dispose);
+
+          final service = AuthService(
+            firebaseAuth: fakeAuth,
+            googleCredentialProvider: () async => FakeAuthCredential(),
+          );
+
+          expect(
+            () => service.signInWithGoogle(),
+            throwsA(
+              isA<AuthServiceException>().having(
+                (e) => e.code,
+                'code',
+                'account-exists-with-different-credential',
+              ),
+            ),
+          );
+        },
+      );
+
+      test(
+        'signInWithGoogle wraps unexpected errors into AuthServiceException',
+        () async {
+          final fakeAuth = FakeFirebaseAuth();
+          fakeAuth.errorToThrow = Exception('Unexpected native error');
+          addTearDown(fakeAuth.dispose);
+
+          final service = AuthService(
+            firebaseAuth: fakeAuth,
+            googleCredentialProvider: () async => FakeAuthCredential(),
+          );
+
+          expect(
+            () => service.signInWithGoogle(),
+            throwsA(
+              isA<AuthServiceException>().having(
+                (e) => e.code,
+                'code',
+                'google-sign-in-failed',
+              ),
+            ),
+          );
+        },
+      );
+
+      test('AuthServiceException maps Google and OAuth codes to user-friendly messages', () {
+        expect(
+          AuthServiceException.messageForErrorCode('popup-closed-by-user'),
+          'Google Sign-In was cancelled.',
+        );
+        expect(
+          AuthServiceException.messageForErrorCode(
+            'account-exists-with-different-credential',
+          ),
+          'An account already exists with the same email address but different sign-in credentials.',
+        );
+        expect(
+          AuthServiceException.messageForErrorCode('unauthorized-domain'),
+          'This domain is not authorized for OAuth operations in your Firebase project.',
+        );
+        expect(
+          AuthServiceException.messageForErrorCode('google-sign-in-failed'),
+          'Google Sign-In failed. Please try again.',
+        );
+      });
     });
   });
 }

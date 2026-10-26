@@ -135,7 +135,9 @@ void main() {
       machineProvider.dispose();
     });
 
-    testWidgets('loads and displays machines from MachineProvider', (tester) async {
+    testWidgets('loads and displays machines from MachineProvider', (
+      tester,
+    ) async {
       machineProvider.setMachines([
         machine(id: 'P-01', name: 'Provider CNC', status: 'Operational'),
         machine(id: 'P-02', name: 'Provider Press', status: 'Warning'),
@@ -154,7 +156,9 @@ void main() {
       expect(find.text('Provider Press'), findsOneWidget);
     });
 
-    testWidgets('shows loading indicator when provider is loading', (tester) async {
+    testWidgets('shows loading indicator when provider is loading', (
+      tester,
+    ) async {
       final streamController = StreamController<List<MachineModel>>();
       machineProvider.subscribeToMachineStream(streamController.stream);
 
@@ -172,11 +176,16 @@ void main() {
       await streamController.close();
     });
 
-    testWidgets('shows error state with retry button when provider has error', (tester) async {
+    testWidgets('shows error state with retry button when provider has error', (
+      tester,
+    ) async {
       final streamController = StreamController<List<MachineModel>>();
       machineProvider.subscribeToMachineStream(streamController.stream);
       streamController.addError(
-        MachineServiceException(code: 'unavailable', message: 'Network offline'),
+        MachineServiceException(
+          code: 'unavailable',
+          message: 'Network offline',
+        ),
       );
 
       await tester.pumpWidget(
@@ -194,7 +203,9 @@ void main() {
       await streamController.close();
     });
 
-    testWidgets('hides Add Machine FAB for operator or technician role', (tester) async {
+    testWidgets('hides Add Machine FAB for operator or technician role', (
+      tester,
+    ) async {
       final appState = AppStateProvider()
         ..setAuthenticated(
           UserModel(
@@ -209,7 +220,9 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<AppStateProvider>.value(value: appState),
-            ChangeNotifierProvider<MachineProvider>.value(value: machineProvider),
+            ChangeNotifierProvider<MachineProvider>.value(
+              value: machineProvider,
+            ),
           ],
           child: const MaterialApp(home: MachineListScreen()),
         ),
@@ -223,41 +236,48 @@ void main() {
       appState.dispose();
     });
 
-    testWidgets('shows Add Machine FAB for manager role and navigates to form', (tester) async {
-      final appState = AppStateProvider()
-        ..setAuthenticated(
-          UserModel(
-            id: 'u-mgr',
-            name: 'Manager Mary',
-            email: 'mary@plant.com',
-            role: AppConstants.roleManager,
+    testWidgets(
+      'shows Add Machine FAB for manager role and navigates to form',
+      (tester) async {
+        final appState = AppStateProvider()
+          ..setAuthenticated(
+            UserModel(
+              id: 'u-mgr',
+              name: 'Manager Mary',
+              email: 'mary@plant.com',
+              role: AppConstants.roleManager,
+            ),
+          );
+
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider<AppStateProvider>.value(value: appState),
+              ChangeNotifierProvider<MachineProvider>.value(
+                value: machineProvider,
+              ),
+            ],
+            child: const MaterialApp(home: MachineListScreen()),
           ),
         );
 
-      await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider<AppStateProvider>.value(value: appState),
-            ChangeNotifierProvider<MachineProvider>.value(value: machineProvider),
-          ],
-          child: const MaterialApp(home: MachineListScreen()),
-        ),
-      );
+        await tester.pump();
 
-      await tester.pump();
+        expect(find.byType(FloatingActionButton), findsOneWidget);
+        expect(find.text('Add Machine'), findsOneWidget);
 
-      expect(find.byType(FloatingActionButton), findsOneWidget);
-      expect(find.text('Add Machine'), findsOneWidget);
+        await tester.tap(find.text('Add Machine'));
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Add Machine'));
-      await tester.pumpAndSettle();
+        expect(find.byType(MachineFormScreen), findsOneWidget);
 
-      expect(find.byType(MachineFormScreen), findsOneWidget);
+        appState.dispose();
+      },
+    );
 
-      appState.dispose();
-    });
-
-    testWidgets('filters machines in real time when searching with provider', (tester) async {
+    testWidgets('filters machines in real time when searching with provider', (
+      tester,
+    ) async {
       machineProvider.setMachines([
         machine(id: 'S-01', name: 'Alpha Machine', status: 'Operational'),
         machine(id: 'S-02', name: 'Beta Press', status: 'Warning'),
@@ -281,8 +301,14 @@ void main() {
       expect(find.text('Beta Press'), findsNothing);
     });
 
-    testWidgets('tapping machine tile navigates to MachineDetailsScreen', (tester) async {
-      final m = machine(id: 'NAV-01', name: 'Navigation Mill', status: 'Operational');
+    testWidgets('tapping machine tile navigates to MachineDetailsScreen', (
+      tester,
+    ) async {
+      final m = machine(
+        id: 'NAV-01',
+        name: 'Navigation Mill',
+        status: 'Operational',
+      );
       machineProvider.setMachines([m]);
 
       await tester.pumpWidget(
@@ -302,35 +328,45 @@ void main() {
       expect(find.text('NAV-01'), findsWidgets);
     });
 
-    testWidgets('canManage: true combined with unauthenticated app state hides Add Machine FAB', (tester) async {
-      final unauthAppState = AppStateProvider();
+    testWidgets(
+      'canManage: true combined with unauthenticated app state hides Add Machine FAB',
+      (tester) async {
+        final unauthAppState = AppStateProvider();
 
-      await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider<AppStateProvider>.value(value: unauthAppState),
-            ChangeNotifierProvider<MachineProvider>.value(value: machineProvider),
-          ],
-          child: const MaterialApp(home: MachineListScreen(canManage: true)),
-        ),
-      );
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider<AppStateProvider>.value(
+                value: unauthAppState,
+              ),
+              ChangeNotifierProvider<MachineProvider>.value(
+                value: machineProvider,
+              ),
+            ],
+            child: const MaterialApp(home: MachineListScreen(canManage: true)),
+          ),
+        );
 
-      await tester.pump();
-      expect(find.byType(FloatingActionButton), findsNothing);
+        await tester.pump();
+        expect(find.byType(FloatingActionButton), findsNothing);
 
-      unauthAppState.dispose();
-    });
+        unauthAppState.dispose();
+      },
+    );
 
-    testWidgets('canManage: true without AppStateProvider hides Add Machine FAB', (tester) async {
-      await tester.pumpWidget(
-        ChangeNotifierProvider<MachineProvider>.value(
-          value: machineProvider,
-          child: const MaterialApp(home: MachineListScreen(canManage: true)),
-        ),
-      );
+    testWidgets(
+      'canManage: true without AppStateProvider hides Add Machine FAB',
+      (tester) async {
+        await tester.pumpWidget(
+          ChangeNotifierProvider<MachineProvider>.value(
+            value: machineProvider,
+            child: const MaterialApp(home: MachineListScreen(canManage: true)),
+          ),
+        );
 
-      await tester.pump();
-      expect(find.byType(FloatingActionButton), findsNothing);
-    });
+        await tester.pump();
+        expect(find.byType(FloatingActionButton), findsNothing);
+      },
+    );
   });
 }

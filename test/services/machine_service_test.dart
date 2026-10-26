@@ -356,78 +356,84 @@ void main() {
         );
       });
 
-      test('createMachineFromMap validates required fields and throws', () async {
-        // Missing / empty name
-        expect(
-          () => machineService.createMachineFromMap({
-            'productionLine': 'Line 1',
-            'status': 'Operational',
-          }),
-          throwsA(
-            isA<MachineServiceException>().having(
-              (e) => e.code,
-              'code',
-              'invalid-name',
+      test(
+        'createMachineFromMap validates required fields and throws',
+        () async {
+          // Missing / empty name
+          expect(
+            () => machineService.createMachineFromMap({
+              'productionLine': 'Line 1',
+              'status': 'Operational',
+            }),
+            throwsA(
+              isA<MachineServiceException>().having(
+                (e) => e.code,
+                'code',
+                'invalid-name',
+              ),
             ),
-          ),
-        );
+          );
 
-        // Missing / empty productionLine
-        expect(
-          () => machineService.createMachineFromMap({
-            'name': 'Valid Name',
-            'productionLine': '   ',
-            'status': 'Operational',
-          }),
-          throwsA(
-            isA<MachineServiceException>().having(
-              (e) => e.code,
-              'code',
-              'invalid-line',
+          // Missing / empty productionLine
+          expect(
+            () => machineService.createMachineFromMap({
+              'name': 'Valid Name',
+              'productionLine': '   ',
+              'status': 'Operational',
+            }),
+            throwsA(
+              isA<MachineServiceException>().having(
+                (e) => e.code,
+                'code',
+                'invalid-line',
+              ),
             ),
-          ),
-        );
+          );
 
-        // Invalid status
-        expect(
-          () => machineService.createMachineFromMap({
-            'name': 'Valid Name',
-            'productionLine': 'Line 1',
-            'status': 'NonExistentStatus',
-          }),
-          throwsA(
-            isA<MachineServiceException>().having(
-              (e) => e.code,
-              'code',
-              'invalid-status',
+          // Invalid status
+          expect(
+            () => machineService.createMachineFromMap({
+              'name': 'Valid Name',
+              'productionLine': 'Line 1',
+              'status': 'NonExistentStatus',
+            }),
+            throwsA(
+              isA<MachineServiceException>().having(
+                (e) => e.code,
+                'code',
+                'invalid-status',
+              ),
             ),
-          ),
-        );
-      });
+          );
+        },
+      );
 
-      test('addMachine writes matching canonical id and machineId with timestamps', () async {
-        final machine = MachineModel(
-          id: 'MCH-CANONICAL-01',
-          name: 'Lathe Machine',
-          productionLine: 'Line 2',
-          status: 'Operational',
-          healthScore: 90.0,
-          createdAt: DateTime(2026, 10, 1),
-        );
+      test(
+        'addMachine writes matching canonical id and machineId with timestamps',
+        () async {
+          final machine = MachineModel(
+            id: 'MCH-CANONICAL-01',
+            name: 'Lathe Machine',
+            productionLine: 'Line 2',
+            status: 'Operational',
+            healthScore: 90.0,
+            createdAt: DateTime(2026, 10, 1),
+          );
 
-        await machineService.addMachine(machine);
+          await machineService.addMachine(machine);
 
-        final doc = await fakeFirestore
-            .collection('machines')
-            .doc('MCH-CANONICAL-01')
-            .get();
-        expect(doc.exists, isTrue);
-        final data = doc.data()!;
-        expect(data['id'], 'MCH-CANONICAL-01');
-        expect(data['machineId'], 'MCH-CANONICAL-01');
-        expect(data['createdAt'], isA<Timestamp>());
-        expect(data['updatedAt'], isNotNull);
-      });
+          final doc = await fakeFirestore
+              .collection('machines')
+              .doc('MCH-CANONICAL-01')
+              .get();
+          expect(doc.exists, isTrue);
+          final data = doc.data()!;
+          expect(data['id'], 'MCH-CANONICAL-01');
+          expect(data['machineId'], 'MCH-CANONICAL-01');
+          expect(data['createdAt'], isA<Timestamp>());
+          expect(data['updatedAt'], isNotNull);
+        },
+      );
 
       test('addMachine throws already-exists and preserves document when duplicate ID is added', () async {
         final initialMachine = MachineModel(
@@ -452,7 +458,11 @@ void main() {
           throwsA(
             isA<MachineServiceException>()
                 .having((e) => e.code, 'code', 'already-exists')
-                .having((e) => e.message, 'message', contains('already exists')),
+                .having(
+                  (e) => e.message,
+                  'message',
+                  contains('already exists'),
+                ),
           ),
         );
 
@@ -593,17 +603,22 @@ void main() {
         expect(nonExistent, isEmpty);
       });
 
-      test('getMachinesByStatus retrieves machines with specified status', () async {
-        final criticals = await machineService.getMachinesByStatus('Critical');
-        expect(criticals.length, 1);
-        expect(criticals.first.id, 'M3');
+      test(
+        'getMachinesByStatus retrieves machines with specified status',
+        () async {
+          final criticals = await machineService.getMachinesByStatus(
+            'Critical',
+          );
+          expect(criticals.length, 1);
+          expect(criticals.first.id, 'M3');
 
-        final maintenance = await machineService.getMachinesByStatus(
-          'under maintenance',
-        );
-        expect(maintenance.length, 1);
-        expect(maintenance.first.id, 'M4');
-      });
+          final maintenance = await machineService.getMachinesByStatus(
+            'under maintenance',
+          );
+          expect(maintenance.length, 1);
+          expect(maintenance.first.id, 'M4');
+        },
+      );
 
       test('getMachines throws on invalid status', () async {
         expect(
@@ -729,68 +744,87 @@ void main() {
         },
       );
 
-      test('updateMachineModel updates mutable fields from MachineModel', () async {
-        final updatedModel = MachineModel(
-          id: 'MCH-UPD',
-          name: 'Upgraded Welding Unit',
-          productionLine: 'Line 3',
-          modelNumber: 'WeldPro-950X',
-          status: AppConstants.machineStatusWarning,
-          healthScore: 78.0,
-          temperature: 84.5,
-          vibration: 4.2,
-          lastInspection: DateTime(2026, 10, 18, 9, 0),
-        );
+      test(
+        'updateMachineModel updates mutable fields from MachineModel',
+        () async {
+          final updatedModel = MachineModel(
+            id: 'MCH-UPD',
+            name: 'Upgraded Welding Unit',
+            productionLine: 'Line 3',
+            modelNumber: 'WeldPro-950X',
+            status: AppConstants.machineStatusWarning,
+            healthScore: 78.0,
+            temperature: 84.5,
+            vibration: 4.2,
+            lastInspection: DateTime(2026, 10, 18, 9, 0),
+          );
 
-        await machineService.updateMachineModel(updatedModel);
+          await machineService.updateMachineModel(updatedModel);
 
-        final doc = await fakeFirestore.collection('machines').doc('MCH-UPD').get();
-        final data = doc.data()!;
-        expect(data['name'], 'Upgraded Welding Unit');
-        expect(data['productionLine'], 'Line 3');
-        expect(data['modelNumber'], 'WeldPro-950X');
-        expect(data['status'], AppConstants.machineStatusWarning);
-        expect(data['healthScore'], 78.0);
-        expect(data['temperature'], 84.5);
-        expect(data['vibration'], 4.2);
-        expect(data['lastInspection'], isA<Timestamp>());
-        expect(data['updatedAt'], isNotNull);
-      });
+          final doc = await fakeFirestore
+              .collection('machines')
+              .doc('MCH-UPD')
+              .get();
+          final data = doc.data()!;
+          expect(data['name'], 'Upgraded Welding Unit');
+          expect(data['productionLine'], 'Line 3');
+          expect(data['modelNumber'], 'WeldPro-950X');
+          expect(data['status'], AppConstants.machineStatusWarning);
+          expect(data['healthScore'], 78.0);
+          expect(data['temperature'], 84.5);
+          expect(data['vibration'], 4.2);
+          expect(data['lastInspection'], isA<Timestamp>());
+          expect(data['updatedAt'], isNotNull);
+        },
+      );
 
-      test('updateMachine throws not-found when updating non-existent machine', () async {
-        expect(
-          () => machineService.updateMachine('NON-EXISTENT-ID', {'name': 'New Machine'}),
-          throwsA(
-            isA<MachineServiceException>()
-                .having((e) => e.code, 'code', 'not-found')
-                .having((e) => e.message, 'message', 'The requested machine was not found.'),
-          ),
-        );
-      });
-
-      test('updateMachine throws on empty name or empty production line', () async {
-        expect(
-          () => machineService.updateMachine('MCH-UPD', {'name': '   '}),
-          throwsA(
-            isA<MachineServiceException>().having(
-              (e) => e.code,
-              'code',
-              'invalid-name',
+      test(
+        'updateMachine throws not-found when updating non-existent machine',
+        () async {
+          expect(
+            () => machineService.updateMachine('NON-EXISTENT-ID', {
+              'name': 'New Machine',
+            }),
+            throwsA(
+              isA<MachineServiceException>()
+                  .having((e) => e.code, 'code', 'not-found')
+                  .having(
+                    (e) => e.message,
+                    'message',
+                    'The requested machine was not found.',
+                  ),
             ),
-          ),
-        );
+          );
+        },
+      );
 
-        expect(
-          () => machineService.updateMachine('MCH-UPD', {'productionLine': ''}),
-          throwsA(
-            isA<MachineServiceException>().having(
-              (e) => e.code,
-              'code',
-              'invalid-line',
+      test(
+        'updateMachine throws on empty name or empty production line',
+        () async {
+          expect(
+            () => machineService.updateMachine('MCH-UPD', {'name': '   '}),
+            throwsA(
+              isA<MachineServiceException>().having(
+                (e) => e.code,
+                'code',
+                'invalid-name',
+              ),
             ),
-          ),
-        );
-      });
+          );
+
+          expect(
+            () =>
+                machineService.updateMachine('MCH-UPD', {'productionLine': ''}),
+            throwsA(
+              isA<MachineServiceException>().having(
+                (e) => e.code,
+                'code',
+                'invalid-line',
+              ),
+            ),
+          );
+        },
+      );
 
       test('successful partial update updates only specified fields while preserving existing document data', () async {
         final initialCreatedAt = Timestamp.fromDate(DateTime(2026, 9, 1));
@@ -811,7 +845,10 @@ void main() {
           'temperature': 74.2,
         });
 
-        final doc = await fakeFirestore.collection('machines').doc('MCH-PARTIAL').get();
+        final doc = await fakeFirestore
+            .collection('machines')
+            .doc('MCH-PARTIAL')
+            .get();
         final data = doc.data()!;
         expect(data['name'], 'Original Name'); // Preserved
         expect(data['productionLine'], 'Line 3'); // Updated
@@ -848,7 +885,8 @@ void main() {
 
         // Health score non-numeric
         expect(
-          () => machineService.updateMachine('MCH-UPD', {'healthScore': 'good'}),
+          () =>
+              machineService.updateMachine('MCH-UPD', {'healthScore': 'good'}),
           throwsA(
             isA<MachineServiceException>().having(
               (e) => e.code,
@@ -860,7 +898,9 @@ void main() {
 
         // Non-numeric temperature
         expect(
-          () => machineService.updateMachine('MCH-UPD', {'temperature': 'boiling'}),
+          () => machineService.updateMachine('MCH-UPD', {
+            'temperature': 'boiling',
+          }),
           throwsA(
             isA<MachineServiceException>().having(
               (e) => e.code,
@@ -910,7 +950,11 @@ void main() {
           throwsA(
             isA<MachineServiceException>()
                 .having((e) => e.code, 'code', 'not-found')
-                .having((e) => e.message, 'message', 'The requested machine was not found.'),
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'The requested machine was not found.',
+                ),
           ),
         );
       });
@@ -962,13 +1006,16 @@ void main() {
         expect(fetched, isNull);
       });
 
-      test('deleting a non-existent machine is safe and completes without error', () async {
-        expect(await machineService.machineExists('MCH-GHOST'), isFalse);
+      test(
+        'deleting a non-existent machine is safe and completes without error',
+        () async {
+          expect(await machineService.machineExists('MCH-GHOST'), isFalse);
 
-        await machineService.deleteMachine('MCH-GHOST');
+          await machineService.deleteMachine('MCH-GHOST');
 
-        expect(await machineService.machineExists('MCH-GHOST'), isFalse);
-      });
+          expect(await machineService.machineExists('MCH-GHOST'), isFalse);
+        },
+      );
 
       test('deleteMachine throws invalid-id for empty or whitespace id', () {
         expect(
@@ -1084,55 +1131,61 @@ void main() {
         },
       );
 
-      test('streamMachinesByLine emits filtered machines in real time', () async {
-        final stream = machineService.streamMachinesByLine('Line 2');
-        final emissions = <List<MachineModel>>[];
-        final sub = stream.listen(emissions.add);
+      test(
+        'streamMachinesByLine emits filtered machines in real time',
+        () async {
+          final stream = machineService.streamMachinesByLine('Line 2');
+          final emissions = <List<MachineModel>>[];
+          final sub = stream.listen(emissions.add);
 
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-        expect(emissions.last, isEmpty);
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          expect(emissions.last, isEmpty);
 
-        await machineService.addMachine(
-          MachineModel(
-            id: 'L2-STR',
-            name: 'Line 2 Press',
-            productionLine: 'Line 2',
-            status: 'Operational',
-            healthScore: 92,
-          ),
-        );
+          await machineService.addMachine(
+            MachineModel(
+              id: 'L2-STR',
+              name: 'Line 2 Press',
+              productionLine: 'Line 2',
+              status: 'Operational',
+              healthScore: 92,
+            ),
+          );
 
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-        expect(emissions.last.length, 1);
-        expect(emissions.last.first.id, 'L2-STR');
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          expect(emissions.last.length, 1);
+          expect(emissions.last.first.id, 'L2-STR');
 
-        await sub.cancel();
-      });
+          await sub.cancel();
+        },
+      );
 
-      test('streamMachinesByStatus emits filtered machines in real time', () async {
-        final stream = machineService.streamMachinesByStatus('Critical');
-        final emissions = <List<MachineModel>>[];
-        final sub = stream.listen(emissions.add);
+      test(
+        'streamMachinesByStatus emits filtered machines in real time',
+        () async {
+          final stream = machineService.streamMachinesByStatus('Critical');
+          final emissions = <List<MachineModel>>[];
+          final sub = stream.listen(emissions.add);
 
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-        expect(emissions.last, isEmpty);
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          expect(emissions.last, isEmpty);
 
-        await machineService.addMachine(
-          MachineModel(
-            id: 'CRIT-STR',
-            name: 'Critical Robot',
-            productionLine: 'Line 1',
-            status: 'Critical',
-            healthScore: 35,
-          ),
-        );
+          await machineService.addMachine(
+            MachineModel(
+              id: 'CRIT-STR',
+              name: 'Critical Robot',
+              productionLine: 'Line 1',
+              status: 'Critical',
+              healthScore: 35,
+            ),
+          );
 
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-        expect(emissions.last.length, 1);
-        expect(emissions.last.first.id, 'CRIT-STR');
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          expect(emissions.last.length, 1);
+          expect(emissions.last.first.id, 'CRIT-STR');
 
-        await sub.cancel();
-      });
+          await sub.cancel();
+        },
+      );
     });
 
     group('Firestore Exception Handling', () {
@@ -1176,8 +1229,11 @@ void main() {
         expect(
           () => errorService.getMachines(),
           throwsA(
-            isA<MachineServiceException>()
-                .having((e) => e.code, 'code', 'permission-denied'),
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'permission-denied',
+            ),
           ),
         );
       });
@@ -1195,8 +1251,11 @@ void main() {
         expect(
           () => errorService.getMachines(),
           throwsA(
-            isA<MachineServiceException>()
-                .having((e) => e.code, 'code', 'unavailable'),
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'unavailable',
+            ),
           ),
         );
       });
@@ -1214,8 +1273,11 @@ void main() {
         expect(
           errorService.streamMachine('MCH-ERR'),
           emitsError(
-            isA<MachineServiceException>()
-                .having((e) => e.code, 'code', 'permission-denied'),
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'permission-denied',
+            ),
           ),
         );
       });
@@ -1233,8 +1295,11 @@ void main() {
         expect(
           errorService.streamMachines(),
           emitsError(
-            isA<MachineServiceException>()
-                .having((e) => e.code, 'code', 'unavailable'),
+            isA<MachineServiceException>().having(
+              (e) => e.code,
+              'code',
+              'unavailable',
+            ),
           ),
         );
       });

@@ -85,9 +85,8 @@ class _MachineListScreenState extends State<MachineListScreen> {
       context.read<MachineProvider>().selectMachine(machine);
     } catch (_) {}
 
-    Navigator.of(context).push<void>(
-      AppRoutes.machineDetails(machine, canManage: canManage),
-    );
+    Navigator.of(context)
+        .push<void>(AppRoutes.machineDetails(machine, canManage: canManage));
   }
 
   void _openAddMachine(bool canManage) {
@@ -104,17 +103,20 @@ class _MachineListScreenState extends State<MachineListScreen> {
       machineProvider = context.watch<MachineProvider>();
     } catch (_) {}
 
-    final bool useStaticList = widget.machines.isNotEmpty || machineProvider == null;
+    final bool useStaticList =
+        widget.machines.isNotEmpty || machineProvider == null;
 
     final List<MachineModel> machines = useStaticList
         ? _getFilteredStaticMachines()
         : machineProvider.filteredMachines;
 
-    final bool isLoading = !useStaticList &&
+    final bool isLoading =
+        !useStaticList &&
         machineProvider.isLoading &&
         machineProvider.machines.isEmpty;
 
-    final bool hasError = !useStaticList &&
+    final bool hasError =
+        !useStaticList &&
         machineProvider.hasError &&
         machineProvider.machines.isEmpty;
 
@@ -177,35 +179,35 @@ class _MachineListScreenState extends State<MachineListScreen> {
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : hasError
-                      ? _buildErrorState(
-                          machineProvider.errorMessage,
-                          machineProvider.fetchMachines,
-                        )
-                      : machines.isEmpty
-                          ? _buildEmptyState(canManage)
-                          : RefreshIndicator(
-                              onRefresh: () async {
-                                if (machineProvider != null) {
-                                  try {
-                                    await machineProvider.fetchMachines();
-                                  } catch (_) {}
-                                }
-                              },
-                              child: ListView.builder(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                itemCount: machines.length,
-                                itemBuilder: (context, index) {
-                                  final machine = machines[index];
+                  ? _buildErrorState(
+                      machineProvider.errorMessage,
+                      machineProvider.fetchMachines,
+                    )
+                  : machines.isEmpty
+                  ? _buildEmptyState(canManage)
+                  : RefreshIndicator(
+                      onRefresh: () async {
+                        if (machineProvider != null) {
+                          try {
+                            await machineProvider.fetchMachines();
+                          } catch (_) {}
+                        }
+                      },
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: machines.length,
+                        itemBuilder: (context, index) {
+                          final machine = machines[index];
 
-                                  return MachineListTile(
-                                    machine: machine,
-                                    onTap: () {
-                                      _openMachine(machine, canManage);
-                                    },
-                                  );
-                                },
-                              ),
-                            ),
+                          return MachineListTile(
+                            machine: machine,
+                            onTap: () {
+                              _openMachine(machine, canManage);
+                            },
+                          );
+                        },
+                      ),
+                    ),
             ),
           ],
         ),
@@ -213,7 +215,10 @@ class _MachineListScreenState extends State<MachineListScreen> {
     );
   }
 
-  Widget _buildErrorState(String? errorMessage, Future<void> Function() onRetry) {
+  Widget _buildErrorState(
+    String? errorMessage,
+    Future<void> Function() onRetry,
+  ) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),

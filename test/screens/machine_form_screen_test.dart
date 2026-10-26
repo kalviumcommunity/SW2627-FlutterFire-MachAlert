@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -67,7 +68,9 @@ void main() {
       );
     }
 
-    testWidgets('renders in Add Machine mode with default fields', (tester) async {
+    testWidgets('renders in Add Machine mode with default fields', (
+      tester,
+    ) async {
       await tester.pumpWidget(createTestWidget());
 
       expect(find.text('Add Machine'), findsWidgets);
@@ -79,31 +82,34 @@ void main() {
       expect(find.text('Save Changes'), findsNothing);
     });
 
-    testWidgets('renders in Edit Machine mode with pre-populated values and disabled ID', (tester) async {
-      final existingMachine = MachineModel(
-        id: 'MCH-001',
-        name: 'Existing Mill',
-        productionLine: 'Line 2',
-        modelNumber: 'VF-2',
-        status: AppConstants.machineStatusWarning,
-        healthScore: 82.0,
-        temperature: 75.5,
-        vibration: 3.1,
-      );
+    testWidgets(
+      'renders in Edit Machine mode with pre-populated values and disabled ID',
+      (tester) async {
+        final existingMachine = MachineModel(
+          id: 'MCH-001',
+          name: 'Existing Mill',
+          productionLine: 'Line 2',
+          modelNumber: 'VF-2',
+          status: AppConstants.machineStatusWarning,
+          healthScore: 82.0,
+          temperature: 75.5,
+          vibration: 3.1,
+        );
 
-      await tester.pumpWidget(createTestWidget(machine: existingMachine));
+        await tester.pumpWidget(createTestWidget(machine: existingMachine));
 
-      expect(find.text('Edit Machine'), findsWidgets);
-      expect(find.text('Update machine information'), findsOneWidget);
-      expect(find.text('MCH-001'), findsOneWidget);
-      expect(find.text('Existing Mill'), findsOneWidget);
-      expect(find.text('Line 2'), findsOneWidget);
-      expect(find.text('VF-2'), findsOneWidget);
-      expect(find.text('82.0'), findsOneWidget);
-      expect(find.text('75.5'), findsOneWidget);
-      expect(find.text('3.1'), findsOneWidget);
-      expect(find.text('Save Changes'), findsOneWidget);
-    });
+        expect(find.text('Edit Machine'), findsWidgets);
+        expect(find.text('Update machine information'), findsOneWidget);
+        expect(find.text('MCH-001'), findsOneWidget);
+        expect(find.text('Existing Mill'), findsOneWidget);
+        expect(find.text('Line 2'), findsOneWidget);
+        expect(find.text('VF-2'), findsOneWidget);
+        expect(find.text('82.0'), findsOneWidget);
+        expect(find.text('75.5'), findsOneWidget);
+        expect(find.text('3.1'), findsOneWidget);
+        expect(find.text('Save Changes'), findsOneWidget);
+      },
+    );
 
     testWidgets('validates required fields on submission', (tester) async {
       await tester.pumpWidget(createTestWidget());
@@ -123,12 +129,24 @@ void main() {
       await tester.pumpWidget(createTestWidget());
 
       // Fill in required text
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine ID'), 'M-99');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine Name'), 'Test Mill');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Production Line'), 'Line 1');
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine ID'),
+        'M-99',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine Name'),
+        'Test Mill',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Production Line'),
+        'Line 1',
+      );
 
       // Clear health score to invalid value
-      await tester.enterText(find.widgetWithText(TextFormField, 'Health Score'), 'not-a-number');
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Health Score'),
+        'not-a-number',
+      );
 
       final submitButton = find.widgetWithText(ElevatedButton, 'Add Machine');
       await tester.ensureVisible(submitButton);
@@ -150,10 +168,22 @@ void main() {
         ),
       );
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine ID'), 'M-NEW-01');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine Name'), 'New Laser Cutter');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Production Line'), 'Line 1');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Model Number'), 'LC-500');
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine ID'),
+        'M-NEW-01',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine Name'),
+        'New Laser Cutter',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Production Line'),
+        'Line 1',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Model Number'),
+        'LC-500',
+      );
 
       final submitButton = find.widgetWithText(ElevatedButton, 'Add Machine');
       await tester.ensureVisible(submitButton);
@@ -171,12 +201,23 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('persists machine via MachineProvider when onSave is null', (tester) async {
+    testWidgets('persists machine via MachineProvider when onSave is null', (
+      tester,
+    ) async {
       await tester.pumpWidget(createTestWidget());
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine ID'), 'M-PROV-01');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine Name'), 'Provider Lathe');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Production Line'), 'Line 2');
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine ID'),
+        'M-PROV-01',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine Name'),
+        'Provider Lathe',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Production Line'),
+        'Line 2',
+      );
 
       final submitButton = find.widgetWithText(ElevatedButton, 'Add Machine');
       await tester.ensureVisible(submitButton);
@@ -185,12 +226,17 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(machineProvider.machines.any((m) => m.id == 'M-PROV-01'), isTrue);
-      final doc = await fakeFirestore.collection('machines').doc('M-PROV-01').get();
+      final doc = await fakeFirestore
+          .collection('machines')
+          .doc('M-PROV-01')
+          .get();
       expect(doc.exists, isTrue);
       expect(doc.data()!['name'], 'Provider Lathe');
     });
 
-    testWidgets('updates machine via MachineProvider in edit mode', (tester) async {
+    testWidgets('updates machine via MachineProvider in edit mode', (
+      tester,
+    ) async {
       final initialMachine = MachineModel(
         id: 'M-EDIT-01',
         name: 'Original Name',
@@ -202,7 +248,10 @@ void main() {
 
       await tester.pumpWidget(createTestWidget(machine: initialMachine));
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine Name'), 'Updated Name');
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine Name'),
+        'Updated Name',
+      );
 
       final saveButton = find.widgetWithText(ElevatedButton, 'Save Changes');
       await tester.ensureVisible(saveButton);
@@ -229,9 +278,18 @@ void main() {
         ),
       );
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine ID'), 'M-FAIL');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine Name'), 'Fail Mill');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Production Line'), 'Line 1');
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine ID'),
+        'M-FAIL',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine Name'),
+        'Fail Mill',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Production Line'),
+        'Line 1',
+      );
 
       final submitButton = find.widgetWithText(ElevatedButton, 'Add Machine');
       await tester.ensureVisible(submitButton);
@@ -242,12 +300,25 @@ void main() {
       expect(find.text('Custom permission denied error'), findsOneWidget);
     });
 
-    testWidgets('blocks non-manager role with permission error', (tester) async {
-      await tester.pumpWidget(createTestWidget(role: AppConstants.roleOperator));
+    testWidgets('blocks non-manager role with permission error', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        createTestWidget(role: AppConstants.roleOperator),
+      );
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine ID'), 'M-UNAUTH');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine Name'), 'Unauthorized Machine');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Production Line'), 'Line 1');
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine ID'),
+        'M-UNAUTH',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine Name'),
+        'Unauthorized Machine',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Production Line'),
+        'Line 1',
+      );
 
       final submitButton = find.widgetWithText(ElevatedButton, 'Add Machine');
       await tester.ensureVisible(submitButton);
@@ -255,7 +326,10 @@ void main() {
       await tester.tap(submitButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('You do not have permission to modify machines.'), findsOneWidget);
+      expect(
+        find.text('You do not have permission to modify machines.'),
+        findsOneWidget,
+      );
       expect(machineProvider.machines, isEmpty);
     });
 
@@ -272,9 +346,18 @@ void main() {
         ),
       );
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine ID'), 'M-DUP');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine Name'), 'Dup Machine');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Production Line'), 'Line 1');
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine ID'),
+        'M-DUP',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine Name'),
+        'Dup Machine',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Production Line'),
+        'Line 1',
+      );
 
       final submitButton = find.widgetWithText(ElevatedButton, 'Add Machine');
       await tester.ensureVisible(submitButton);
@@ -299,29 +382,55 @@ void main() {
       expect(submissionCount, 1);
     });
 
-    testWidgets('blocks submission when user is unauthenticated (user is null)', (tester) async {
-      await tester.pumpWidget(createTestWidget(isAuthenticated: false));
+    testWidgets(
+      'blocks submission when user is unauthenticated (user is null)',
+      (tester) async {
+        await tester.pumpWidget(createTestWidget(isAuthenticated: false));
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine ID'), 'M-UNAUTH');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine Name'), 'Unauth Machine');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Production Line'), 'Line 1');
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Machine ID'),
+          'M-UNAUTH',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Machine Name'),
+          'Unauth Machine',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Production Line'),
+          'Line 1',
+        );
 
-      final submitButton = find.widgetWithText(ElevatedButton, 'Add Machine');
-      await tester.ensureVisible(submitButton);
-      await tester.pumpAndSettle();
-      await tester.tap(submitButton);
-      await tester.pumpAndSettle();
+        final submitButton = find.widgetWithText(ElevatedButton, 'Add Machine');
+        await tester.ensureVisible(submitButton);
+        await tester.pumpAndSettle();
+        await tester.tap(submitButton);
+        await tester.pumpAndSettle();
 
-      expect(find.text('You do not have permission to modify machines.'), findsOneWidget);
-      expect(machineProvider.machines, isEmpty);
-    });
+        expect(
+          find.text('You do not have permission to modify machines.'),
+          findsOneWidget,
+        );
+        expect(machineProvider.machines, isEmpty);
+      },
+    );
 
-    testWidgets('blocks submission when role is empty or unknown', (tester) async {
+    testWidgets('blocks submission when role is empty or unknown', (
+      tester,
+    ) async {
       await tester.pumpWidget(createTestWidget(role: ''));
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine ID'), 'M-EMPTY');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine Name'), 'Empty Role Machine');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Production Line'), 'Line 1');
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine ID'),
+        'M-EMPTY',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine Name'),
+        'Empty Role Machine',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Production Line'),
+        'Line 1',
+      );
 
       final submitButton = find.widgetWithText(ElevatedButton, 'Add Machine');
       await tester.ensureVisible(submitButton);
@@ -329,16 +438,30 @@ void main() {
       await tester.tap(submitButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('You do not have permission to modify machines.'), findsOneWidget);
+      expect(
+        find.text('You do not have permission to modify machines.'),
+        findsOneWidget,
+      );
       expect(machineProvider.machines, isEmpty);
     });
 
-    testWidgets('blocks submission when AppStateProvider is missing', (tester) async {
+    testWidgets('blocks submission when AppStateProvider is missing', (
+      tester,
+    ) async {
       await tester.pumpWidget(createTestWidget(provideAppState: false));
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine ID'), 'M-NOAPP');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine Name'), 'No App Machine');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Production Line'), 'Line 1');
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine ID'),
+        'M-NOAPP',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Machine Name'),
+        'No App Machine',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Production Line'),
+        'Line 1',
+      );
 
       final submitButton = find.widgetWithText(ElevatedButton, 'Add Machine');
       await tester.ensureVisible(submitButton);
@@ -346,38 +469,56 @@ void main() {
       await tester.tap(submitButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('You do not have permission to modify machines.'), findsOneWidget);
+      expect(
+        find.text('You do not have permission to modify machines.'),
+        findsOneWidget,
+      );
       expect(machineProvider.machines, isEmpty);
     });
 
-    testWidgets('surfaces user-visible duplicate-ID error when adding existing machine', (tester) async {
-      final existingMachine = MachineModel(
-        id: 'M-EXIST-01',
-        name: 'Existing Mill',
-        productionLine: 'Line 1',
-        status: AppConstants.machineStatusOperational,
-        healthScore: 95.0,
-      );
-      await machineService.addMachine(existingMachine);
-      machineProvider.setMachines([existingMachine]);
+    testWidgets(
+      'surfaces user-visible duplicate-ID error when adding existing machine',
+      (tester) async {
+        final existingMachine = MachineModel(
+          id: 'M-EXIST-01',
+          name: 'Existing Mill',
+          productionLine: 'Line 1',
+          status: AppConstants.machineStatusOperational,
+          healthScore: 95.0,
+        );
+        await machineService.addMachine(existingMachine);
+        machineProvider.setMachines([existingMachine]);
 
-      await tester.pumpWidget(createTestWidget());
+        await tester.pumpWidget(createTestWidget());
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine ID'), 'M-EXIST-01');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Machine Name'), 'Duplicate Mill');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Production Line'), 'Line 2');
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Machine ID'),
+          'M-EXIST-01',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Machine Name'),
+          'Duplicate Mill',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Production Line'),
+          'Line 2',
+        );
 
-      final submitButton = find.widgetWithText(ElevatedButton, 'Add Machine');
-      await tester.ensureVisible(submitButton);
-      await tester.pumpAndSettle();
-      await tester.tap(submitButton);
-      await tester.pumpAndSettle();
+        final submitButton = find.widgetWithText(ElevatedButton, 'Add Machine');
+        await tester.ensureVisible(submitButton);
+        await tester.pumpAndSettle();
+        await tester.tap(submitButton);
+        await tester.pumpAndSettle();
 
-      expect(find.text('Machine with ID "M-EXIST-01" already exists.'), findsOneWidget);
+        expect(
+          find.text('Machine with ID "M-EXIST-01" already exists.'),
+          findsOneWidget,
+        );
 
-      final stored = await machineService.getMachineById('M-EXIST-01');
-      expect(stored?.name, 'Existing Mill');
-      expect(stored?.productionLine, 'Line 1');
-    });
+        final stored = await machineService.getMachineById('M-EXIST-01');
+        expect(stored?.name, 'Existing Mill');
+        expect(stored?.productionLine, 'Line 1');
+      },
+    );
   });
 }
