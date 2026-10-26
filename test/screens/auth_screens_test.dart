@@ -251,6 +251,298 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Login screen creates missing Firestore profile with default operator role on email/password login',
+    (tester) async {
+      final fakeUser = _FakeAuthUser(
+        uid: 'email_login_uid',
+        email: 'operator@test.com',
+        displayName: 'Operator User',
+      );
+      final mockAuth = _MockAuthService(user: fakeUser);
+      final fakeFirestore = FakeFirebaseFirestore();
+      final userService = UserService(firestore: fakeFirestore);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            Provider<AuthService>.value(value: mockAuth),
+            Provider<UserService>.value(value: userService),
+          ],
+          child: const MaterialApp(home: LoginScreen()),
+        ),
+      );
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email'),
+        'operator@test.com',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Password'),
+        'password123',
+      );
+      await tester.pump();
+
+      final loginButton = find.widgetWithText(ElevatedButton, 'Login');
+      await tester.ensureVisible(loginButton);
+      await tester.tap(loginButton);
+      await tester.pumpAndSettle();
+
+      expect(mockAuth.signInCalled, isTrue);
+
+      final doc = await fakeFirestore
+          .collection('users')
+          .doc('email_login_uid')
+          .get();
+      expect(doc.exists, isTrue);
+      expect(doc.data()!['role'], AppConstants.roleOperator);
+      expect(doc.data()!['email'], 'operator@test.com');
+      expect(doc.data()!['displayName'], 'Operator User');
+    },
+  );
+
+  testWidgets(
+    'Login screen preserves existing technician or manager profile on email/password login',
+    (tester) async {
+      final fakeFirestore = FakeFirebaseFirestore();
+      await fakeFirestore.collection('users').doc('existing_tech_uid').set({
+        'uid': 'existing_tech_uid',
+        'userId': 'existing_tech_uid',
+        'displayName': 'Lead Technician',
+        'name': 'Lead Technician',
+        'email': 'tech@test.com',
+        'role': AppConstants.roleTechnician,
+      });
+
+      final fakeUser = _FakeAuthUser(
+        uid: 'existing_tech_uid',
+        email: 'tech@test.com',
+        displayName: 'Lead Technician',
+      );
+      final mockAuth = _MockAuthService(user: fakeUser);
+      final userService = UserService(firestore: fakeFirestore);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            Provider<AuthService>.value(value: mockAuth),
+            Provider<UserService>.value(value: userService),
+          ],
+          child: const MaterialApp(home: LoginScreen()),
+        ),
+      );
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email'),
+        'tech@test.com',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Password'),
+        'password123',
+      );
+      await tester.pump();
+
+      final loginButton = find.widgetWithText(ElevatedButton, 'Login');
+      await tester.ensureVisible(loginButton);
+      await tester.tap(loginButton);
+      await tester.pumpAndSettle();
+
+      expect(mockAuth.signInCalled, isTrue);
+
+      final doc = await fakeFirestore
+          .collection('users')
+          .doc('existing_tech_uid')
+          .get();
+      expect(doc.exists, isTrue);
+      expect(doc.data()!['role'], AppConstants.roleTechnician);
+      expect(doc.data()!['displayName'], 'Lead Technician');
+    },
+  );
+
+  testWidgets(
+    'Login screen preserves existing manager profile on email/password login',
+    (tester) async {
+      final fakeFirestore = FakeFirebaseFirestore();
+      await fakeFirestore.collection('users').doc('existing_mgr_uid').set({
+        'uid': 'existing_mgr_uid',
+        'userId': 'existing_mgr_uid',
+        'displayName': 'Plant Manager',
+        'name': 'Plant Manager',
+        'email': 'manager@factory.com',
+        'role': AppConstants.roleManager,
+      });
+
+      final fakeUser = _FakeAuthUser(
+        uid: 'existing_mgr_uid',
+        email: 'manager@factory.com',
+        displayName: 'Plant Manager',
+      );
+      final mockAuth = _MockAuthService(user: fakeUser);
+      final userService = UserService(firestore: fakeFirestore);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            Provider<AuthService>.value(value: mockAuth),
+            Provider<UserService>.value(value: userService),
+          ],
+          child: const MaterialApp(home: LoginScreen()),
+        ),
+      );
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email'),
+        'manager@factory.com',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Password'),
+        'password123',
+      );
+      await tester.pump();
+
+      final loginButton = find.widgetWithText(ElevatedButton, 'Login');
+      await tester.ensureVisible(loginButton);
+      await tester.tap(loginButton);
+      await tester.pumpAndSettle();
+
+      expect(mockAuth.signInCalled, isTrue);
+
+      final doc = await fakeFirestore
+          .collection('users')
+          .doc('existing_mgr_uid')
+          .get();
+      expect(doc.exists, isTrue);
+      expect(doc.data()!['role'], AppConstants.roleManager);
+      expect(doc.data()!['displayName'], 'Plant Manager');
+      expect(doc.data()!['name'], 'Plant Manager');
+      expect(doc.data()!['email'], 'manager@factory.com');
+      expect(doc.data()!['userId'], 'existing_mgr_uid');
+    },
+  );
+
+  testWidgets(
+    'Login screen surfaces profile creation error safely in SnackBar on email/password login',
+    (tester) async {
+      final errorFirestore = _FakeErrorFirestore(
+        FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'unavailable',
+          message: 'Network offline',
+        ),
+      );
+      final errorService = UserService(firestore: errorFirestore);
+
+      final fakeUser = _FakeAuthUser(
+        uid: 'failing_login_uid',
+        email: 'fail_login@test.com',
+      );
+      final mockAuth = _MockAuthService(user: fakeUser);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            Provider<AuthService>.value(value: mockAuth),
+            Provider<UserService>.value(value: errorService),
+          ],
+          child: const MaterialApp(home: LoginScreen()),
+        ),
+      );
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email'),
+        'fail_login@test.com',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Password'),
+        'password123',
+      );
+      await tester.pump();
+
+      final loginButton = find.widgetWithText(ElevatedButton, 'Login');
+      await tester.ensureVisible(loginButton);
+      await tester.tap(loginButton);
+      await tester.pumpAndSettle();
+
+      expect(mockAuth.signInCalled, isTrue);
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(
+        find.textContaining('could not set up user profile'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'Login screen completes profile provisioning even when unmounted during auth state change',
+    (tester) async {
+      final fakeUser = _FakeAuthUser(
+        uid: 'unmounted_email_user',
+        email: 'unmounted_email@test.com',
+        displayName: 'Unmounted Email User',
+      );
+      final fakeFirestore = FakeFirebaseFirestore();
+      final userService = UserService(firestore: fakeFirestore);
+
+      late StateSetter parentSetState;
+      bool showLogin = true;
+
+      final mockAuth = _MockAuthService(
+        user: fakeUser,
+        onSignIn: () {
+          // Simulate AuthGate switching screens upon authStateChanges event:
+          parentSetState(() {
+            showLogin = false;
+          });
+        },
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            Provider<AuthService>.value(value: mockAuth),
+            Provider<UserService>.value(value: userService),
+          ],
+          child: MaterialApp(
+            home: StatefulBuilder(
+              builder: (context, setState) {
+                parentSetState = setState;
+                return showLogin
+                    ? const LoginScreen()
+                    : const Scaffold(body: Text('Home Dashboard'));
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email'),
+        'unmounted_email@test.com',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Password'),
+        'password123',
+      );
+      await tester.pump();
+
+      final loginButton = find.widgetWithText(ElevatedButton, 'Login');
+      await tester.ensureVisible(loginButton);
+      await tester.tap(loginButton);
+      await tester.pumpAndSettle();
+
+      expect(mockAuth.signInCalled, isTrue);
+      expect(find.text('Home Dashboard'), findsOneWidget);
+
+      final doc = await fakeFirestore
+          .collection('users')
+          .doc('unmounted_email_user')
+          .get();
+      expect(doc.exists, isTrue);
+      expect(doc.data()!['email'], 'unmounted_email@test.com');
+      expect(doc.data()!['role'], AppConstants.roleOperator);
+    },
+  );
+
   testWidgets('Signup screen displays all fields', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: SignupScreen()));
 
@@ -639,13 +931,30 @@ class _MockAuthService extends Fake implements AuthService {
   bool returnNullOnGoogleSignIn = false;
   VoidCallback? onSignInWithGoogle;
 
-  _MockAuthService({this.user, this.onSignInWithGoogle});
+  bool signInCalled = false;
+  Object? signInErrorToThrow;
+  VoidCallback? onSignIn;
+
+  _MockAuthService({this.user, this.onSignInWithGoogle, this.onSignIn});
 
   @override
   Future<UserCredential> signUp({
     required String email,
     required String password,
   }) async {
+    return _FakeCredential(user: user);
+  }
+
+  @override
+  Future<UserCredential> signIn({
+    required String email,
+    required String password,
+  }) async {
+    signInCalled = true;
+    onSignIn?.call();
+    if (signInErrorToThrow != null) {
+      throw signInErrorToThrow!;
+    }
     return _FakeCredential(user: user);
   }
 

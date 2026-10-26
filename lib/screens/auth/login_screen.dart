@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -65,10 +66,24 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
 
-      await authService.signIn(
+      UserService? userService = widget.userService;
+      if (userService == null) {
+        try {
+          userService = context.read<UserService>();
+        } catch (_) {
+          userService = null;
+        }
+      }
+
+      final credential = await authService.signIn(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+
+      final user = credential.user;
+      if (user != null) {
+        await _ensureUserProfile(userService: userService, user: user);
+      }
 
       // Do not navigate to Home manually.
       // Firebase auth state -> AppStateProvider -> AuthGate
@@ -95,6 +110,64 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() {
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _ensureUserProfile({
+    required UserService? userService,
+    required User user,
+  }) async {
+    if (userService == null) {
+      return;
+    }
+
+    try {
+      if (kDebugMode) {
+        debugPrint(
+          '[LoginScreen] Ensuring profile exists for UID: ${user.uid}',
+        );
+      }
+      final profile = await userService.createProfileIfAbsent(
+        uid: user.uid,
+        email: user.email ?? '',
+        displayName: user.displayName,
+        role: AppConstants.roleOperator,
+      );
+      if (kDebugMode) {
+        debugPrint(
+          '[LoginScreen] Profile confirmed for UID: ${profile.id}, role: ${profile.role}',
+        );
+      }
+    } on UserServiceException catch (profileError) {
+      if (kDebugMode) {
+        debugPrint(
+          '[LoginScreen] Profile creation failed for UID: ${user.uid}: code=${profileError.code}, message=${profileError.message}',
+        );
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Signed in, but could not set up user profile: ${profileError.message}',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+          '[LoginScreen] Profile creation unexpected error for UID: ${user.uid}: $e',
+        );
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Signed in, but could not set up user profile. Please check your connection.',
+            ),
+          ),
+        );
       }
     }
   }
@@ -151,56 +224,7 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
 
-        if (userService != null) {
-          try {
-            if (kDebugMode) {
-              debugPrint(
-                '[LoginScreen] Ensuring profile exists for UID: ${user.uid}',
-              );
-            }
-            final profile = await userService.createProfileIfAbsent(
-              uid: user.uid,
-              email: user.email ?? '',
-              displayName: user.displayName,
-              role: AppConstants.roleOperator,
-            );
-            if (kDebugMode) {
-              debugPrint(
-                '[LoginScreen] Profile confirmed for UID: ${profile.id}, role: ${profile.role}',
-              );
-            }
-          } on UserServiceException catch (profileError) {
-            if (kDebugMode) {
-              debugPrint(
-                '[LoginScreen] Profile creation failed for UID: ${user.uid}: code=${profileError.code}, message=${profileError.message}',
-              );
-            }
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Signed in, but could not set up user profile: ${profileError.message}',
-                  ),
-                ),
-              );
-            }
-          } catch (e) {
-            if (kDebugMode) {
-              debugPrint(
-                '[LoginScreen] Profile creation unexpected error for UID: ${user.uid}: $e',
-              );
-            }
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Signed in, but could not set up user profile. Please check your connection.',
-                  ),
-                ),
-              );
-            }
-          }
-        }
+        await _ensureUserProfile(userService: userService, user: user);
       }
 
       // Do not navigate to Home manually.
