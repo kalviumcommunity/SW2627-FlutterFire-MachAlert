@@ -98,6 +98,10 @@ class _HomeScreenState extends State<HomeScreen> {
     ).showSnackBar(SnackBar(content: Text('$feature will be available soon.')));
   }
 
+  void _openRealtimeFaults() {
+    Navigator.of(context).push<void>(AppRoutes.realtimeFaults());
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppStateProvider>();
@@ -239,9 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Faults',
           subtitle: 'Monitor active machine faults',
           icon: Icons.warning,
-          onTap: () {
-            _showComingSoon('Fault monitoring');
-          },
+          onTap: _openRealtimeFaults,
         ),
 
         DashboardActionCard(
@@ -304,9 +306,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Active Faults',
           subtitle: 'Inspect reported machine faults',
           icon: Icons.warning,
-          onTap: () {
-            _showComingSoon('Active faults');
-          },
+          onTap: _openRealtimeFaults,
         ),
 
         DashboardActionCard(

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'dart:async';
+
 import '../models/machine_model.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/dashboard/home_screen.dart';
@@ -9,6 +11,8 @@ import '../screens/machines/machine_list_screen.dart';
 import '../screens/faults/fault_history_screen.dart';
 import '../screens/faults/fault_reporting_screen.dart';
 import '../services/fault_service.dart';
+import '../models/fault_model.dart';
+import '../screens/faults/realtime_faults_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -75,6 +79,12 @@ class AppRoutes {
     return MaterialPageRoute<void>(
       builder: (_) =>
           FaultHistoryScreen(faultService: faultService, machineId: machineId),
+    );
+  }
+
+  static Route<void> realtimeFaults({Stream<List<FaultModel>>? faultStream}) {
+    return MaterialPageRoute<void>(
+      builder: (_) => RealtimeFaultsScreen(faultStream: faultStream),
     );
   }
 }
