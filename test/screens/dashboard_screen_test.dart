@@ -1,16 +1,29 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mach_alert/models/fault_model.dart';
 import 'package:mach_alert/models/user_model.dart';
 import 'package:mach_alert/providers/app_state_provider.dart';
 import 'package:mach_alert/screens/dashboard/home_screen.dart';
+import 'package:mach_alert/screens/faults/fault_history_screen.dart';
 import 'package:mach_alert/screens/machines/machine_list_screen.dart';
 import 'package:mach_alert/services/auth_service.dart';
+import 'package:mach_alert/services/fault_service.dart';
 import 'package:provider/provider.dart';
 
 class FakeFirebaseAuth extends Fake implements FirebaseAuth {
   @override
   Future<void> signOut() async {}
+}
+
+class FakeFaultService extends Fake implements FaultService {
+  @override
+  Future<List<FaultModel>> getFaults({
+    String? machineId,
+    String? status,
+  }) async {
+    return [];
+  }
 }
 
 UserModel createUser({required String role}) {
@@ -22,10 +35,15 @@ UserModel createUser({required String role}) {
   );
 }
 
-Future<void> pumpDashboard(WidgetTester tester, {required String role}) async {
+Future<void> pumpDashboard(
+  WidgetTester tester, {
+  required String role,
+  FaultService? faultService,
+}) async {
   final appState = AppStateProvider()..setAuthenticated(createUser(role: role));
 
   final authService = AuthService(firebaseAuth: FakeFirebaseAuth());
+  final effectiveFaultService = faultService ?? FakeFaultService();
 
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox.shrink());
@@ -38,8 +56,9 @@ Future<void> pumpDashboard(WidgetTester tester, {required String role}) async {
       providers: [
         ChangeNotifierProvider<AppStateProvider>.value(value: appState),
         Provider<AuthService>.value(value: authService),
+        Provider<FaultService>.value(value: effectiveFaultService),
       ],
-      child: const MaterialApp(home: HomeScreen()),
+      child: MaterialApp(home: HomeScreen(faultService: effectiveFaultService)),
     ),
   );
 
@@ -57,6 +76,8 @@ void main() {
 
       expect(find.text('Report Fault'), findsOneWidget);
 
+      expect(find.text('Fault History'), findsOneWidget);
+
       expect(find.text('My Reports'), findsOneWidget);
     });
 
@@ -69,6 +90,8 @@ void main() {
 
       expect(find.text('Active Faults'), findsWidgets);
 
+      expect(find.text('Fault History'), findsOneWidget);
+
       expect(find.text('Machines'), findsOneWidget);
     });
 
@@ -80,6 +103,8 @@ void main() {
       expect(find.text('Factory Overview'), findsOneWidget);
 
       expect(find.text('Machines'), findsWidgets);
+
+      expect(find.text('Fault History'), findsOneWidget);
 
       expect(find.text('Maintenance'), findsOneWidget);
     });
@@ -140,5 +165,74 @@ void main() {
 
       expect(find.byType(MachineListScreen), findsNothing);
     });
+
+    testWidgets(
+      'Operator Fault History action opens FaultHistoryScreen and shows title',
+      (tester) async {
+        await pumpDashboard(tester, role: 'operator');
+
+        final faultHistoryButton = find.text('Fault History');
+        expect(faultHistoryButton, findsOneWidget);
+
+        await tester.ensureVisible(faultHistoryButton);
+        await tester.tap(faultHistoryButton);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(FaultHistoryScreen), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(AppBar),
+            matching: find.text('Fault History'),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'Technician Fault History action opens FaultHistoryScreen and shows title',
+      (tester) async {
+        await pumpDashboard(tester, role: 'technician');
+
+        final faultHistoryButton = find.text('Fault History');
+        expect(faultHistoryButton, findsOneWidget);
+
+        await tester.ensureVisible(faultHistoryButton);
+        await tester.tap(faultHistoryButton);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(FaultHistoryScreen), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(AppBar),
+            matching: find.text('Fault History'),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'Manager Fault History action opens FaultHistoryScreen and shows title',
+      (tester) async {
+        await pumpDashboard(tester, role: 'manager');
+
+        final faultHistoryButton = find.text('Fault History');
+        expect(faultHistoryButton, findsOneWidget);
+
+        await tester.ensureVisible(faultHistoryButton);
+        await tester.tap(faultHistoryButton);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(FaultHistoryScreen), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(AppBar),
+            matching: find.text('Fault History'),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }
