@@ -99,7 +99,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openRealtimeFaults() {
-    Navigator.of(context).push<void>(AppRoutes.realtimeFaults());
+    FaultService? faultService = widget.faultService;
+    if (faultService == null) {
+      try {
+        faultService = context.read<FaultService>();
+      } catch (_) {}
+    }
+
+    Navigator.of(context).push<void>(
+      AppRoutes.realtimeFaults(faultStream: faultService?.streamFaults()),
+    );
   }
 
   @override
