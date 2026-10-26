@@ -7,6 +7,7 @@ import 'providers/app_state_provider.dart';
 import 'providers/machine_provider.dart';
 import 'screens/auth/auth_gate.dart';
 import 'services/auth_service.dart';
+import 'services/fault_service.dart';
 import 'services/machine_service.dart';
 import 'services/user_service.dart';
 import 'utils/emulator_config.dart';
@@ -25,6 +26,7 @@ class MachAlertApp extends StatelessWidget {
   final AuthService? authService;
   final UserService? userService;
   final MachineService? machineService;
+  final FaultService? faultService;
   final AppStateProvider? appStateProvider;
   final MachineProvider? machineProvider;
 
@@ -33,6 +35,7 @@ class MachAlertApp extends StatelessWidget {
     this.authService,
     this.userService,
     this.machineService,
+    this.faultService,
     this.appStateProvider,
     this.machineProvider,
   });
@@ -53,6 +56,10 @@ class MachAlertApp extends StatelessWidget {
           Provider<MachineService>.value(value: machineService!)
         else
           Provider<MachineService>(create: (_) => MachineService()),
+        if (faultService != null)
+          Provider<FaultService>.value(value: faultService!)
+        else
+          Provider<FaultService>(create: (_) => FaultService()),
         if (appStateProvider != null)
           ChangeNotifierProvider<AppStateProvider>.value(
             value: appStateProvider!,
