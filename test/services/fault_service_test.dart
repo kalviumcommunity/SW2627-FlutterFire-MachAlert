@@ -38,7 +38,7 @@ class FakeFirebaseAuth extends Fake implements FirebaseAuth {
 
 class FakeErrorDocumentReference extends Fake
     implements DocumentReference<Map<String, dynamic>> {
-  final FirebaseException exception;
+  final Object exception;
 
   FakeErrorDocumentReference(this.exception);
 
@@ -78,7 +78,7 @@ class FakeErrorDocumentReference extends Fake
 
 class FakeErrorCollectionReference extends Fake
     implements CollectionReference<Map<String, dynamic>> {
-  final FirebaseException exception;
+  final Object exception;
 
   FakeErrorCollectionReference(this.exception);
 
@@ -120,7 +120,7 @@ class FakeErrorCollectionReference extends Fake
 }
 
 class FakeErrorFirestore extends Fake implements FirebaseFirestore {
-  final FirebaseException exception;
+  final Object exception;
 
   FakeErrorFirestore(this.exception);
 
@@ -869,23 +869,484 @@ void main() {
       },
     );
 
-    test('streamFaults emits real-time updates', () async {
-      final stream = faultService.streamFaults();
+    test('streamFaults emits complete real-time document lifecycle: initial empty, added, updated, and deleted', () async {
+      final iterator = StreamIterator(faultService.streamFaults());
 
-      expect(stream, emitsInOrder([isEmpty, hasLength(1)]));
+      try {
+        // 1. Initial snapshot: empty snapshot on empty collection
+        expect(await iterator.moveNext(), isTrue);
+        expect(iterator.current, isEmpty);
 
-      await Future<void>.delayed(Duration.zero);
-
-      await faultService.addFault(
-        FaultModel(
+        // 2. Added fault: emits snapshot with newly created fault document
+        final fault = FaultModel(
           id: '',
           machineId: 'mock-cnc-01',
+          machineName: 'CNC Milling Machine 01',
           type: AppConstants.faultTypeThermal,
           severity: AppConstants.severityHigh,
-          description: 'Streaming test fault',
+          description: 'Thermal sensor spike on spindle bearing',
           reportedBy: 'user_1',
+          reportedByName: 'Operator 1',
+        );
+        final docId = await faultService.addFault(fault);
+
+        expect(await iterator.moveNext(), isTrue);
+        expect(iterator.current.length, 1);
+        final added = iterator.current.first;
+        expect(added.id, docId);
+        expect(added.machineId, 'mock-cnc-01');
+        expect(added.machineName, 'CNC Milling Machine 01');
+        expect(added.type, AppConstants.faultTypeThermal);
+        expect(added.severity, AppConstants.severityHigh);
+        expect(added.description, 'Thermal sensor spike on spindle bearing');
+        expect(added.status, AppConstants.faultStatusOpen);
+
+        // 3. Updated fault status: emits snapshot with modified status
+        await fakeFirestore
+            .collection(AppConstants.faultsCollection)
+            .doc(docId)
+            .update({'status': AppConstants.faultStatusInProgress});
+
+        expect(await iterator.moveNext(), isTrue);
+        expect(iterator.current.length, 1);
+        final updated = iterator.current.first;
+        expect(updated.id, docId);
+        expect(updated.status, AppConstants.faultStatusInProgress);
+
+        // Further transition to Resolved
+        await fakeFirestore
+            .collection(AppConstants.faultsCollection)
+            .doc(docId)
+            .update({'status': AppConstants.faultStatusResolved});
+
+        expect(await iterator.moveNext(), isTrue);
+        expect(iterator.current.length, 1);
+        final resolved = iterator.current.first;
+        expect(resolved.id, docId);
+        expect(resolved.status, AppConstants.faultStatusResolved);
+
+        // 4. Deleted fault: emits empty snapshot following document removal
+        await fakeFirestore
+            .collection(AppConstants.faultsCollection)
+            .doc(docId)
+            .delete();
+
+        expect(await iterator.moveNext(), isTrue);
+        expect(iterator.current, isEmpty);
+      } finally {
+        await iterator.cancel();
+      }
+    });
+
+    test('streamFaults filters by machineId, status, and combined conditions in real-time', () async {
+      final f1 = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeThermal,
+        severity: AppConstants.severityHigh,
+        description: 'CNC Overheating',
+        reportedBy: 'user_1',
+        status: AppConstants.faultStatusOpen,
+      );
+      final f2 = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeMechanical,
+        severity: AppConstants.severityMedium,
+        description: 'CNC Vibration',
+        reportedBy: 'user_1',
+        status: AppConstants.faultStatusResolved,
+      );
+      final f3 = FaultModel(
+        id: '',
+        machineId: 'mock-press-02',
+        type: AppConstants.faultTypeHydraulic,
+        severity: AppConstants.severityHigh,
+        description: 'Press Leak',
+        reportedBy: 'user_1',
+        status: AppConstants.faultStatusOpen,
+      );
+      final f4 = FaultModel(
+        id: '',
+        machineId: 'mock-press-02',
+        type: AppConstants.faultTypeElectrical,
+        severity: AppConstants.severityLow,
+        description: 'Press Sensor Issue',
+        reportedBy: 'user_1',
+        status: AppConstants.faultStatusInProgress,
+      );
+
+      final id1 = await faultService.addFault(f1);
+      final id2 = await faultService.addFault(f2);
+      final id3 = await faultService.addFault(f3);
+      final id4 = await faultService.addFault(f4);
+
+      // Filter by machineId only: emits only matching machine records
+      final cncIterator = StreamIterator(
+        faultService.streamFaults(machineId: 'mock-cnc-01'),
+      );
+      try {
+        expect(await cncIterator.moveNext(), isTrue);
+        expect(cncIterator.current.length, 2);
+        expect(
+          cncIterator.current.map((f) => f.id),
+          unorderedEquals([id1, id2]),
+        );
+        expect(
+          cncIterator.current.every((f) => f.machineId == 'mock-cnc-01'),
+          isTrue,
+        );
+      } finally {
+        await cncIterator.cancel();
+      }
+
+      // Filter by another machineId: emits matching press records (id3, id4)
+      final pressIterator = StreamIterator(
+        faultService.streamFaults(machineId: 'mock-press-02'),
+      );
+      try {
+        expect(await pressIterator.moveNext(), isTrue);
+        expect(pressIterator.current.length, 2);
+        expect(
+          pressIterator.current.map((f) => f.id),
+          unorderedEquals([id3, id4]),
+        );
+        expect(
+          pressIterator.current.every((f) => f.machineId == 'mock-press-02'),
+          isTrue,
+        );
+      } finally {
+        await pressIterator.cancel();
+      }
+
+      // Filter by status only: emits only matching status records
+      final openIterator = StreamIterator(
+        faultService.streamFaults(status: AppConstants.faultStatusOpen),
+      );
+      try {
+        expect(await openIterator.moveNext(), isTrue);
+        expect(openIterator.current.length, 2);
+        expect(
+          openIterator.current.map((f) => f.id),
+          unorderedEquals([id1, id3]),
+        );
+        expect(
+          openIterator.current.every(
+            (f) => f.status == AppConstants.faultStatusOpen,
+          ),
+          isTrue,
+        );
+      } finally {
+        await openIterator.cancel();
+      }
+
+      // Filter by In Progress status: emits id4
+      final inProgressIterator = StreamIterator(
+        faultService.streamFaults(status: AppConstants.faultStatusInProgress),
+      );
+      try {
+        expect(await inProgressIterator.moveNext(), isTrue);
+        expect(inProgressIterator.current.length, 1);
+        expect(inProgressIterator.current.first.id, id4);
+        expect(
+          inProgressIterator.current.first.status,
+          AppConstants.faultStatusInProgress,
+        );
+      } finally {
+        await inProgressIterator.cancel();
+      }
+
+      // Combined filter matching a single record: applies both conditions
+      final combinedIterator = StreamIterator(
+        faultService.streamFaults(
+          machineId: 'mock-cnc-01',
+          status: AppConstants.faultStatusOpen,
         ),
       );
+      try {
+        expect(await combinedIterator.moveNext(), isTrue);
+        expect(combinedIterator.current.length, 1);
+        expect(combinedIterator.current.first.id, id1);
+        expect(combinedIterator.current.first.machineId, 'mock-cnc-01');
+        expect(
+          combinedIterator.current.first.status,
+          AppConstants.faultStatusOpen,
+        );
+      } finally {
+        await combinedIterator.cancel();
+      }
+
+      // Combined filter matching press in-progress record (id4)
+      final pressInProgressIterator = StreamIterator(
+        faultService.streamFaults(
+          machineId: 'mock-press-02',
+          status: AppConstants.faultStatusInProgress,
+        ),
+      );
+      try {
+        expect(await pressInProgressIterator.moveNext(), isTrue);
+        expect(pressInProgressIterator.current.length, 1);
+        expect(pressInProgressIterator.current.first.id, id4);
+        expect(
+          pressInProgressIterator.current.first.machineId,
+          'mock-press-02',
+        );
+      } finally {
+        await pressInProgressIterator.cancel();
+      }
+
+      // Combined filter matching no records
+      final noMatchIterator = StreamIterator(
+        faultService.streamFaults(
+          machineId: 'mock-press-02',
+          status: AppConstants.faultStatusResolved,
+        ),
+      );
+      try {
+        expect(await noMatchIterator.moveNext(), isTrue);
+        expect(noMatchIterator.current, isEmpty);
+      } finally {
+        await noMatchIterator.cancel();
+      }
+
+      // Active filtered stream updates when matching record is added in real time
+      final liveCncIterator = StreamIterator(
+        faultService.streamFaults(machineId: 'mock-cnc-01'),
+      );
+      try {
+        expect(await liveCncIterator.moveNext(), isTrue);
+        expect(liveCncIterator.current.length, 2);
+
+        // Add a fault for mock-press-02: does not belong to mock-cnc-01 stream
+        await faultService.addFault(
+          FaultModel(
+            id: '',
+            machineId: 'mock-press-02',
+            type: AppConstants.faultTypeThermal,
+            severity: AppConstants.severityLow,
+            description: 'Unrelated press issue',
+            reportedBy: 'user_1',
+          ),
+        );
+
+        // Add a fault for mock-cnc-01: stream emits updated list
+        final newCncId = await faultService.addFault(
+          FaultModel(
+            id: '',
+            machineId: 'mock-cnc-01',
+            type: AppConstants.faultTypeThermal,
+            severity: AppConstants.severityMedium,
+            description: 'CNC Secondary Spindle Alert',
+            reportedBy: 'user_1',
+          ),
+        );
+
+        expect(await liveCncIterator.moveNext(), isTrue);
+        expect(liveCncIterator.current.length, 3);
+        expect(liveCncIterator.current.map((f) => f.id), contains(newCncId));
+      } finally {
+        await liveCncIterator.cancel();
+      }
+    });
+
+    test('streamFaults trims whitespace around filter values and treats whitespace-only filters as omitted', () async {
+      final f1 = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeThermal,
+        severity: AppConstants.severityHigh,
+        description: 'CNC Overheating',
+        reportedBy: 'user_1',
+        status: AppConstants.faultStatusOpen,
+      );
+      final f2 = FaultModel(
+        id: '',
+        machineId: 'mock-press-02',
+        type: AppConstants.faultTypeMechanical,
+        severity: AppConstants.severityLow,
+        description: 'Press Vibration',
+        reportedBy: 'user_1',
+        status: AppConstants.faultStatusResolved,
+      );
+
+      final id1 = await faultService.addFault(f1);
+      final id2 = await faultService.addFault(f2);
+
+      // Whitespace around filter values is trimmed
+      final trimmedBothIterator = StreamIterator(
+        faultService.streamFaults(
+          machineId: '   mock-cnc-01   ',
+          status: '   ${AppConstants.faultStatusOpen}   ',
+        ),
+      );
+      try {
+        expect(await trimmedBothIterator.moveNext(), isTrue);
+        expect(trimmedBothIterator.current.length, 1);
+        expect(trimmedBothIterator.current.first.id, id1);
+      } finally {
+        await trimmedBothIterator.cancel();
+      }
+
+      // Whitespace-only filter values are treated as omitted (all records emitted)
+      final whitespaceOnlyIterator = StreamIterator(
+        faultService.streamFaults(machineId: '    ', status: '   \t  '),
+      );
+      try {
+        expect(await whitespaceOnlyIterator.moveNext(), isTrue);
+        expect(whitespaceOnlyIterator.current.length, 2);
+        expect(
+          whitespaceOnlyIterator.current.map((f) => f.id),
+          unorderedEquals([id1, id2]),
+        );
+      } finally {
+        await whitespaceOnlyIterator.cancel();
+      }
+
+      // Whitespace-only machineId with valid trimmed status
+      final wsMachineValidStatusIterator = StreamIterator(
+        faultService.streamFaults(
+          machineId: '   ',
+          status: '  ${AppConstants.faultStatusResolved}  ',
+        ),
+      );
+      try {
+        expect(await wsMachineValidStatusIterator.moveNext(), isTrue);
+        expect(wsMachineValidStatusIterator.current.length, 1);
+        expect(wsMachineValidStatusIterator.current.first.id, id2);
+      } finally {
+        await wsMachineValidStatusIterator.cancel();
+      }
+
+      // Valid trimmed machineId with whitespace-only status
+      final validMachineWsStatusIterator = StreamIterator(
+        faultService.streamFaults(
+          machineId: '  mock-press-02  ',
+          status: '   \n  ',
+        ),
+      );
+      try {
+        expect(await validMachineWsStatusIterator.moveNext(), isTrue);
+        expect(validMachineWsStatusIterator.current.length, 1);
+        expect(validMachineWsStatusIterator.current.first.id, id2);
+      } finally {
+        await validMachineWsStatusIterator.cancel();
+      }
+    });
+
+    test('streamFaults surfaces PERMISSION_DENIED FirebaseException as user-safe FaultServiceException', () async {
+      final errorFirestore = FakeErrorFirestore(
+        FirebaseException(plugin: 'cloud_firestore', code: 'PERMISSION_DENIED'),
+      );
+
+      final service = FaultService(
+        firestore: errorFirestore,
+        firebaseAuth: fakeAuth,
+      );
+
+      final iterator = StreamIterator(service.streamFaults());
+      try {
+        await expectLater(
+          iterator.moveNext(),
+          throwsA(
+            isA<FaultServiceException>()
+                .having((e) => e.code, 'code', 'permission-denied')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'You do not have permission to access or report this fault.',
+                ),
+          ),
+        );
+      } finally {
+        await iterator.cancel();
+      }
+
+      // Also verify error mapping when query filters are applied
+      final filteredIterator = StreamIterator(
+        service.streamFaults(
+          machineId: 'mock-cnc-01',
+          status: AppConstants.faultStatusOpen,
+        ),
+      );
+      try {
+        await expectLater(
+          filteredIterator.moveNext(),
+          throwsA(
+            isA<FaultServiceException>()
+                .having((e) => e.code, 'code', 'permission-denied')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'You do not have permission to access or report this fault.',
+                ),
+          ),
+        );
+      } finally {
+        await filteredIterator.cancel();
+      }
+    });
+
+    test('streamFaults surfaces UNAVAILABLE FirebaseException as user-safe FaultServiceException', () async {
+      final errorFirestore = FakeErrorFirestore(
+        FirebaseException(plugin: 'cloud_firestore', code: 'UNAVAILABLE'),
+      );
+
+      final service = FaultService(
+        firestore: errorFirestore,
+        firebaseAuth: fakeAuth,
+      );
+
+      final iterator = StreamIterator(service.streamFaults());
+      try {
+        await expectLater(
+          iterator.moveNext(),
+          throwsA(
+            isA<FaultServiceException>()
+                .having((e) => e.code, 'code', 'unavailable')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'Firestore is currently unavailable. Please check your network connection.',
+                ),
+          ),
+        );
+      } finally {
+        await iterator.cancel();
+      }
+    });
+
+    test('streamFaults wraps unexpected non-Firebase stream errors in unknown FaultServiceException with safe user message', () async {
+      const rawInternalError =
+          'Unexpected network socket disconnect with internal buffer overflow';
+      final errorFirestore = FakeErrorFirestore(Exception(rawInternalError));
+
+      final service = FaultService(
+        firestore: errorFirestore,
+        firebaseAuth: fakeAuth,
+      );
+
+      final iterator = StreamIterator(service.streamFaults());
+      try {
+        await expectLater(
+          iterator.moveNext(),
+          throwsA(
+            isA<FaultServiceException>()
+                .having((e) => e.code, 'code', 'unknown')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'A real-time fault stream error occurred. Please try again.',
+                )
+                .having(
+                  (e) => e.message,
+                  'message does not leak raw details',
+                  isNot(contains(rawInternalError)),
+                ),
+          ),
+        );
+      } finally {
+        await iterator.cancel();
+      }
     });
   });
 }

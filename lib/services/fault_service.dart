@@ -324,7 +324,8 @@ class FaultService {
           }
           throw FaultServiceException(
             code: 'unknown',
-            message: 'Stream error: $error',
+            message:
+                'A real-time fault stream error occurred. Please try again.',
           );
         });
   }
