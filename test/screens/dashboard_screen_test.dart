@@ -346,7 +346,13 @@ void main() {
 
         expect(find.text('2 live faults'), findsOneWidget);
         expect(find.text('Hydraulic Press 02'), findsOneWidget);
-        expect(find.text('Critical'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(Card),
+            matching: find.text('Critical'),
+          ),
+          findsOneWidget,
+        );
 
         // Cleanly pop screen
         await tester.pageBack();

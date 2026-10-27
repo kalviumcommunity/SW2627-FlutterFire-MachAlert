@@ -1,13 +1,90 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../models/fault_model.dart';
+import '../../utils/app_constants.dart';
 
-class RealtimeFaultsScreen extends StatelessWidget {
+class RealtimeFaultsScreen extends StatefulWidget {
   final Stream<List<FaultModel>>? faultStream;
 
   const RealtimeFaultsScreen({super.key, this.faultStream});
+
+  @override
+  State<RealtimeFaultsScreen> createState() => _RealtimeFaultsScreenState();
+}
+
+class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
+  final _searchController = TextEditingController();
+
+  String _searchQuery = '';
+  String? _selectedSeverity;
+  String? _selectedStatus;
+
+  bool get _hasActiveFilters =>
+      _searchQuery.trim().isNotEmpty ||
+      _selectedSeverity != null ||
+      _selectedStatus != null;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _clearFilters() {
+    _searchController.clear();
+
+    setState(() {
+      _searchQuery = '';
+      _selectedSeverity = null;
+      _selectedStatus = null;
+    });
+  }
+
+  List<FaultModel> _filterFaults(List<FaultModel> faults) {
+    final query = _searchQuery.trim().toLowerCase();
+
+    final filtered = faults.where((fault) {
+      final matchesSearch =
+          query.isEmpty ||
+          fault.machineId.toLowerCase().contains(query) ||
+          (fault.machineName ?? '').toLowerCase().contains(query) ||
+          fault.type.toLowerCase().contains(query) ||
+          fault.description.toLowerCase().contains(query) ||
+          (fault.reportedByName ?? '').toLowerCase().contains(query);
+
+      final matchesSeverity =
+          _selectedSeverity == null ||
+          fault.severity.trim().toLowerCase() ==
+              _selectedSeverity!.toLowerCase();
+
+      final matchesStatus =
+          _selectedStatus == null ||
+          fault.status.trim().toLowerCase() == _selectedStatus!.toLowerCase();
+
+      return matchesSearch && matchesSeverity && matchesStatus;
+    }).toList();
+
+    filtered.sort((a, b) {
+      final aDate = a.createdAt;
+      final bDate = b.createdAt;
+
+      if (aDate == null && bDate == null) {
+        return 0;
+      }
+
+      if (aDate == null) {
+        return 1;
+      }
+
+      if (bDate == null) {
+        return -1;
+      }
+
+      return bDate.compareTo(aDate);
+    });
+
+    return filtered;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,10 +128,10 @@ class RealtimeFaultsScreen extends StatelessWidget {
         ],
       ),
       body: SafeArea(
-        child: faultStream == null
+        child: widget.faultStream == null
             ? _buildDisconnectedState(context)
             : StreamBuilder<List<FaultModel>>(
-                stream: faultStream,
+                stream: widget.faultStream,
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return _buildErrorState(context);
@@ -65,83 +142,288 @@ class RealtimeFaultsScreen extends StatelessWidget {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  final faults = [...?snapshot.data];
+                  final allFaults = [...?snapshot.data];
 
-                  faults.sort((a, b) {
-                    final aDate = a.createdAt;
-                    final bDate = b.createdAt;
-
-                    if (aDate == null && bDate == null) {
-                      return 0;
-                    }
-
-                    if (aDate == null) {
-                      return 1;
-                    }
-
-                    if (bDate == null) {
-                      return -1;
-                    }
-
-                    return bDate.compareTo(aDate);
-                  });
-
-                  if (faults.isEmpty) {
+                  if (allFaults.isEmpty) {
                     return _buildEmptyState(context);
                   }
 
-                  return _buildFaultList(context, faults);
+                  final filteredFaults = _filterFaults(allFaults);
+
+                  return _buildFaultContent(
+                    context,
+                    allFaults: allFaults,
+                    filteredFaults: filteredFaults,
+                  );
                 },
               ),
       ),
     );
   }
 
-  Widget _buildFaultList(BuildContext context, List<FaultModel> faults) {
+  Widget _buildFaultContent(
+    BuildContext context, {
+    required List<FaultModel> allFaults,
+    required List<FaultModel> filteredFaults,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          margin: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '${faults.length} live '
-                  '${faults.length == 1 ? 'fault' : 'faults'}',
-                  style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ),
-              const Text(
-                'Updates automatically',
-                style: TextStyle(fontSize: 12),
-              ),
-            ],
-          ),
+        _buildSearchField(),
+
+        _buildFilterSection(),
+
+        _buildSummary(
+          context,
+          visibleCount: filteredFaults.length,
+          totalCount: allFaults.length,
         ),
 
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-            itemCount: faults.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              return _RealtimeFaultCard(fault: faults[index]);
-            },
+        if (filteredFaults.isEmpty)
+          Expanded(child: _buildNoMatchesState(context))
+        else
+          Expanded(
+            child: ListView.separated(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+              itemCount: filteredFaults.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                return _RealtimeFaultCard(fault: filteredFaults[index]);
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value;
+          });
+        },
+        decoration: InputDecoration(
+          hintText: 'Search faults...',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  tooltip: 'Clear search',
+                  onPressed: () {
+                    _searchController.clear();
+
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                  icon: const Icon(Icons.close),
+                )
+              : null,
+          filled: true,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
           ),
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildFilterSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.filter_alt_outlined, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                'Filters',
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              if (_hasActiveFilters)
+                TextButton(
+                  onPressed: _clearFilters,
+                  child: const Text('Clear All'),
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 4),
+
+          Text('Severity', style: Theme.of(context).textTheme.bodySmall),
+
+          const SizedBox(height: 6),
+
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('All'),
+                  selected: _selectedSeverity == null,
+                  onSelected: (_) {
+                    setState(() {
+                      _selectedSeverity = null;
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                ...AppConstants.severities.map((severity) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(severity),
+                      selected: _selectedSeverity == severity,
+                      onSelected: (_) {
+                        setState(() {
+                          _selectedSeverity = severity;
+                        });
+                      },
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          Text('Status', style: Theme.of(context).textTheme.bodySmall),
+
+          const SizedBox(height: 6),
+
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('All'),
+                  selected: _selectedStatus == null,
+                  onSelected: (_) {
+                    setState(() {
+                      _selectedStatus = null;
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                ...AppConstants.faultStatuses.map((status) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(status),
+                      selected: _selectedStatus == status,
+                      onSelected: (_) {
+                        setState(() {
+                          _selectedStatus = status;
+                        });
+                      },
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummary(
+    BuildContext context, {
+    required int visibleCount,
+    required int totalCount,
+  }) {
+    final message = _hasActiveFilters
+        ? '$visibleCount of $totalCount faults shown'
+        : '$totalCount live '
+              '${totalCount == 1 ? 'fault' : 'faults'}';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ),
+          if (!_hasActiveFilters)
+            const Text('Updates automatically', style: TextStyle(fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoMatchesState(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.search_off,
+                      size: 56,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    Text(
+                      'No matching faults',
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    const Text(
+                      'Try changing your search or filters.',
+                      textAlign: TextAlign.center,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    OutlinedButton.icon(
+                      onPressed: _clearFilters,
+                      icon: const Icon(Icons.filter_alt_off),
+                      label: const Text('Clear Filters'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -270,9 +552,7 @@ class _RealtimeFaultCard extends StatelessWidget {
                     color: severityColor,
                   ),
                 ),
-
                 const SizedBox(width: 12),
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,7 +562,6 @@ class _RealtimeFaultCard extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
-
                       if (fault.machineId.trim().isNotEmpty)
                         Text(
                           fault.machineId,
@@ -291,7 +570,6 @@ class _RealtimeFaultCard extends StatelessWidget {
                     ],
                   ),
                 ),
-
                 _StatusBadge(status: fault.status),
               ],
             ),
@@ -351,16 +629,12 @@ class _RealtimeFaultCard extends StatelessWidget {
     switch (severity.trim().toLowerCase()) {
       case 'low':
         return Colors.green;
-
       case 'medium':
         return Colors.orange;
-
       case 'high':
         return Colors.deepOrange;
-
       case 'critical':
         return Colors.red;
-
       default:
         return Colors.grey;
     }
@@ -370,19 +644,14 @@ class _RealtimeFaultCard extends StatelessWidget {
     switch (type.trim().toLowerCase()) {
       case 'mechanical':
         return Icons.build_outlined;
-
       case 'electrical':
         return Icons.bolt_outlined;
-
       case 'hydraulic':
         return Icons.water_drop_outlined;
-
       case 'thermal':
         return Icons.thermostat_outlined;
-
       case 'pneumatic':
         return Icons.air_outlined;
-
       default:
         return Icons.warning_amber;
     }
@@ -460,15 +729,12 @@ class _StatusBadge extends StatelessWidget {
       case 'resolved':
         color = Colors.green;
         break;
-
       case 'in progress':
         color = Colors.orange;
         break;
-
       case 'open':
         color = Colors.red;
         break;
-
       default:
         color = Colors.grey;
     }
