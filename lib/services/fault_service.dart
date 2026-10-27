@@ -261,23 +261,47 @@ class FaultService {
     }
   }
 
-  /// Retrieves a list of faults, with optional filtering by [machineId] and/or [status].
+  /// Helper to build a Firestore query for the faults collection with optional filters.
+  ///
+  /// Supports exact-match filtering by [machineId], [status], and [severity].
+  /// Trims whitespace and treats null, empty, or whitespace-only values as omitted.
+  Query<Map<String, dynamic>> _buildFaultsQuery({
+    String? machineId,
+    String? status,
+    String? severity,
+  }) {
+    Query<Map<String, dynamic>> query = _faultsCollection;
+
+    if (machineId != null && machineId.trim().isNotEmpty) {
+      query = query.where('machineId', isEqualTo: machineId.trim());
+    }
+
+    if (status != null && status.trim().isNotEmpty) {
+      query = query.where('status', isEqualTo: status.trim());
+    }
+
+    if (severity != null && severity.trim().isNotEmpty) {
+      query = query.where('severity', isEqualTo: severity.trim());
+    }
+
+    return query;
+  }
+
+  /// Retrieves a list of faults, with optional filtering by [machineId],
+  /// [status], and/or [severity].
   ///
   /// Throws [FaultServiceException] on Firestore error.
   Future<List<FaultModel>> getFaults({
     String? machineId,
     String? status,
+    String? severity,
   }) async {
     try {
-      Query<Map<String, dynamic>> query = _faultsCollection;
-
-      if (machineId != null && machineId.trim().isNotEmpty) {
-        query = query.where('machineId', isEqualTo: machineId.trim());
-      }
-
-      if (status != null && status.trim().isNotEmpty) {
-        query = query.where('status', isEqualTo: status.trim());
-      }
+      final query = _buildFaultsQuery(
+        machineId: machineId,
+        status: status,
+        severity: severity,
+      );
 
       final snapshot = await query.get();
       return snapshot.docs
@@ -296,17 +320,17 @@ class FaultService {
 
   /// Streams real-time updates for the faults collection.
   ///
-  /// Optionally filters by [machineId] and/or [status].
-  Stream<List<FaultModel>> streamFaults({String? machineId, String? status}) {
-    Query<Map<String, dynamic>> query = _faultsCollection;
-
-    if (machineId != null && machineId.trim().isNotEmpty) {
-      query = query.where('machineId', isEqualTo: machineId.trim());
-    }
-
-    if (status != null && status.trim().isNotEmpty) {
-      query = query.where('status', isEqualTo: status.trim());
-    }
+  /// Optionally filters by [machineId], [status], and/or [severity].
+  Stream<List<FaultModel>> streamFaults({
+    String? machineId,
+    String? status,
+    String? severity,
+  }) {
+    final query = _buildFaultsQuery(
+      machineId: machineId,
+      status: status,
+      severity: severity,
+    );
 
     return query
         .snapshots()
