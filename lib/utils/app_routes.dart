@@ -11,6 +11,7 @@ import '../screens/machines/machine_list_screen.dart';
 import '../screens/faults/fault_history_screen.dart';
 import '../screens/faults/fault_reporting_screen.dart';
 import '../services/fault_service.dart';
+import '../services/storage_service.dart';
 import '../models/fault_model.dart';
 import '../screens/faults/realtime_faults_screen.dart';
 
@@ -63,11 +64,15 @@ class AppRoutes {
   static Route<void> reportFault({
     List<MachineModel> machines = const [],
     MachineModel? initialMachine,
+    FaultService? faultService,
+    StorageService? storageService,
   }) {
     return MaterialPageRoute<void>(
       builder: (_) => FaultReportingScreen(
         machines: machines,
         initialMachine: initialMachine,
+        faultService: faultService,
+        storageService: storageService,
       ),
     );
   }
