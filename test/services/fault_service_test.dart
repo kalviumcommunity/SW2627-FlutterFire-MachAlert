@@ -869,6 +869,211 @@ void main() {
       },
     );
 
+    test('getFaults returns only records matching severity', () async {
+      final f1 = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeThermal,
+        severity: AppConstants.severityHigh,
+        description: 'Fault High 1',
+        reportedBy: 'user_1',
+      );
+      final f2 = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeMechanical,
+        severity: AppConstants.severityCritical,
+        description: 'Fault Critical 2',
+        reportedBy: 'user_1',
+      );
+      final f3 = FaultModel(
+        id: '',
+        machineId: 'mock-press-02',
+        type: AppConstants.faultTypeElectrical,
+        severity: AppConstants.severityLow,
+        description: 'Fault Low 3',
+        reportedBy: 'user_1',
+      );
+      final f4 = FaultModel(
+        id: '',
+        machineId: 'mock-press-02',
+        type: AppConstants.faultTypeHydraulic,
+        severity: AppConstants.severityHigh,
+        description: 'Fault High 4',
+        reportedBy: 'user_1',
+      );
+
+      final id1 = await faultService.addFault(f1);
+      await faultService.addFault(f2);
+      await faultService.addFault(f3);
+      final id4 = await faultService.addFault(f4);
+
+      final highFaults = await faultService.getFaults(
+        severity: AppConstants.severityHigh,
+      );
+      expect(highFaults.length, 2);
+      expect(highFaults.map((f) => f.id), unorderedEquals([id1, id4]));
+      expect(
+        highFaults.every((f) => f.severity == AppConstants.severityHigh),
+        isTrue,
+      );
+
+      final trimmedHigh = await faultService.getFaults(
+        severity: '  ${AppConstants.severityHigh}  ',
+      );
+      expect(trimmedHigh.length, 2);
+      expect(trimmedHigh.map((f) => f.id), unorderedEquals([id1, id4]));
+
+      final criticalFaults = await faultService.getFaults(
+        severity: AppConstants.severityCritical,
+      );
+      expect(criticalFaults.length, 1);
+      expect(criticalFaults.first.severity, AppConstants.severityCritical);
+    });
+
+    test(
+      'getFaults combines machine ID, status and severity filters',
+      () async {
+        final f1 = FaultModel(
+          id: '',
+          machineId: 'mock-cnc-01',
+          type: AppConstants.faultTypeThermal,
+          severity: AppConstants.severityHigh,
+          description: 'CNC Open High',
+          reportedBy: 'user_1',
+          status: AppConstants.faultStatusOpen,
+        );
+        final f2 = FaultModel(
+          id: '',
+          machineId: 'mock-cnc-01',
+          type: AppConstants.faultTypeMechanical,
+          severity: AppConstants.severityLow,
+          description: 'CNC Open Low',
+          reportedBy: 'user_1',
+          status: AppConstants.faultStatusOpen,
+        );
+        final f3 = FaultModel(
+          id: '',
+          machineId: 'mock-cnc-01',
+          type: AppConstants.faultTypeElectrical,
+          severity: AppConstants.severityHigh,
+          description: 'CNC Resolved High',
+          reportedBy: 'user_1',
+          status: AppConstants.faultStatusResolved,
+        );
+        final f4 = FaultModel(
+          id: '',
+          machineId: 'mock-press-02',
+          type: AppConstants.faultTypeHydraulic,
+          severity: AppConstants.severityHigh,
+          description: 'Press Open High',
+          reportedBy: 'user_1',
+          status: AppConstants.faultStatusOpen,
+        );
+
+        final id1 = await faultService.addFault(f1);
+        await faultService.addFault(f2);
+        await faultService.addFault(f3);
+        await faultService.addFault(f4);
+
+        final results = await faultService.getFaults(
+          machineId: 'mock-cnc-01',
+          status: AppConstants.faultStatusOpen,
+          severity: AppConstants.severityHigh,
+        );
+
+        expect(results.length, 1);
+        expect(results.first.id, id1);
+        expect(results.first.machineId, 'mock-cnc-01');
+        expect(results.first.status, AppConstants.faultStatusOpen);
+        expect(results.first.severity, AppConstants.severityHigh);
+      },
+    );
+
+    test(
+      'getFaults ignores whitespace-only filter values including severity',
+      () async {
+        final f1 = FaultModel(
+          id: '',
+          machineId: 'mock-cnc-01',
+          type: AppConstants.faultTypeThermal,
+          severity: AppConstants.severityHigh,
+          description: 'Fault 1',
+          reportedBy: 'user_1',
+          status: AppConstants.faultStatusOpen,
+        );
+        final f2 = FaultModel(
+          id: '',
+          machineId: 'mock-press-02',
+          type: AppConstants.faultTypeMechanical,
+          severity: AppConstants.severityLow,
+          description: 'Fault 2',
+          reportedBy: 'user_1',
+          status: AppConstants.faultStatusResolved,
+        );
+
+        final id1 = await faultService.addFault(f1);
+        final id2 = await faultService.addFault(f2);
+
+        // All filters whitespace-only: treated as omitted
+        final allResults = await faultService.getFaults(
+          machineId: '   ',
+          status: ' \t ',
+          severity: '  \n  ',
+        );
+        expect(allResults.length, 2);
+        expect(allResults.map((f) => f.id), unorderedEquals([id1, id2]));
+
+        // Valid severity with whitespace-only machineId and status
+        final severityOnly = await faultService.getFaults(
+          machineId: '   ',
+          status: '   ',
+          severity: '  ${AppConstants.severityHigh}  ',
+        );
+        expect(severityOnly.length, 1);
+        expect(severityOnly.first.id, id1);
+
+        // Valid machineId with whitespace-only severity
+        final machineOnly = await faultService.getFaults(
+          machineId: ' mock-press-02 ',
+          severity: '   ',
+        );
+        expect(machineOnly.length, 1);
+        expect(machineOnly.first.id, id2);
+      },
+    );
+
+    test('getFaults returns an empty list for unmatched criteria', () async {
+      final f1 = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeThermal,
+        severity: AppConstants.severityHigh,
+        description: 'Fault 1',
+        reportedBy: 'user_1',
+        status: AppConstants.faultStatusOpen,
+      );
+      await faultService.addFault(f1);
+
+      final noSeverityMatch = await faultService.getFaults(
+        severity: AppConstants.severityCritical,
+      );
+      expect(noSeverityMatch, isEmpty);
+
+      final noCombinedMatch = await faultService.getFaults(
+        machineId: 'mock-cnc-01',
+        status: AppConstants.faultStatusResolved,
+        severity: AppConstants.severityHigh,
+      );
+      expect(noCombinedMatch, isEmpty);
+
+      final noMachineMatch = await faultService.getFaults(
+        machineId: 'non-existent-machine',
+        severity: AppConstants.severityHigh,
+      );
+      expect(noMachineMatch, isEmpty);
+    });
+
     test('streamFaults emits complete real-time document lifecycle: initial empty, added, updated, and deleted', () async {
       final iterator = StreamIterator(faultService.streamFaults());
 
@@ -1233,6 +1438,250 @@ void main() {
       }
     });
 
+    test('streamFaults filters by severity correctly', () async {
+      final f1 = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeThermal,
+        severity: AppConstants.severityCritical,
+        description: 'Critical spindle emergency',
+        reportedBy: 'user_1',
+      );
+      final f2 = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeMechanical,
+        severity: AppConstants.severityHigh,
+        description: 'High spindle vibration',
+        reportedBy: 'user_1',
+      );
+      final f3 = FaultModel(
+        id: '',
+        machineId: 'mock-press-02',
+        type: AppConstants.faultTypeElectrical,
+        severity: AppConstants.severityCritical,
+        description: 'Critical press relay failure',
+        reportedBy: 'user_1',
+      );
+
+      final id1 = await faultService.addFault(f1);
+      await faultService.addFault(f2);
+      final id3 = await faultService.addFault(f3);
+
+      final criticalIterator = StreamIterator(
+        faultService.streamFaults(
+          severity: '  ${AppConstants.severityCritical}  ',
+        ),
+      );
+      try {
+        expect(await criticalIterator.moveNext(), isTrue);
+        expect(criticalIterator.current.length, 2);
+        expect(
+          criticalIterator.current.map((f) => f.id),
+          unorderedEquals([id1, id3]),
+        );
+        expect(
+          criticalIterator.current.every(
+            (f) => f.severity == AppConstants.severityCritical,
+          ),
+          isTrue,
+        );
+      } finally {
+        await criticalIterator.cancel();
+      }
+
+      final highIterator = StreamIterator(
+        faultService.streamFaults(severity: AppConstants.severityHigh),
+      );
+      try {
+        expect(await highIterator.moveNext(), isTrue);
+        expect(highIterator.current.length, 1);
+        expect(highIterator.current.first.severity, AppConstants.severityHigh);
+        expect(
+          highIterator.current.first.description,
+          'High spindle vibration',
+        );
+      } finally {
+        await highIterator.cancel();
+      }
+    });
+
+    test('streamFaults applies combined machine ID, status and severity filters correctly', () async {
+      final f1 = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeThermal,
+        severity: AppConstants.severityHigh,
+        description: 'Target match',
+        reportedBy: 'user_1',
+        status: AppConstants.faultStatusOpen,
+      );
+      final f2 = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeThermal,
+        severity: AppConstants.severityCritical,
+        description: 'CNC Open Critical',
+        reportedBy: 'user_1',
+        status: AppConstants.faultStatusOpen,
+      );
+      final f3 = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeMechanical,
+        severity: AppConstants.severityHigh,
+        description: 'CNC InProgress High',
+        reportedBy: 'user_1',
+        status: AppConstants.faultStatusInProgress,
+      );
+      final f4 = FaultModel(
+        id: '',
+        machineId: 'mock-press-02',
+        type: AppConstants.faultTypeHydraulic,
+        severity: AppConstants.severityHigh,
+        description: 'Press Open High',
+        reportedBy: 'user_1',
+        status: AppConstants.faultStatusOpen,
+      );
+
+      final id1 = await faultService.addFault(f1);
+      await faultService.addFault(f2);
+      await faultService.addFault(f3);
+      await faultService.addFault(f4);
+
+      final combinedIterator = StreamIterator(
+        faultService.streamFaults(
+          machineId: '  mock-cnc-01  ',
+          status: '  ${AppConstants.faultStatusOpen}  ',
+          severity: '  ${AppConstants.severityHigh}  ',
+        ),
+      );
+      try {
+        expect(await combinedIterator.moveNext(), isTrue);
+        expect(combinedIterator.current.length, 1);
+        expect(combinedIterator.current.first.id, id1);
+        expect(combinedIterator.current.first.machineId, 'mock-cnc-01');
+        expect(
+          combinedIterator.current.first.status,
+          AppConstants.faultStatusOpen,
+        );
+        expect(
+          combinedIterator.current.first.severity,
+          AppConstants.severityHigh,
+        );
+      } finally {
+        await combinedIterator.cancel();
+      }
+
+      // Combination matching zero records
+      final noMatchIterator = StreamIterator(
+        faultService.streamFaults(
+          machineId: 'mock-cnc-01',
+          status: AppConstants.faultStatusResolved,
+          severity: AppConstants.severityHigh,
+        ),
+      );
+      try {
+        expect(await noMatchIterator.moveNext(), isTrue);
+        expect(noMatchIterator.current, isEmpty);
+      } finally {
+        await noMatchIterator.cancel();
+      }
+    });
+
+    test('severity-filtered stream updates when matching fault is added or changed and excludes non-matching records', () async {
+      final initialLowFault = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeMechanical,
+        severity: AppConstants.severityLow,
+        description: 'Initial low severity fault',
+        reportedBy: 'user_1',
+      );
+      final initialLowId = await faultService.addFault(initialLowFault);
+
+      final criticalStream = faultService.streamFaults(
+        severity: AppConstants.severityCritical,
+      );
+      final iterator = StreamIterator(criticalStream);
+
+      try {
+        // 1. Initial emission: excludes non-matching low fault
+        expect(await iterator.moveNext(), isTrue);
+        expect(iterator.current, isEmpty);
+
+        // 2. Add another non-matching record (Medium severity): remains excluded
+        final mediumFault = FaultModel(
+          id: '',
+          machineId: 'mock-cnc-01',
+          type: AppConstants.faultTypeThermal,
+          severity: AppConstants.severityMedium,
+          description: 'Spindle warning',
+          reportedBy: 'user_1',
+        );
+        await faultService.addFault(mediumFault);
+
+        // 3. Add a matching fault to verify the stream update
+        final matchingCritical = FaultModel(
+          id: '',
+          machineId: 'mock-press-02',
+          type: AppConstants.faultTypeHydraulic,
+          severity: AppConstants.severityCritical,
+          description: 'Critical hydraulic line burst',
+          reportedBy: 'user_1',
+        );
+        final critDocId = await faultService.addFault(matchingCritical);
+
+        expect(await iterator.moveNext(), isTrue);
+        expect(iterator.current.length, 1);
+        expect(iterator.current.first.id, critDocId);
+        expect(iterator.current.first.severity, AppConstants.severityCritical);
+        expect(
+          iterator.current.any((f) => f.id == initialLowId),
+          isFalse,
+          reason: 'Non-matching low severity record must remain excluded',
+        );
+
+        // 4. Update existing matching fault description: stream emits updated fault
+        await fakeFirestore
+            .collection(AppConstants.faultsCollection)
+            .doc(critDocId)
+            .update({'description': 'Updated: Emergency shutoff activated'});
+
+        expect(await iterator.moveNext(), isTrue);
+        expect(iterator.current.length, 1);
+        expect(
+          iterator.current.first.description,
+          'Updated: Emergency shutoff activated',
+        );
+
+        // 5. Update the low severity fault to become Critical: stream updates and includes it
+        await fakeFirestore
+            .collection(AppConstants.faultsCollection)
+            .doc(initialLowId)
+            .update({'severity': AppConstants.severityCritical});
+
+        expect(await iterator.moveNext(), isTrue);
+        expect(iterator.current.length, 2);
+        expect(
+          iterator.current.map((f) => f.id),
+          unorderedEquals([critDocId, initialLowId]),
+        );
+
+        // 6. Change severity of critDocId to Low: becomes excluded from stream
+        await fakeFirestore
+            .collection(AppConstants.faultsCollection)
+            .doc(critDocId)
+            .update({'severity': AppConstants.severityLow});
+
+        expect(await iterator.moveNext(), isTrue);
+        expect(iterator.current.length, 1);
+        expect(iterator.current.first.id, initialLowId);
+      } finally {
+        await iterator.cancel();
+      }
+    });
+
     test('streamFaults surfaces PERMISSION_DENIED FirebaseException as user-safe FaultServiceException', () async {
       final errorFirestore = FakeErrorFirestore(
         FirebaseException(plugin: 'cloud_firestore', code: 'PERMISSION_DENIED'),
@@ -1261,11 +1710,12 @@ void main() {
         await iterator.cancel();
       }
 
-      // Also verify error mapping when query filters are applied
+      // Also verify error mapping when query filters including severity are applied
       final filteredIterator = StreamIterator(
         service.streamFaults(
           machineId: 'mock-cnc-01',
           status: AppConstants.faultStatusOpen,
+          severity: AppConstants.severityHigh,
         ),
       );
       try {

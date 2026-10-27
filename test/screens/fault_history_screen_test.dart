@@ -12,6 +12,7 @@ class FakeFaultService extends Fake implements FaultService {
   int getFaultsCallCount = 0;
   String? lastMachineIdFilter;
   String? lastStatusFilter;
+  String? lastSeverityFilter;
   List<FaultModel> faultsToReturn = [];
   Exception? exceptionToThrow;
   Completer<List<FaultModel>>? completer;
@@ -20,10 +21,12 @@ class FakeFaultService extends Fake implements FaultService {
   Future<List<FaultModel>> getFaults({
     String? machineId,
     String? status,
+    String? severity,
   }) async {
     getFaultsCallCount++;
     lastMachineIdFilter = machineId;
     lastStatusFilter = status;
+    lastSeverityFilter = severity;
 
     if (completer != null) {
       return completer!.future;

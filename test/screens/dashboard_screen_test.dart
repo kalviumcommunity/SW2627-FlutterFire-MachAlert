@@ -38,12 +38,17 @@ class FakeFaultService extends Fake implements FaultService {
   Future<List<FaultModel>> getFaults({
     String? machineId,
     String? status,
+    String? severity,
   }) async {
     return [];
   }
 
   @override
-  Stream<List<FaultModel>> streamFaults({String? machineId, String? status}) {
+  Stream<List<FaultModel>> streamFaults({
+    String? machineId,
+    String? status,
+    String? severity,
+  }) {
     return faultStream ?? const Stream.empty();
   }
 }
