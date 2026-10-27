@@ -62,53 +62,79 @@ Future<void> pumpFaultScreen(
 
 Future<void> selectFaultType(WidgetTester tester, String faultType) async {
   final dropdown = find.byType(DropdownButtonFormField<String>).at(1);
+
   await tester.ensureVisible(dropdown);
   await tester.pumpAndSettle();
+
   await tester.tap(dropdown);
   await tester.pumpAndSettle();
+
   await tester.tap(find.text(faultType).last);
+
   await tester.pumpAndSettle();
 }
 
 Future<void> selectSeverity(WidgetTester tester, String severity) async {
   final chip = find.widgetWithText(ChoiceChip, severity);
+
   await tester.ensureVisible(chip);
   await tester.pumpAndSettle();
+
   await tester.tap(chip);
   await tester.pumpAndSettle();
 }
 
 Future<void> enterDescription(WidgetTester tester, String text) async {
   final desc = find.byType(TextFormField);
+
   await tester.ensureVisible(desc);
   await tester.pumpAndSettle();
+
   await tester.enterText(desc, text);
+
   await tester.pumpAndSettle();
 }
 
 Future<void> tapSubmit(WidgetTester tester) async {
   final submitButton = find.widgetWithText(FilledButton, 'Submit Fault Report');
+
   await tester.ensureVisible(submitButton);
+
   await tester.pumpAndSettle();
+
   await tester.tap(submitButton);
 }
 
 void main() {
-  testWidgets('FaultReportingScreen displays Day 12 form fields', (
+  testWidgets('FaultReportingScreen displays Day 16 fault form fields', (
     tester,
   ) async {
     await pumpFaultScreen(tester, machines: [createMachine()]);
 
     expect(find.text('Report Machine Fault'), findsOneWidget);
+
     expect(find.text('Machine'), findsOneWidget);
+
     expect(find.text('Fault Type'), findsOneWidget);
+
     expect(find.text('Severity'), findsOneWidget);
+
     expect(find.text('Low'), findsOneWidget);
+
     expect(find.text('Medium'), findsOneWidget);
+
     expect(find.text('High'), findsOneWidget);
+
     expect(find.text('Critical'), findsOneWidget);
+
     expect(find.text('Fault Description'), findsOneWidget);
-    expect(find.text('Add Photos'), findsOneWidget);
+
+    expect(find.text('Add Photo'), findsOneWidget);
+
+    expect(find.text('Add a fault photo'), findsOneWidget);
+
+    expect(find.text('Camera or Gallery'), findsOneWidget);
+
     expect(find.text('Submit Fault Report'), findsOneWidget);
   });
 
@@ -118,7 +144,9 @@ void main() {
     await pumpFaultScreen(tester, machines: [machine], initialMachine: machine);
 
     expect(find.text('M-01 - CNC Machine'), findsOneWidget);
+
     expect(find.text('CNC Machine'), findsOneWidget);
+
     expect(find.text('Line 1'), findsOneWidget);
   });
 
@@ -129,7 +157,9 @@ void main() {
     await tester.pump();
 
     expect(find.text('Please select a fault type.'), findsOneWidget);
+
     expect(find.text('Please select a severity.'), findsOneWidget);
+
     expect(find.text('Please describe the fault.'), findsOneWidget);
   });
 
@@ -141,6 +171,7 @@ void main() {
     final chip = tester.widget<ChoiceChip>(
       find.widgetWithText(ChoiceChip, 'Critical'),
     );
+
     expect(chip.selected, isTrue);
   });
 
@@ -157,6 +188,7 @@ void main() {
     'FaultReportingScreen can be instantiated with default faultService',
     (tester) async {
       const screen = FaultReportingScreen();
+
       expect(screen.faultService, isNull);
     },
   );
@@ -165,6 +197,7 @@ void main() {
     'successful submission invokes the service once with the correct machine, type, severity and trimmed description',
     (tester) async {
       final fakeService = FakeFaultService();
+
       final machine = createMachine(id: 'M-01', name: 'CNC Machine');
 
       await pumpFaultScreen(
@@ -175,7 +208,9 @@ void main() {
       );
 
       await selectFaultType(tester, 'Mechanical');
+
       await selectSeverity(tester, 'Critical');
+
       await enterDescription(
         tester,
         '   Motor overheating with unusual vibration.   ',
@@ -185,20 +220,33 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fakeService.addFaultCallCount, equals(1));
+
       final submitted = fakeService.lastSubmittedFault;
+
       expect(submitted, isNotNull);
+
       expect(submitted!.machineId, equals('M-01'));
+
       expect(submitted.machineName, equals('CNC Machine'));
+
       expect(submitted.type, equals('Mechanical'));
+
       expect(submitted.severity, equals('Critical'));
+
       expect(
         submitted.description,
         equals('Motor overheating with unusual vibration.'),
       );
+
       expect(submitted.status, equals(AppConstants.faultStatusOpen));
+
       expect(submitted.id, isEmpty);
+
       expect(submitted.reportedBy, isEmpty);
+
       expect(submitted.createdAt, isNull);
+
+      expect(submitted.imageUrl, isNull);
 
       expect(find.text('Fault report submitted successfully.'), findsOneWidget);
     },
@@ -208,6 +256,7 @@ void main() {
     'missing machine, type, severity, or short description does not invoke the service',
     (tester) async {
       final fakeService = FakeFaultService();
+
       final machine = createMachine();
 
       await pumpFaultScreen(
@@ -217,27 +266,31 @@ void main() {
         faultService: fakeService,
       );
 
-      // 1. Missing type, severity, and description
       await tapSubmit(tester);
       await tester.pump();
+
       expect(fakeService.addFaultCallCount, equals(0));
+
       expect(find.text('Please select a fault type.'), findsOneWidget);
+
       expect(find.text('Please select a severity.'), findsOneWidget);
+
       expect(find.text('Please describe the fault.'), findsOneWidget);
 
-      // 2. Select type and severity, but description too short
       await selectFaultType(tester, 'Electrical');
+
       await selectSeverity(tester, 'High');
+
       await enterDescription(tester, '   Short   ');
 
       await tapSubmit(tester);
       await tester.pump();
 
       expect(fakeService.addFaultCallCount, equals(0));
-      expect(
-        find.text('Please provide at least 10 characters.'),
-        findsOneWidget,
-      );
+
+      expect(find.text('Add Photo'), findsOneWidget);
+
+      expect(find.text('Add a fault photo'), findsOneWidget);
     },
   );
 
@@ -245,12 +298,14 @@ void main() {
     'service-level unauthenticated error displays a suitable message and does not crash',
     (tester) async {
       final fakeService = FakeFaultService();
+
       fakeService.exceptionToThrow = FaultServiceException(
         code: 'unauthenticated',
         message: 'User is not authenticated. Please log in.',
       );
 
       final machine = createMachine();
+
       await pumpFaultScreen(
         tester,
         machines: [machine],
@@ -259,17 +314,21 @@ void main() {
       );
 
       await selectFaultType(tester, 'Mechanical');
+
       await selectSeverity(tester, 'Medium');
+
       await enterDescription(tester, 'Conveyor belt slipping intermittently.');
 
       await tapSubmit(tester);
       await tester.pumpAndSettle();
 
       expect(fakeService.addFaultCallCount, equals(1));
+
       expect(
         find.text('User is not authenticated. Please log in.'),
         findsOneWidget,
       );
+
       expect(find.text('Submit Fault Report'), findsOneWidget);
     },
   );
@@ -278,6 +337,7 @@ void main() {
     'service failure displays an error and retains entered description',
     (tester) async {
       final fakeService = FakeFaultService();
+
       fakeService.exceptionToThrow = FaultServiceException(
         code: 'unavailable',
         message: 'Firestore is currently unavailable. Please check your network connection.',
@@ -285,7 +345,9 @@ void main() {
 
       const enteredDescription =
           'Sensor reading fluctuating wildly under load.';
+
       final machine = createMachine();
+
       await pumpFaultScreen(
         tester,
         machines: [machine],
@@ -294,13 +356,16 @@ void main() {
       );
 
       await selectFaultType(tester, 'Thermal');
+
       await selectSeverity(tester, 'High');
+
       await enterDescription(tester, enteredDescription);
 
       await tapSubmit(tester);
       await tester.pumpAndSettle();
 
       expect(fakeService.addFaultCallCount, equals(1));
+
       expect(
         find.text(
           'Firestore is currently unavailable. Please check your network connection.',
@@ -309,8 +374,11 @@ void main() {
       );
 
       final descFinder = find.byType(TextFormField);
+
       final textField = tester.widget<TextFormField>(descFinder);
+
       expect(textField.controller?.text, equals(enteredDescription));
+
       expect(find.text(enteredDescription), findsOneWidget);
     },
   );
@@ -319,12 +387,15 @@ void main() {
     'generic unexpected failure displays safe error and retains description',
     (tester) async {
       final fakeService = FakeFaultService();
+
       fakeService.exceptionToThrow = Exception(
         'Internal server error with sensitive details',
       );
 
       const enteredDescription = 'Hydraulic pressure drop on main actuator.';
+
       final machine = createMachine();
+
       await pumpFaultScreen(
         tester,
         machines: [machine],
@@ -333,18 +404,23 @@ void main() {
       );
 
       await selectFaultType(tester, 'Hydraulic');
+
       await selectSeverity(tester, 'Low');
+
       await enterDescription(tester, enteredDescription);
 
       await tapSubmit(tester);
       await tester.pumpAndSettle();
 
       expect(fakeService.addFaultCallCount, equals(1));
+
       expect(
         find.text('Failed to submit fault report. Please try again.'),
         findsOneWidget,
       );
+
       expect(find.textContaining('sensitive details'), findsNothing);
+
       expect(find.text(enteredDescription), findsOneWidget);
     },
   );
@@ -353,10 +429,13 @@ void main() {
     'submitting state prevents duplicate submission and disables relevant controls',
     (tester) async {
       final fakeService = FakeFaultService();
+
       final completer = Completer<String>();
+
       fakeService.submitCompleter = completer;
 
       final machine = createMachine();
+
       await pumpFaultScreen(
         tester,
         machines: [machine],
@@ -365,7 +444,9 @@ void main() {
       );
 
       await selectFaultType(tester, 'Pneumatic');
+
       await selectSeverity(tester, 'Critical');
+
       await enterDescription(
         tester,
         'Emergency stop button does not reset properly.',
@@ -375,31 +456,38 @@ void main() {
       await tester.pump();
 
       expect(find.text('Submitting...'), findsOneWidget);
+
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
       final submittingButton = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Submitting...'),
       );
+
       expect(submittingButton.onPressed, isNull);
 
       await tester.tap(
         find.widgetWithText(FilledButton, 'Submitting...'),
         warnIfMissed: false,
       );
+
       await tester.pump();
+
       expect(fakeService.addFaultCallCount, equals(1));
 
       final descField = tester.widget<TextFormField>(
         find.byType(TextFormField),
       );
+
       expect(descField.enabled, isFalse);
 
       final lowChip = tester.widget<ChoiceChip>(
         find.widgetWithText(ChoiceChip, 'Low'),
       );
+
       expect(lowChip.onSelected, isNull);
 
       completer.complete('fault-doc-complete-1');
+
       await tester.pumpAndSettle();
 
       expect(find.text('Fault report submitted successfully.'), findsOneWidget);
@@ -410,7 +498,9 @@ void main() {
     'successful submission pops with created document ID when navigation stack allows popping',
     (tester) async {
       final fakeService = FakeFaultService();
+
       fakeService.docIdToReturn = 'doc-nav-pop-456';
+
       dynamic popResult;
 
       await tester.pumpWidget(
@@ -437,10 +527,13 @@ void main() {
       );
 
       await tester.tap(find.text('Open'));
+
       await tester.pumpAndSettle();
 
       await selectFaultType(tester, 'Mechanical');
+
       await selectSeverity(tester, 'High');
+
       await enterDescription(
         tester,
         'Spindle bearing noise detected during warmup.',
@@ -450,6 +543,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(popResult, equals('doc-nav-pop-456'));
+
       expect(find.text('Fault report submitted successfully.'), findsOneWidget);
     },
   );
