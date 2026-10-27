@@ -106,9 +106,8 @@ class _HomeScreenState extends State<HomeScreen> {
       } catch (_) {}
     }
 
-    Navigator.of(context).push<void>(
-      AppRoutes.realtimeFaults(faultStream: faultService?.streamFaults()),
-    );
+    Navigator.of(context)
+        .push<void>(AppRoutes.realtimeFaults(faultService: faultService));
   }
 
   @override
