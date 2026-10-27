@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/fault_model.dart';
 import '../../models/machine_model.dart';
 import '../../services/fault_service.dart';
+import '../../services/storage_service.dart';
 import '../../utils/app_constants.dart';
 import '../../widgets/fault_image_attachment_picker.dart';
 
@@ -11,12 +13,16 @@ class FaultReportingScreen extends StatefulWidget {
   final List<MachineModel> machines;
   final MachineModel? initialMachine;
   final FaultService? faultService;
+  final StorageService? storageService;
+  final FaultImagePickCallback? pickImage;
 
   const FaultReportingScreen({
     super.key,
     this.machines = const [],
     this.initialMachine,
     this.faultService,
+    this.storageService,
+    this.pickImage,
   });
 
   @override
@@ -82,8 +88,41 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
     return null;
   }
 
-  FaultService get _effectiveFaultService =>
-      widget.faultService ?? FaultService();
+  FaultService get _effectiveFaultService {
+    if (widget.faultService != null) {
+      return widget.faultService!;
+    }
+    try {
+      return Provider.of<FaultService>(context, listen: false);
+    } catch (_) {
+      return FaultService();
+    }
+  }
+
+  StorageService get _effectiveStorageService {
+    if (widget.storageService != null) {
+      return widget.storageService!;
+    }
+    try {
+      return Provider.of<StorageService>(context, listen: false);
+    } catch (_) {
+      return StorageService();
+    }
+  }
+
+  String _determineContentType(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.png')) {
+      return 'image/png';
+    } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    } else if (lower.endsWith('.webp')) {
+      return 'image/webp';
+    } else if (lower.endsWith('.gif')) {
+      return 'image/gif';
+    }
+    return 'image/jpeg';
+  }
 
   Future<void> _submit() async {
     if (_isSubmitting) {
@@ -128,6 +167,35 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
     });
 
     try {
+      String? imageUrl;
+
+      if (_selectedImage != null) {
+        final imageBytes = await _selectedImage!.readAsBytes();
+        if (!mounted) {
+          return;
+        }
+        final rawName = _selectedImage!.name.trim();
+        final rawPath = _selectedImage!.path.trim();
+        final pathName = rawPath.isNotEmpty
+            ? rawPath.split(RegExp(r'[/\\]')).last.trim()
+            : '';
+        final candidateName = rawName.isNotEmpty ? rawName : pathName;
+        final fileName = candidateName.isNotEmpty
+            ? candidateName
+            : 'fault_image.jpg';
+        final contentType = _determineContentType(fileName);
+
+        imageUrl = await _effectiveStorageService.uploadFaultImage(
+          bytes: imageBytes,
+          fileName: fileName,
+          contentType: contentType,
+        );
+
+        if (!mounted) {
+          return;
+        }
+      }
+
       final fault = FaultModel(
         id: '',
         machineId: _selectedMachineId!.trim(),
@@ -137,12 +205,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
         description: trimmedDescription,
         reportedBy: '',
         status: AppConstants.faultStatusOpen,
-
-        // Day 16:
-        // We only select and preview the image.
-        // Member 3 will later upload it to Firebase Storage
-        // and place the returned URL into imageUrl.
-        imageUrl: null,
+        imageUrl: imageUrl,
       );
 
       final docId = await _effectiveFaultService.addFault(fault);
@@ -152,16 +215,23 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _selectedImage == null ? 'Fault report submitted successfully.' : 'Fault report submitted. Photo upload will be connected during Storage integration.',
-          ),
-        ),
+        const SnackBar(content: Text('Fault report submitted successfully.')),
       );
 
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop(docId);
       }
+    } on StorageServiceException catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
     } on FaultServiceException catch (e) {
       if (!mounted) {
         return;
@@ -569,6 +639,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
 
         FaultImageAttachmentPicker(
           enabled: !_isSubmitting,
+          pickImage: widget.pickImage,
           onImageChanged: (image) {
             setState(() {
               _selectedImage = image;
