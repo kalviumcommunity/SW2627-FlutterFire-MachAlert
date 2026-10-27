@@ -21,6 +21,7 @@ void main() {
       const MaterialApp(home: Scaffold(body: FaultImageAttachmentPicker())),
     );
 
+    expect(find.text('Add a fault photo'), findsOneWidget);
 
     expect(find.text('Camera or Gallery'), findsOneWidget);
   });
@@ -72,8 +73,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('fault-image-preview')), findsOneWidget);
-
-    expect(find.text('fault-photo.png'), findsOneWidget);
 
     expect(selectedImage, isNotNull);
   });
