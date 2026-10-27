@@ -58,7 +58,10 @@ void main() {
 
     expect(find.text('M-01'), findsOneWidget);
 
-    expect(find.text('High'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(Card), matching: find.text('High')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('updates list when stream emits new data', (tester) async {
@@ -94,7 +97,10 @@ void main() {
 
     expect(find.text('Hydraulic Press'), findsOneWidget);
 
-    expect(find.text('Critical'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(Card), matching: find.text('Critical')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('shows empty state when live stream has no faults', (
