@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../models/fault_model.dart';
 import '../../models/machine_model.dart';
 import '../../services/fault_service.dart';
 import '../../utils/app_constants.dart';
+import '../../widgets/fault_image_attachment_picker.dart';
 
 class FaultReportingScreen extends StatefulWidget {
   final List<MachineModel> machines;
@@ -28,6 +30,8 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
   String? _selectedMachineId;
   String? _selectedFaultType;
   String? _selectedSeverity;
+
+  XFile? _selectedImage;
 
   bool _isSubmitting = false;
   bool _showSeverityError = false;
@@ -78,16 +82,6 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
     return null;
   }
 
-  void _showPhotoPlaceholder() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Photo attachment will be implemented during the image upload task.',
-        ),
-      ),
-    );
-  }
-
   FaultService get _effectiveFaultService =>
       widget.faultService ?? FaultService();
 
@@ -100,11 +94,15 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
 
     final hasMachine =
         _selectedMachineId != null && _selectedMachineId!.trim().isNotEmpty;
+
     final hasFaultType =
         _selectedFaultType != null && _selectedFaultType!.trim().isNotEmpty;
+
     final hasSeverity =
         _selectedSeverity != null && _selectedSeverity!.trim().isNotEmpty;
+
     final trimmedDescription = _descriptionController.text.trim();
+
     final hasDescription = trimmedDescription.length >= 10;
 
     setState(() {
@@ -139,6 +137,12 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
         description: trimmedDescription,
         reportedBy: '',
         status: AppConstants.faultStatusOpen,
+
+        // Day 16:
+        // We only select and preview the image.
+        // Member 3 will later upload it to Firebase Storage
+        // and place the returned URL into imageUrl.
+        imageUrl: null,
       );
 
       final docId = await _effectiveFaultService.addFault(fault);
@@ -148,7 +152,11 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Fault report submitted successfully.')),
+        SnackBar(
+          content: Text(
+            _selectedImage == null ? 'Fault report submitted successfully.' : 'Fault report submitted. Photo upload will be connected during Storage integration.',
+          ),
+        ),
       );
 
       if (Navigator.of(context).canPop()) {
@@ -158,6 +166,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       if (!mounted) {
         return;
       }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.message),
@@ -168,6 +177,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       if (!mounted) {
         return;
       }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text(
@@ -278,7 +288,9 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
                 style: Theme.of(context).textTheme.titleLarge
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
+
               const SizedBox(height: 4),
+
               Text(
                 'Log an issue immediately so maintenance can respond quickly.',
                 style: Theme.of(context).textTheme.bodyMedium,
@@ -351,6 +363,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
 
         if (_selectedMachine != null) ...[
           const SizedBox(height: 10),
+
           _SelectedMachineCard(machine: _selectedMachine!),
         ],
       ],
@@ -449,6 +462,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
 
         if (_showSeverityError) ...[
           const SizedBox(height: 8),
+
           Text(
             'Please select a severity.',
             style: TextStyle(
@@ -485,7 +499,9 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
             Expanded(
               child: _InfoBox(icon: Icons.calendar_today_outlined, label: date),
             ),
+
             const SizedBox(width: 12),
+
             Expanded(
               child: _InfoBox(icon: Icons.access_time, label: time),
             ),
@@ -540,35 +556,42 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Add Photos'),
+        _sectionTitle('Add Photo'),
 
         const SizedBox(height: 4),
 
-        Text('Optional', style: Theme.of(context).textTheme.bodySmall),
-
-        const SizedBox(height: 8),
-
-        InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: _isSubmitting ? null : _showPhotoPlaceholder,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Column(
-              children: [
-                Icon(Icons.add_a_photo_outlined, size: 32),
-                SizedBox(height: 8),
-                Text('Tap to add photos'),
-              ],
-            ),
-          ),
+        Text(
+          'Optional • Attach a photo of the machine issue',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
+
+        const SizedBox(height: 10),
+
+        FaultImageAttachmentPicker(
+          enabled: !_isSubmitting,
+          onImageChanged: (image) {
+            setState(() {
+              _selectedImage = image;
+            });
+          },
+        ),
+
+        if (_selectedImage != null) ...[
+          const SizedBox(height: 8),
+
+          Row(
+            children: [
+              Icon(Icons.check_circle, size: 18, color: Colors.green.shade700),
+
+              const SizedBox(width: 6),
+
+              Text(
+                'Photo ready to upload',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -639,7 +662,9 @@ class _InfoBox extends StatelessWidget {
       child: Row(
         children: [
           Icon(icon, size: 20),
+
           const SizedBox(width: 10),
+
           Expanded(child: Text(label)),
         ],
       ),
