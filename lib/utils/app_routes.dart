@@ -82,9 +82,15 @@ class AppRoutes {
     );
   }
 
-  static Route<void> realtimeFaults({Stream<List<FaultModel>>? faultStream}) {
+  static Route<void> realtimeFaults({
+    Stream<List<FaultModel>>? faultStream,
+    FaultService? faultService,
+  }) {
     return MaterialPageRoute<void>(
-      builder: (_) => RealtimeFaultsScreen(faultStream: faultStream),
+      builder: (_) => RealtimeFaultsScreen(
+        faultStream: faultStream,
+        faultService: faultService,
+      ),
     );
   }
 }

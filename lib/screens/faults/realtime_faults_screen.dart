@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../models/fault_model.dart';
+import '../../services/fault_service.dart';
 import '../../utils/app_constants.dart';
 
 class RealtimeFaultsScreen extends StatefulWidget {
   final Stream<List<FaultModel>>? faultStream;
+  final FaultService? faultService;
 
-  const RealtimeFaultsScreen({super.key, this.faultStream});
+  const RealtimeFaultsScreen({super.key, this.faultStream, this.faultService});
 
   @override
   State<RealtimeFaultsScreen> createState() => _RealtimeFaultsScreenState();
@@ -15,6 +17,7 @@ class RealtimeFaultsScreen extends StatefulWidget {
 class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
   final _searchController = TextEditingController();
 
+  Stream<List<FaultModel>>? _activeStream;
   String _searchQuery = '';
   String? _selectedSeverity;
   String? _selectedStatus;
@@ -23,6 +26,43 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
       _searchQuery.trim().isNotEmpty ||
       _selectedSeverity != null ||
       _selectedStatus != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _initStream();
+  }
+
+  void _initStream() {
+    if (widget.faultService != null) {
+      _activeStream = widget.faultService!.streamFaults(
+        status: _selectedStatus,
+        severity: _selectedSeverity,
+      );
+    } else {
+      _activeStream = widget.faultStream;
+    }
+  }
+
+  @override
+  void didUpdateWidget(RealtimeFaultsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.faultService != oldWidget.faultService ||
+        widget.faultStream != oldWidget.faultStream) {
+      _updateStream();
+    }
+  }
+
+  void _updateStream() {
+    if (widget.faultService != null) {
+      _activeStream = widget.faultService!.streamFaults(
+        status: _selectedStatus,
+        severity: _selectedSeverity,
+      );
+    } else {
+      _activeStream = widget.faultStream;
+    }
+  }
 
   @override
   void dispose() {
@@ -37,6 +77,7 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
       _searchQuery = '';
       _selectedSeverity = null;
       _selectedStatus = null;
+      _updateStream();
     });
   }
 
@@ -128,10 +169,10 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
         ],
       ),
       body: SafeArea(
-        child: widget.faultStream == null
+        child: _activeStream == null
             ? _buildDisconnectedState(context)
             : StreamBuilder<List<FaultModel>>(
-                stream: widget.faultStream,
+                stream: _activeStream,
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return _buildErrorState(context);
@@ -144,7 +185,7 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
 
                   final allFaults = [...?snapshot.data];
 
-                  if (allFaults.isEmpty) {
+                  if (allFaults.isEmpty && !_hasActiveFilters) {
                     return _buildEmptyState(context);
                   }
 
@@ -271,9 +312,12 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
                   label: const Text('All'),
                   selected: _selectedSeverity == null,
                   onSelected: (_) {
-                    setState(() {
-                      _selectedSeverity = null;
-                    });
+                    if (_selectedSeverity != null) {
+                      setState(() {
+                        _selectedSeverity = null;
+                        _updateStream();
+                      });
+                    }
                   },
                 ),
                 const SizedBox(width: 8),
@@ -284,9 +328,12 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
                       label: Text(severity),
                       selected: _selectedSeverity == severity,
                       onSelected: (_) {
-                        setState(() {
-                          _selectedSeverity = severity;
-                        });
+                        if (_selectedSeverity != severity) {
+                          setState(() {
+                            _selectedSeverity = severity;
+                            _updateStream();
+                          });
+                        }
                       },
                     ),
                   );
@@ -309,9 +356,12 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
                   label: const Text('All'),
                   selected: _selectedStatus == null,
                   onSelected: (_) {
-                    setState(() {
-                      _selectedStatus = null;
-                    });
+                    if (_selectedStatus != null) {
+                      setState(() {
+                        _selectedStatus = null;
+                        _updateStream();
+                      });
+                    }
                   },
                 ),
                 const SizedBox(width: 8),
@@ -322,9 +372,12 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
                       label: Text(status),
                       selected: _selectedStatus == status,
                       onSelected: (_) {
-                        setState(() {
-                          _selectedStatus = status;
-                        });
+                        if (_selectedStatus != status) {
+                          setState(() {
+                            _selectedStatus = status;
+                            _updateStream();
+                          });
+                        }
                       },
                     ),
                   );
@@ -344,10 +397,26 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
     required int visibleCount,
     required int totalCount,
   }) {
-    final message = _hasActiveFilters
-        ? '$visibleCount of $totalCount faults shown'
-        : '$totalCount live '
-              '${totalCount == 1 ? 'fault' : 'faults'}';
+    final isServerFiltered =
+        widget.faultService != null &&
+        (_selectedSeverity != null || _selectedStatus != null);
+
+    final String message;
+    if (isServerFiltered) {
+      if (_searchQuery.trim().isNotEmpty) {
+        message = '$visibleCount of $totalCount matching faults shown';
+      } else {
+        message =
+            '$visibleCount matching '
+            '${visibleCount == 1 ? 'fault' : 'faults'}';
+      }
+    } else if (_hasActiveFilters) {
+      message = '$visibleCount of $totalCount faults shown';
+    } else {
+      message =
+          '$totalCount live '
+          '${totalCount == 1 ? 'fault' : 'faults'}';
+    }
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
