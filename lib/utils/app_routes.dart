@@ -14,6 +14,7 @@ import '../services/fault_service.dart';
 import '../services/storage_service.dart';
 import '../models/fault_model.dart';
 import '../screens/faults/realtime_faults_screen.dart';
+import '../screens/maintenance/maintenance_list_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -96,6 +97,12 @@ class AppRoutes {
         faultStream: faultStream,
         faultService: faultService,
       ),
+    );
+  }
+
+  static Route<void> maintenance({bool assignedOnly = false}) {
+    return MaterialPageRoute<void>(
+      builder: (_) => MaintenanceListScreen(assignedOnly: assignedOnly),
     );
   }
 }
