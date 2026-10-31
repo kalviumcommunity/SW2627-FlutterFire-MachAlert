@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../models/maintenance_model.dart';
+import '../../services/maintenance_service.dart';
 import 'maintenance_details_screen.dart';
 
 class MaintenanceListScreen extends StatefulWidget {
   final bool assignedOnly;
+  final MaintenanceService? maintenanceService;
 
-  const MaintenanceListScreen({super.key, this.assignedOnly = false});
+  const MaintenanceListScreen({
+    super.key,
+    this.assignedOnly = false,
+    this.maintenanceService,
+  });
 
   @override
   State<MaintenanceListScreen> createState() => _MaintenanceListScreenState();
@@ -46,17 +54,70 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
     ),
   ];
 
-  List<_MaintenancePreview> get _filteredItems {
-    if (_selectedStatus == 'All') {
-      return _items;
+  MaintenanceService? get _resolvedService {
+    if (widget.maintenanceService != null) {
+      return widget.maintenanceService;
     }
+    try {
+      return Provider.of<MaintenanceService>(context, listen: false);
+    } catch (_) {
+      return null;
+    }
+  }
 
-    return _items.where((item) => item.status == _selectedStatus).toList();
+  Stream<List<MaintenanceModel>> _taskStream(MaintenanceService service) {
+    if (widget.assignedOnly) {
+      return service.streamAssignedMaintenanceTasks();
+    }
+    return service.streamMaintenanceTasks();
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = _filteredItems;
+    final service = _resolvedService;
+
+    if (service != null) {
+      return StreamBuilder<List<MaintenanceModel>>(
+        stream: _taskStream(service),
+        builder: (context, snapshot) {
+          final items = (snapshot.data ?? const <MaintenanceModel>[])
+              .map(
+                (task) => _MaintenancePreview(
+                  id: task.id,
+                  title: (task.notes?.trim().isNotEmpty == true)
+                      ? task.notes!.trim()
+                      : 'Maintenance Task #${task.id}',
+                  machineName: (task.machineName?.trim().isNotEmpty == true)
+                      ? task.machineName!.trim()
+                      : task.machineId,
+                  technician: (task.technicianName?.trim().isNotEmpty == true)
+                      ? task.technicianName!.trim()
+                      : task.technicianId,
+                  priority: task.priority,
+                  status: task.status == 'Resolved' ? 'Completed' : task.status,
+                  dueDate: task.createdAt != null
+                      ? '${task.createdAt!.year}-${task.createdAt!.month.toString().padLeft(2, '0')}-${task.createdAt!.day.toString().padLeft(2, '0')}'
+                      : 'Today',
+                ),
+              )
+              .toList();
+
+          return _buildContent(context, items, service);
+        },
+      );
+    }
+
+    return _buildContent(context, _items, null);
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    List<_MaintenancePreview> allItems,
+    MaintenanceService? service,
+  ) {
+    final filtered = _selectedStatus == 'All'
+        ? allItems
+        : allItems.where((item) => item.status == _selectedStatus).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -68,19 +129,19 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(),
+            _buildHeader(allItems),
 
             _buildFilters(),
 
             Expanded(
-              child: items.isEmpty
+              child: filtered.isEmpty
                   ? _buildEmptyState()
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      itemCount: items.length,
+                      itemCount: filtered.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
-                        final item = items[index];
+                        final item = filtered[index];
 
                         return _MaintenanceCard(
                           item: item,
@@ -95,6 +156,7 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
                                   priority: item.priority,
                                   status: item.status,
                                   dueDate: item.dueDate,
+                                  maintenanceService: service,
                                 ),
                               ),
                             );
@@ -109,17 +171,17 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
     );
   }
 
-  Widget _buildHeader() {
-    final pendingCount = _items
-        .where((item) => item.status == 'Pending')
-        .length;
+  Widget _buildHeader(List<_MaintenancePreview> items) {
+    final pendingCount = items.where((item) => item.status == 'Pending').length;
 
-    final inProgressCount = _items
+    final inProgressCount = items
         .where((item) => item.status == 'In Progress')
         .length;
 
-    final completedCount = _items
-        .where((item) => item.status == 'Completed')
+    final completedCount = items
+        .where(
+          (item) => item.status == 'Completed' || item.status == 'Resolved',
+        )
         .length;
 
     return Padding(
@@ -388,7 +450,7 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (status) {
-      'Completed' => Colors.green,
+      'Completed' || 'Resolved' => Colors.green,
       'In Progress' => Colors.blue,
       _ => Colors.orange,
     };
