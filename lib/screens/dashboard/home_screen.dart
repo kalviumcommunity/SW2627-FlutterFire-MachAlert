@@ -106,9 +106,8 @@ class _HomeScreenState extends State<HomeScreen> {
       } catch (_) {}
     }
 
-    Navigator.of(context).push<void>(
-      AppRoutes.realtimeFaults(faultStream: faultService?.streamFaults()),
-    );
+    Navigator.of(context)
+        .push<void>(AppRoutes.realtimeFaults(faultService: faultService));
   }
 
   @override
@@ -260,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
           subtitle: 'Track maintenance activity',
           icon: Icons.build,
           onTap: () {
-            _showComingSoon('Maintenance');
+            Navigator.of(context).push<void>(AppRoutes.maintenance());
           },
         ),
       ],
@@ -307,7 +306,8 @@ class _HomeScreenState extends State<HomeScreen> {
           subtitle: 'View your maintenance tasks',
           icon: Icons.assignment_turned_in,
           onTap: () {
-            _showComingSoon('Assigned maintenance');
+            Navigator.of(context)
+                .push<void>(AppRoutes.maintenance(assignedOnly: true));
           },
         ),
 

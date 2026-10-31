@@ -434,6 +434,32 @@ void main() {
     );
 
     testWidgets(
+      'Dashboard navigation passes FaultService instance to RealtimeFaultsScreen',
+      (tester) async {
+        final controller = StreamController<List<FaultModel>>.broadcast();
+        addTearDown(controller.close);
+
+        final faultService = FakeFaultService(faultStream: controller.stream);
+        await pumpDashboard(
+          tester,
+          role: 'manager',
+          faultService: faultService,
+        );
+
+        final faultsCard = find.widgetWithText(DashboardActionCard, 'Faults');
+        await tester.ensureVisible(faultsCard);
+        await tester.tap(faultsCard);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        final screen = tester.widget<RealtimeFaultsScreen>(
+          find.byType(RealtimeFaultsScreen),
+        );
+        expect(screen.faultService, equals(faultService));
+      },
+    );
+
+    testWidgets(
       'HomeScreen resolves FaultService from Provider when not directly injected',
       (tester) async {
         final controller = StreamController<List<FaultModel>>.broadcast();
