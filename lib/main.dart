@@ -12,6 +12,7 @@ import 'services/machine_service.dart';
 import 'services/storage_service.dart';
 import 'services/user_service.dart';
 import 'utils/emulator_config.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -97,7 +98,7 @@ class MachAlertApp extends StatelessWidget {
       child: MaterialApp(
         title: 'MachAlert',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
+        theme: AppTheme.light,
         home: const AuthGate(),
       ),
     );

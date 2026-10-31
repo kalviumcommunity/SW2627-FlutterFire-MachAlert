@@ -5,6 +5,8 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -13,13 +15,21 @@ class SplashScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(
-                  Icons.precision_manufacturing,
-                  size: 96,
-                  color: Colors.blue,
+                Container(
+                  width: 112,
+                  height: 112,
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  child: Icon(
+                    Icons.precision_manufacturing,
+                    size: 64,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
 
                 Text(
                   'MachAlert',
@@ -32,22 +42,28 @@ class SplashScreen extends StatelessWidget {
                 Text(
                   'Machine Monitoring & Maintenance',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyLarge,
+                  style: Theme.of(context).textTheme.bodyLarge
+                      ?.copyWith(color: colorScheme.onSurfaceVariant),
                 ),
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 44),
 
-                const SizedBox(
+                SizedBox(
                   width: 32,
                   height: 32,
-                  child: CircularProgressIndicator(strokeWidth: 3),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: colorScheme.primary,
+                  ),
                 ),
 
                 const SizedBox(height: 16),
 
-                const Text(
+                Text(
                   'Checking your session...',
                   textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
