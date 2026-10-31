@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 
-class MaintenanceDetailsScreen extends StatelessWidget {
+typedef MaintenanceStatusUpdateCallback = Future<void> Function(
+  String status,
+  String notes,
+);
+
+class MaintenanceDetailsScreen extends StatefulWidget {
   final String maintenanceId;
   final String title;
   final String machineName;
@@ -8,6 +13,9 @@ class MaintenanceDetailsScreen extends StatelessWidget {
   final String priority;
   final String status;
   final String dueDate;
+
+  /// Optional callback for Day 18/Member 3 backend integration.
+  final MaintenanceStatusUpdateCallback? onStatusUpdate;
 
   const MaintenanceDetailsScreen({
     super.key,
@@ -18,7 +26,97 @@ class MaintenanceDetailsScreen extends StatelessWidget {
     required this.priority,
     required this.status,
     required this.dueDate,
+    this.onStatusUpdate,
   });
+
+  @override
+  State<MaintenanceDetailsScreen> createState() =>
+      _MaintenanceDetailsScreenState();
+}
+
+class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
+  static const List<String> _statuses = ['Pending', 'In Progress', 'Completed'];
+
+  late String _currentStatus;
+
+  bool _isUpdating = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _currentStatus = _statuses.contains(widget.status)
+        ? widget.status
+        : 'Pending';
+  }
+
+  Future<void> _openStatusUpdateSheet() async {
+    if (_isUpdating) {
+      return;
+    }
+
+    final result = await showModalBottomSheet<_StatusUpdateResult>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) {
+        return _StatusUpdateSheet(currentStatus: _currentStatus);
+      },
+    );
+
+    if (result == null || !mounted) {
+      return;
+    }
+
+    await _updateStatus(result.status, result.notes);
+  }
+
+  Future<void> _updateStatus(String status, String notes) async {
+    if (_isUpdating) {
+      return;
+    }
+
+    setState(() {
+      _isUpdating = true;
+    });
+
+    try {
+      if (widget.onStatusUpdate != null) {
+        await widget.onStatusUpdate!(status, notes);
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _currentStatus = status;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Maintenance status updated to $status.')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Unable to update maintenance status. Please try again.',
+          ),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,34 +133,35 @@ class MaintenanceDetailsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildHeader(context),
+              _buildHeader(),
 
               const SizedBox(height: 20),
 
-              _buildInformationCard(context),
+              _buildInformationCard(),
 
               const SizedBox(height: 20),
 
-              _buildDescriptionCard(context),
+              _buildDescriptionCard(),
 
               const SizedBox(height: 20),
 
-              _buildTimelineCard(context),
+              _buildTimelineCard(),
 
               const SizedBox(height: 24),
 
-              OutlinedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Maintenance status updates will be connected during the workflow integration task.',
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Update Maintenance Status'),
+              FilledButton.icon(
+                key: const ValueKey('update-maintenance-status-button'),
+                onPressed: _isUpdating ? null : _openStatusUpdateSheet,
+                icon: _isUpdating
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.edit_outlined),
+                label: Text(
+                  _isUpdating ? 'Updating...' : 'Update Maintenance Status',
+                ),
               ),
             ],
           ),
@@ -71,7 +170,7 @@ class MaintenanceDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -100,12 +199,14 @@ class MaintenanceDetailsScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        title,
+                        widget.title,
                         style: Theme.of(context).textTheme.titleLarge
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
+
                       const SizedBox(height: 4),
-                      Text(maintenanceId),
+
+                      Text(widget.maintenanceId),
                     ],
                   ),
                 ),
@@ -120,12 +221,10 @@ class MaintenanceDetailsScreen extends StatelessWidget {
               children: [
                 Chip(
                   avatar: const Icon(Icons.flag_outlined, size: 18),
-                  label: Text(priority),
+                  label: Text(widget.priority),
                 ),
-                Chip(
-                  avatar: const Icon(Icons.sync_alt_outlined, size: 18),
-                  label: Text(status),
-                ),
+
+                _MaintenanceStatusChip(status: _currentStatus),
               ],
             ),
           ],
@@ -134,7 +233,7 @@ class MaintenanceDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInformationCard(BuildContext context) {
+  Widget _buildInformationCard() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -152,7 +251,7 @@ class MaintenanceDetailsScreen extends StatelessWidget {
             _DetailsRow(
               icon: Icons.precision_manufacturing_outlined,
               label: 'Machine',
-              value: machineName,
+              value: widget.machineName,
             ),
 
             const Divider(height: 24),
@@ -160,7 +259,7 @@ class MaintenanceDetailsScreen extends StatelessWidget {
             _DetailsRow(
               icon: Icons.person_outline,
               label: 'Assigned To',
-              value: technician,
+              value: widget.technician,
             ),
 
             const Divider(height: 24),
@@ -168,7 +267,7 @@ class MaintenanceDetailsScreen extends StatelessWidget {
             _DetailsRow(
               icon: Icons.event_outlined,
               label: 'Due',
-              value: dueDate,
+              value: widget.dueDate,
             ),
 
             const Divider(height: 24),
@@ -176,7 +275,7 @@ class MaintenanceDetailsScreen extends StatelessWidget {
             _DetailsRow(
               icon: Icons.info_outline,
               label: 'Status',
-              value: status,
+              value: _currentStatus,
             ),
           ],
         ),
@@ -184,7 +283,7 @@ class MaintenanceDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDescriptionCard(BuildContext context) {
+  Widget _buildDescriptionCard() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -208,7 +307,7 @@ class MaintenanceDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTimelineCard(BuildContext context) {
+  Widget _buildTimelineCard() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -234,12 +333,201 @@ class MaintenanceDetailsScreen extends StatelessWidget {
             const _TimelineItem(
               icon: Icons.assignment_ind_outlined,
               title: 'Technician assigned',
-              subtitle: 'Awaiting workflow integration',
+              subtitle: 'Task assigned for maintenance',
+            ),
+
+            if (_currentStatus == 'In Progress' ||
+                _currentStatus == 'Completed') ...[
+              const SizedBox(height: 14),
+
+              const _TimelineItem(
+                icon: Icons.engineering_outlined,
+                title: 'Maintenance started',
+                subtitle: 'Technician started working on the task',
+              ),
+            ],
+
+            if (_currentStatus == 'Completed') ...[
+              const SizedBox(height: 14),
+
+              const _TimelineItem(
+                icon: Icons.check_circle_outline,
+                title: 'Maintenance completed',
+                subtitle: 'Maintenance work marked as completed',
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusUpdateSheet extends StatefulWidget {
+  final String currentStatus;
+
+  const _StatusUpdateSheet({required this.currentStatus});
+
+  @override
+  State<_StatusUpdateSheet> createState() => _StatusUpdateSheetState();
+}
+
+class _StatusUpdateSheetState extends State<_StatusUpdateSheet> {
+  static const List<String> _statuses = ['Pending', 'In Progress', 'Completed'];
+
+  late String _selectedStatus;
+
+  final TextEditingController _notesController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    _selectedStatus = widget.currentStatus;
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    Navigator.of(context).pop(
+      _StatusUpdateResult(
+        status: _selectedStatus,
+        notes: _notesController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + keyboardInset),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Update Maintenance Status',
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 6),
+
+            Text(
+              'Select the current maintenance progress.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+
+            const SizedBox(height: 20),
+
+            Text(
+              'Status',
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 10),
+
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _statuses.map((status) {
+                return ChoiceChip(
+                  label: Text(status),
+                  selected: _selectedStatus == status,
+                  onSelected: (_) {
+                    setState(() {
+                      _selectedStatus = status;
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+
+            const SizedBox(height: 20),
+
+            TextField(
+              key: const ValueKey('maintenance-update-notes'),
+              controller: _notesController,
+              minLines: 3,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Update Notes',
+                hintText: 'Add maintenance notes (optional)',
+                border: OutlineInputBorder(),
+                alignLabelWithHint: true,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            FilledButton.icon(
+              key: const ValueKey('save-maintenance-status'),
+              onPressed: _save,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save Status'),
+            ),
+
+            const SizedBox(height: 8),
+
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
             ),
           ],
         ),
       ),
     );
+  }
+}
+
+class _StatusUpdateResult {
+  final String status;
+  final String notes;
+
+  const _StatusUpdateResult({required this.status, required this.notes});
+}
+
+class _MaintenanceStatusChip extends StatelessWidget {
+  final String status;
+
+  const _MaintenanceStatusChip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (status) {
+      'Completed' => Colors.green,
+      'In Progress' => Colors.blue,
+      _ => Colors.orange,
+    };
+
+    return Chip(
+      avatar: Icon(_statusIcon(status), size: 18, color: color),
+      label: Text(status),
+      side: BorderSide(color: color.withValues(alpha: 0.5)),
+    );
+  }
+
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'Completed':
+        return Icons.check_circle_outline;
+
+      case 'In Progress':
+        return Icons.engineering_outlined;
+
+      default:
+        return Icons.schedule_outlined;
+    }
   }
 }
 
