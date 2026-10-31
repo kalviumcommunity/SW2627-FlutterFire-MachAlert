@@ -297,10 +297,10 @@ class _SignupScreenState extends State<SignupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.person_add_alt_1,
                       size: 64,
-                      color: Colors.blue,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
 
                     const SizedBox(height: 16),
