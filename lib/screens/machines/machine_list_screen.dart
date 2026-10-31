@@ -7,6 +7,7 @@ import '../../providers/machine_provider.dart';
 import '../../utils/app_constants.dart';
 import '../../utils/app_routes.dart';
 import '../../widgets/machine_list_tile.dart';
+import '../../widgets/app_state_view.dart';
 
 class MachineListScreen extends StatefulWidget {
   final List<MachineModel> machines;
@@ -177,7 +178,10 @@ class _MachineListScreenState extends State<MachineListScreen> {
 
             Expanded(
               child: isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const AppStateView.loading(
+                      title: 'Loading machines...',
+                      message: 'Fetching the latest machine information.',
+                    )
                   : hasError
                   ? _buildErrorState(
                       machineProvider.errorMessage,
@@ -219,72 +223,29 @@ class _MachineListScreenState extends State<MachineListScreen> {
     String? errorMessage,
     Future<void> Function() onRetry,
   ) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              errorMessage ?? 'Failed to load machines',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: () => onRetry(),
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
+    return AppStateView.error(
+      title: 'Unable to load machines',
+      message: errorMessage ?? 'Machine information could not be loaded. Check your connection and try again.',
+      actionLabel: 'Retry',
+      onAction: () {
+        onRetry();
+      },
     );
   }
 
   Widget _buildEmptyState(bool canManage) {
     final isSearching = _searchQuery.trim().isNotEmpty;
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isSearching
-                  ? Icons.search_off
-                  : Icons.precision_manufacturing_outlined,
-              size: 64,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-
-            const SizedBox(height: 16),
-
-            Text(
-              isSearching ? 'No machines found' : 'No machines available',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-
-            const SizedBox(height: 8),
-
-            Text(
-              isSearching
-                  ? 'Try another machine name, ID, or status.'
-                  : canManage
-                  ? 'Add your first machine using the Add Machine button.'
-                  : 'Machines will appear here once they are added.',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return AppStateView.empty(
+      icon: isSearching
+          ? Icons.search_off
+          : Icons.precision_manufacturing_outlined,
+      title: isSearching ? 'No machines found' : 'No machines available',
+      message: isSearching
+          ? 'Try another machine name, ID, production line, or status.'
+          : canManage
+          ? 'There are no machines yet. Use Add Machine to create the first machine.'
+          : 'Machines will appear here once they are added.',
     );
   }
 }

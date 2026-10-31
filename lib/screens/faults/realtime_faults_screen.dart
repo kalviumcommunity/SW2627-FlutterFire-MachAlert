@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../models/fault_model.dart';
+import '../../services/fault_service.dart';
 import '../../utils/app_constants.dart';
+import '../../widgets/app_state_view.dart';
 
 class RealtimeFaultsScreen extends StatefulWidget {
   final Stream<List<FaultModel>>? faultStream;
+  final FaultService? faultService;
 
-  const RealtimeFaultsScreen({super.key, this.faultStream});
+  const RealtimeFaultsScreen({super.key, this.faultStream, this.faultService});
 
   @override
   State<RealtimeFaultsScreen> createState() => _RealtimeFaultsScreenState();
@@ -15,6 +18,7 @@ class RealtimeFaultsScreen extends StatefulWidget {
 class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
   final _searchController = TextEditingController();
 
+  Stream<List<FaultModel>>? _activeStream;
   String _searchQuery = '';
   String? _selectedSeverity;
   String? _selectedStatus;
@@ -23,6 +27,49 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
       _searchQuery.trim().isNotEmpty ||
       _selectedSeverity != null ||
       _selectedStatus != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _initStream();
+  }
+
+  void _initStream() {
+    if (widget.faultService != null) {
+      _activeStream = widget.faultService!.streamFaults(
+        status: _selectedStatus,
+        severity: _selectedSeverity,
+      );
+    } else {
+      _activeStream = widget.faultStream;
+    }
+  }
+
+  @override
+  void didUpdateWidget(RealtimeFaultsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.faultService != oldWidget.faultService ||
+        widget.faultStream != oldWidget.faultStream) {
+      _updateStream();
+    }
+  }
+
+  void _updateStream() {
+    if (widget.faultService != null) {
+      _activeStream = widget.faultService!.streamFaults(
+        status: _selectedStatus,
+        severity: _selectedSeverity,
+      );
+    } else {
+      _activeStream = widget.faultStream;
+    }
+  }
+
+  void _retryLiveStream() {
+    setState(() {
+      _updateStream();
+    });
+  }
 
   @override
   void dispose() {
@@ -37,6 +84,7 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
       _searchQuery = '';
       _selectedSeverity = null;
       _selectedStatus = null;
+      _updateStream();
     });
   }
 
@@ -128,10 +176,10 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
         ],
       ),
       body: SafeArea(
-        child: widget.faultStream == null
+        child: _activeStream == null
             ? _buildDisconnectedState(context)
             : StreamBuilder<List<FaultModel>>(
-                stream: widget.faultStream,
+                stream: _activeStream,
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return _buildErrorState(context);
@@ -139,12 +187,15 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
 
                   if (snapshot.connectionState == ConnectionState.waiting &&
                       !snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const AppStateView.loading(
+                      title: 'Connecting to live faults...',
+                      message: 'Waiting for real-time fault updates.',
+                    );
                   }
 
                   final allFaults = [...?snapshot.data];
 
-                  if (allFaults.isEmpty) {
+                  if (allFaults.isEmpty && !_hasActiveFilters) {
                     return _buildEmptyState(context);
                   }
 
@@ -271,9 +322,12 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
                   label: const Text('All'),
                   selected: _selectedSeverity == null,
                   onSelected: (_) {
-                    setState(() {
-                      _selectedSeverity = null;
-                    });
+                    if (_selectedSeverity != null) {
+                      setState(() {
+                        _selectedSeverity = null;
+                        _updateStream();
+                      });
+                    }
                   },
                 ),
                 const SizedBox(width: 8),
@@ -284,9 +338,12 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
                       label: Text(severity),
                       selected: _selectedSeverity == severity,
                       onSelected: (_) {
-                        setState(() {
-                          _selectedSeverity = severity;
-                        });
+                        if (_selectedSeverity != severity) {
+                          setState(() {
+                            _selectedSeverity = severity;
+                            _updateStream();
+                          });
+                        }
                       },
                     ),
                   );
@@ -309,9 +366,12 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
                   label: const Text('All'),
                   selected: _selectedStatus == null,
                   onSelected: (_) {
-                    setState(() {
-                      _selectedStatus = null;
-                    });
+                    if (_selectedStatus != null) {
+                      setState(() {
+                        _selectedStatus = null;
+                        _updateStream();
+                      });
+                    }
                   },
                 ),
                 const SizedBox(width: 8),
@@ -322,9 +382,12 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
                       label: Text(status),
                       selected: _selectedStatus == status,
                       onSelected: (_) {
-                        setState(() {
-                          _selectedStatus = status;
-                        });
+                        if (_selectedStatus != status) {
+                          setState(() {
+                            _selectedStatus = status;
+                            _updateStream();
+                          });
+                        }
                       },
                     ),
                   );
@@ -344,10 +407,26 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
     required int visibleCount,
     required int totalCount,
   }) {
-    final message = _hasActiveFilters
-        ? '$visibleCount of $totalCount faults shown'
-        : '$totalCount live '
-              '${totalCount == 1 ? 'fault' : 'faults'}';
+    final isServerFiltered =
+        widget.faultService != null &&
+        (_selectedSeverity != null || _selectedStatus != null);
+
+    final String message;
+    if (isServerFiltered) {
+      if (_searchQuery.trim().isNotEmpty) {
+        message = '$visibleCount of $totalCount matching faults shown';
+      } else {
+        message =
+            '$visibleCount matching '
+            '${visibleCount == 1 ? 'fault' : 'faults'}';
+      }
+    } else if (_hasActiveFilters) {
+      message = '$visibleCount of $totalCount faults shown';
+    } else {
+      message =
+          '$totalCount live '
+          '${totalCount == 1 ? 'fault' : 'faults'}';
+    }
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
@@ -428,88 +507,28 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.check_circle_outline,
-              size: 72,
-              color: Colors.green.shade600,
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'No active faults',
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'New fault reports will appear here automatically.',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return const AppStateView.empty(
+      icon: Icons.check_circle_outline,
+      title: 'No active faults',
+      message: 'New fault reports will appear here automatically.',
     );
   }
 
   Widget _buildErrorState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Unable to load live faults',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'The real-time connection encountered an error.',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return AppStateView.error(
+      title: 'Unable to load live faults',
+      message:
+          'The real-time connection encountered an error. Try reconnecting.',
+      actionLabel: 'Retry',
+      onAction: widget.faultService != null ? _retryLiveStream : null,
     );
   }
 
   Widget _buildDisconnectedState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.sync_outlined,
-              size: 72,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Live fault monitoring',
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Real-time fault updates will appear here once the live data connection is integrated.',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return const AppStateView.info(
+      icon: Icons.sync_outlined,
+      title: 'Live fault monitoring',
+      message: 'Real-time fault updates will appear here once a live data connection is available.',
     );
   }
 }

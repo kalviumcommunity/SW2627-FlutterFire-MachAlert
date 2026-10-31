@@ -2,19 +2,23 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:mach_alert/models/fault_model.dart';
 import 'package:mach_alert/screens/faults/fault_history_screen.dart';
 import 'package:mach_alert/services/fault_service.dart';
 import 'package:mach_alert/utils/app_constants.dart';
-import 'package:mach_alert/widgets/app_loading_indicator.dart';
 
 class FakeFaultService extends Fake implements FaultService {
   int getFaultsCallCount = 0;
+
   String? lastMachineIdFilter;
   String? lastStatusFilter;
   String? lastSeverityFilter;
+
   List<FaultModel> faultsToReturn = [];
+
   Exception? exceptionToThrow;
+
   Completer<List<FaultModel>>? completer;
 
   @override
@@ -24,6 +28,7 @@ class FakeFaultService extends Fake implements FaultService {
     String? severity,
   }) async {
     getFaultsCallCount++;
+
     lastMachineIdFilter = machineId;
     lastStatusFilter = status;
     lastSeverityFilter = severity;
@@ -93,27 +98,35 @@ void main() {
 
     testWidgets('displays AppBar titled Fault History', (tester) async {
       await pumpFaultHistoryScreen(tester, faultService: fakeFaultService);
+
       await tester.pumpAndSettle();
 
       expect(find.text('Fault History'), findsOneWidget);
+
       expect(find.byType(AppBar), findsOneWidget);
     });
 
-    testWidgets('displays loading indicator while fetching faults', (
-      tester,
-    ) async {
+    testWidgets('displays loading state while fetching faults', (tester) async {
       fakeFaultService.completer = Completer<List<FaultModel>>();
 
       await pumpFaultHistoryScreen(tester, faultService: fakeFaultService);
+
       await tester.pump();
 
-      expect(find.byType(AppLoadingIndicator), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
+      expect(find.text('Loading fault history...'), findsOneWidget);
+
+      expect(find.text('Retrieving reported machine faults.'), findsOneWidget);
+
       fakeFaultService.completer!.complete([createFault()]);
+
       await tester.pumpAndSettle();
 
-      expect(find.byType(AppLoadingIndicator), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      expect(find.text('Loading fault history...'), findsNothing);
+
       expect(find.text('CNC Machine'), findsOneWidget);
     });
 
@@ -137,19 +150,28 @@ void main() {
       fakeFaultService.faultsToReturn = [sampleFault];
 
       await pumpFaultHistoryScreen(tester, faultService: fakeFaultService);
+
       await tester.pumpAndSettle();
 
       expect(find.text('CNC Milling Machine'), findsOneWidget);
+
       expect(find.text('Machine ID: M-01'), findsOneWidget);
+
       expect(find.text(AppConstants.faultTypeMechanical), findsOneWidget);
+
       expect(find.text(AppConstants.severityHigh), findsOneWidget);
+
       expect(
         find.text('Vibration observed at axis 3 during rapid traverse.'),
         findsOneWidget,
       );
+
       expect(find.text(AppConstants.faultStatusOpen), findsOneWidget);
+
       expect(find.text('By Jane Doe'), findsOneWidget);
+
       expect(find.text('23/10/2026 • 09:15'), findsOneWidget);
+
       expect(find.byIcon(Icons.image_outlined), findsOneWidget);
     });
 
@@ -157,13 +179,16 @@ void main() {
       fakeFaultService.faultsToReturn = [];
 
       await pumpFaultHistoryScreen(tester, faultService: fakeFaultService);
+
       await tester.pumpAndSettle();
 
       expect(find.text('No faults found'), findsOneWidget);
+
       expect(
         find.text('No fault reports have been recorded yet.'),
         findsOneWidget,
       );
+
       expect(find.byIcon(Icons.assignment_turned_in_outlined), findsOneWidget);
     });
 
@@ -176,7 +201,10 @@ void main() {
       );
 
       await pumpFaultHistoryScreen(tester, faultService: fakeFaultService);
+
       await tester.pumpAndSettle();
+
+      expect(find.text('Unable to load fault history'), findsOneWidget);
 
       expect(
         find.text(
@@ -184,20 +212,25 @@ void main() {
         ),
         findsOneWidget,
       );
+
       expect(find.byIcon(Icons.error_outline), findsOneWidget);
+
       expect(find.widgetWithText(FilledButton, 'Retry'), findsOneWidget);
 
-      // Now recover and tap Retry
       fakeFaultService.exceptionToThrow = null;
+
       fakeFaultService.faultsToReturn = [
         createFault(machineName: 'Recovered CNC'),
       ];
 
       await tester.tap(find.widgetWithText(FilledButton, 'Retry'));
+
       await tester.pumpAndSettle();
 
       expect(fakeFaultService.getFaultsCallCount, 2);
+
       expect(find.text('Recovered CNC'), findsOneWidget);
+
       expect(find.byIcon(Icons.error_outline), findsNothing);
     });
 
@@ -207,9 +240,13 @@ void main() {
         fakeFaultService.exceptionToThrow = Exception('Network socket closed');
 
         await pumpFaultHistoryScreen(tester, faultService: fakeFaultService);
+
         await tester.pumpAndSettle();
 
+        expect(find.text('Unable to load fault history'), findsOneWidget);
+
         expect(find.text('Unable to retrieve fault history.'), findsOneWidget);
+
         expect(find.widgetWithText(FilledButton, 'Retry'), findsOneWidget);
       },
     );
@@ -218,9 +255,11 @@ void main() {
       fakeFaultService.faultsToReturn = [createFault(id: 'F-1')];
 
       await pumpFaultHistoryScreen(tester, faultService: fakeFaultService);
+
       await tester.pumpAndSettle();
 
       expect(fakeFaultService.getFaultsCallCount, 1);
+
       expect(find.byType(Card), findsOneWidget);
 
       fakeFaultService.faultsToReturn = [
@@ -228,13 +267,16 @@ void main() {
         createFault(id: 'F-2', machineName: 'Drill Press'),
       ];
 
-      // Pull down to trigger refresh
       await tester.fling(find.byType(ListView), const Offset(0, 300), 1000);
+
       await tester.pump();
+
       await tester.pump(const Duration(seconds: 1));
+
       await tester.pumpAndSettle();
 
       expect(fakeFaultService.getFaultsCallCount, 2);
+
       expect(find.text('Drill Press'), findsOneWidget);
     });
 
@@ -258,15 +300,23 @@ void main() {
       fakeFaultService.faultsToReturn = [minimalFault];
 
       await pumpFaultHistoryScreen(tester, faultService: fakeFaultService);
+
       await tester.pumpAndSettle();
 
       expect(find.text('M-99'), findsOneWidget);
+
       expect(find.text('Other'), findsOneWidget);
+
       expect(find.text('Unknown'), findsOneWidget);
+
       expect(find.text('Open'), findsOneWidget);
+
       expect(find.text('No description provided'), findsOneWidget);
+
       expect(find.text('Date unavailable'), findsOneWidget);
+
       expect(find.text('By UID-99'), findsOneWidget);
+
       expect(find.byIcon(Icons.image_outlined), findsNothing);
     });
 
@@ -280,9 +330,11 @@ void main() {
         faultService: fakeFaultService,
         machineId: 'M-TARGET',
       );
+
       await tester.pumpAndSettle();
 
       expect(fakeFaultService.lastMachineIdFilter, 'M-TARGET');
+
       expect(fakeFaultService.getFaultsCallCount, 1);
     });
   });

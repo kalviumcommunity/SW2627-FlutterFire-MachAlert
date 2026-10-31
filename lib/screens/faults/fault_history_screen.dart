@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/fault_model.dart';
 import '../../services/fault_service.dart';
 import '../../utils/app_constants.dart';
-import '../../widgets/app_loading_indicator.dart';
+import '../../widgets/app_state_view.dart';
 
 /// Screen displaying the history of reported faults.
 class FaultHistoryScreen extends StatefulWidget {
@@ -18,7 +18,9 @@ class FaultHistoryScreen extends StatefulWidget {
 
 class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
   List<FaultModel> _faults = [];
+
   bool _isLoading = true;
+
   String? _errorMessage;
 
   FaultService get _effectiveFaultService =>
@@ -27,6 +29,7 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
   @override
   void initState() {
     super.initState();
+
     _fetchFaults();
   }
 
@@ -43,7 +46,9 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
         machineId: widget.machineId,
       );
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _faults = results;
@@ -51,7 +56,9 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
         _errorMessage = null;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       final message = e is FaultServiceException
           ? e.message
@@ -64,7 +71,9 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
     }
   }
 
-  Future<void> _onRefresh() => _fetchFaults(showLoadingIndicator: false);
+  Future<void> _onRefresh() {
+    return _fetchFaults(showLoadingIndicator: false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +85,10 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const AppLoadingIndicator();
+      return const AppStateView.loading(
+        title: 'Loading fault history...',
+        message: 'Retrieving reported machine faults.',
+      );
     }
 
     if (_errorMessage != null && _faults.isEmpty) {
@@ -90,10 +102,12 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
     return RefreshIndicator(
       onRefresh: _onRefresh,
       child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         itemCount: _faults.length,
         itemBuilder: (context, index) {
           final fault = _faults[index];
+
           return _buildFaultCard(fault);
         },
       ),
@@ -109,32 +123,13 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: () => _fetchFaults(),
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                ),
+              child: AppStateView.error(
+                title: 'Unable to load fault history',
+                message: message,
+                actionLabel: 'Retry',
+                onAction: () {
+                  _fetchFaults();
+                },
               ),
             ),
           );
@@ -152,33 +147,10 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.assignment_turned_in_outlined,
-                        size: 64,
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No faults found',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'No fault reports have been recorded yet.',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              child: const AppStateView.empty(
+                icon: Icons.assignment_turned_in_outlined,
+                title: 'No faults found',
+                message: 'No fault reports have been recorded yet.',
               ),
             ),
           );
@@ -190,18 +162,19 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
   Widget _buildFaultCard(FaultModel fault) {
     final hasMachineName =
         fault.machineName != null && fault.machineName!.trim().isNotEmpty;
+
     final machineDisplayName = hasMachineName
         ? fault.machineName!.trim()
-        : (fault.machineId.trim().isNotEmpty
-              ? fault.machineId.trim()
-              : 'Unknown Machine');
+        : fault.machineId.trim().isNotEmpty
+        ? fault.machineId.trim()
+        : 'Unknown Machine';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -217,9 +190,11 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
+
                       if (hasMachineName &&
                           fault.machineId.trim().isNotEmpty) ...[
                         const SizedBox(height: 2),
+
                         Text(
                           'Machine ID: ${fault.machineId.trim()}',
                           style: Theme.of(context).textTheme.bodySmall
@@ -231,11 +206,15 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
                     ],
                   ),
                 ),
+
                 const SizedBox(width: 8),
+
                 _buildStatusBadge(fault.status),
               ],
             ),
+
             const SizedBox(height: 10),
+
             Wrap(
               spacing: 8,
               runSpacing: 6,
@@ -245,16 +224,22 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
                 _buildSeverityBadge(fault.severity),
               ],
             ),
+
             const SizedBox(height: 10),
+
             Text(
               fault.description.trim().isNotEmpty
                   ? fault.description
                   : 'No description provided',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+
             const SizedBox(height: 12),
+
             const Divider(height: 1),
+
             const SizedBox(height: 8),
+
             Row(
               children: [
                 Icon(
@@ -262,7 +247,9 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
                   size: 14,
                   color: Theme.of(context).colorScheme.outline,
                 ),
+
                 const SizedBox(width: 4),
+
                 Expanded(
                   child: Text(
                     _formatDate(fault.createdAt),
@@ -271,6 +258,7 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
                     ),
                   ),
                 ),
+
                 if (fault.reportedByName != null &&
                     fault.reportedByName!.trim().isNotEmpty) ...[
                   Text(
@@ -287,9 +275,11 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
                     ),
                   ),
                 ],
+
                 if (fault.imageUrl != null &&
                     fault.imageUrl!.trim().isNotEmpty) ...[
                   const SizedBox(width: 8),
+
                   Icon(
                     Icons.image_outlined,
                     size: 16,
@@ -306,6 +296,7 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
 
   Widget _buildTypeBadge(String type) {
     final displayType = type.trim().isNotEmpty ? type.trim() : 'Other';
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -320,7 +311,9 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
             size: 14,
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
+
           const SizedBox(width: 4),
+
           Text(
             displayType,
             style: TextStyle(
@@ -338,14 +331,19 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
     switch (type.trim().toLowerCase()) {
       case 'mechanical':
         return Icons.build_outlined;
+
       case 'electrical':
         return Icons.bolt_outlined;
+
       case 'hydraulic':
         return Icons.water_drop_outlined;
+
       case 'thermal':
         return Icons.thermostat_outlined;
+
       case 'pneumatic':
         return Icons.air_outlined;
+
       default:
         return Icons.warning_amber_rounded;
     }
@@ -353,9 +351,13 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
 
   Widget _buildSeverityBadge(String severity) {
     final normalized = severity.trim();
+
     final color = _getSeverityColor(normalized);
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final backgroundColor = color.withValues(alpha: isDark ? 0.25 : 0.12);
+
     final textColor = isDark
         ? color
         : _getAccessibleSeverityTextColor(normalized, color);
@@ -375,7 +377,9 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
             height: 8,
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
+
           const SizedBox(width: 6),
+
           Text(
             normalized.isNotEmpty ? normalized : 'Unknown',
             style: TextStyle(
@@ -393,12 +397,16 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
     switch (severity.trim().toLowerCase()) {
       case 'low':
         return Colors.green;
+
       case 'medium':
         return Colors.orange;
+
       case 'high':
         return Colors.deepOrange;
+
       case 'critical':
         return Colors.red;
+
       default:
         return Colors.grey;
     }
@@ -408,12 +416,16 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
     switch (severity.trim().toLowerCase()) {
       case 'low':
         return const Color(0xFF1B5E20);
+
       case 'medium':
         return const Color(0xFFE65100);
+
       case 'high':
         return const Color(0xFFBF360C);
+
       case 'critical':
         return const Color(0xFFB71C1C);
+
       default:
         return fallback;
     }
@@ -421,9 +433,13 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
 
   Widget _buildStatusBadge(String status) {
     final normalized = status.trim();
+
     final color = _getStatusColor(normalized);
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final backgroundColor = color.withValues(alpha: isDark ? 0.25 : 0.12);
+
     final textColor = isDark
         ? color
         : _getAccessibleStatusTextColor(normalized, color);
@@ -450,10 +466,13 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
     switch (status.trim().toLowerCase()) {
       case 'open':
         return Colors.blue;
+
       case 'in progress':
         return Colors.amber.shade800;
+
       case 'resolved':
         return Colors.teal;
+
       default:
         return Colors.grey;
     }
@@ -463,10 +482,13 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
     switch (status.trim().toLowerCase()) {
       case 'open':
         return const Color(0xFF0D47A1);
+
       case 'in progress':
         return const Color(0xFFE65100);
+
       case 'resolved':
         return const Color(0xFF004D40);
+
       default:
         return fallback;
     }
@@ -476,13 +498,20 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
     if (dateTime == null) {
       return 'Date unavailable';
     }
+
     try {
       final local = dateTime.toLocal();
+
       final day = local.day.toString().padLeft(2, '0');
+
       final month = local.month.toString().padLeft(2, '0');
+
       final year = local.year;
+
       final hour = local.hour.toString().padLeft(2, '0');
+
       final minute = local.minute.toString().padLeft(2, '0');
+
       return '$day/$month/$year • $hour:$minute';
     } catch (_) {
       return 'Date unavailable';
