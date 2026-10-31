@@ -115,6 +115,7 @@ class FakeStorageService extends Fake implements StorageService {
   String? lastUploadedFileName;
   String? lastUploadedContentType;
   String? lastUploadedFolder;
+  Map<String, String>? lastUploadedCustomMetadata;
   String downloadUrlToReturn =
       'https://firebasestorage.googleapis.com/v0/b/bucket/o/maintenance_proofs%2Fproof.jpg?alt=media';
   Exception? exceptionToThrow;
@@ -125,12 +126,14 @@ class FakeStorageService extends Fake implements StorageService {
     required String fileName,
     String contentType = 'image/jpeg',
     String folder = StorageService.defaultFolder,
+    Map<String, String>? customMetadata,
   }) async {
     uploadCallCount++;
     lastUploadedBytes = bytes;
     lastUploadedFileName = fileName;
     lastUploadedContentType = contentType;
     lastUploadedFolder = folder;
+    lastUploadedCustomMetadata = customMetadata;
 
     if (exceptionToThrow != null) {
       throw exceptionToThrow!;
@@ -389,6 +392,10 @@ void main() {
         );
         expect(fakeStorageService.lastUploadedContentType, equals('image/png'));
         expect(fakeStorageService.lastUploadedBytes, equals(sampleBytes));
+        expect(
+          fakeStorageService.lastUploadedCustomMetadata,
+          equals({'taskId': 'task_003'}),
+        );
 
         // Verify proofImageUrl was written to Firestore history entry
         final doc = await fakeFirestore

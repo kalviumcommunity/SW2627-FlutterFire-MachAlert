@@ -169,6 +169,7 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
           fileName: fileName,
           contentType: contentType,
           folder: 'maintenance_proofs',
+          customMetadata: {'taskId': widget.maintenanceId},
         );
       }
 
