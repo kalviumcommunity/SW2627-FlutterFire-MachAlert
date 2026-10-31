@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/fault_model.dart';
 import '../../services/fault_service.dart';
 import '../../utils/app_constants.dart';
+import '../../widgets/app_state_view.dart';
 
 class RealtimeFaultsScreen extends StatefulWidget {
   final Stream<List<FaultModel>>? faultStream;
@@ -62,6 +63,12 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
     } else {
       _activeStream = widget.faultStream;
     }
+  }
+
+  void _retryLiveStream() {
+    setState(() {
+      _updateStream();
+    });
   }
 
   @override
@@ -180,7 +187,10 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
 
                   if (snapshot.connectionState == ConnectionState.waiting &&
                       !snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const AppStateView.loading(
+                      title: 'Connecting to live faults...',
+                      message: 'Waiting for real-time fault updates.',
+                    );
                   }
 
                   final allFaults = [...?snapshot.data];
@@ -497,88 +507,28 @@ class _RealtimeFaultsScreenState extends State<RealtimeFaultsScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.check_circle_outline,
-              size: 72,
-              color: Colors.green.shade600,
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'No active faults',
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'New fault reports will appear here automatically.',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return const AppStateView.empty(
+      icon: Icons.check_circle_outline,
+      title: 'No active faults',
+      message: 'New fault reports will appear here automatically.',
     );
   }
 
   Widget _buildErrorState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Unable to load live faults',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'The real-time connection encountered an error.',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return AppStateView.error(
+      title: 'Unable to load live faults',
+      message:
+          'The real-time connection encountered an error. Try reconnecting.',
+      actionLabel: 'Retry',
+      onAction: widget.faultService != null ? _retryLiveStream : null,
     );
   }
 
   Widget _buildDisconnectedState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.sync_outlined,
-              size: 72,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Live fault monitoring',
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Real-time fault updates will appear here once the live data connection is integrated.',
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return const AppStateView.info(
+      icon: Icons.sync_outlined,
+      title: 'Live fault monitoring',
+      message: 'Real-time fault updates will appear here once a live data connection is available.',
     );
   }
 }
