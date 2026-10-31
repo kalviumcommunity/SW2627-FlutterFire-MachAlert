@@ -397,17 +397,19 @@ docs: update README
 
 ### Prerequisites
 
-Before running the project, make sure you have:
+Before running the project, make sure you have the following installed and configured:
 
-- Git
-- Flutter SDK
-- Dart
-- Android Studio or VS Code
-- Android Emulator or physical Android device
-- Firebase account
-- FlutterFire CLI
+- **Flutter SDK:** Version `3.13.5` or higher (`flutter doctor`).
+- **Dart SDK:** Bundled with Flutter (`sdk: ^3.13.5`).
+- **Java Development Kit (JDK):**
+  - **JDK 17:** Required by Gradle for Android APK compilation.
+  - **JDK 21+:** Required by modern Firebase CLI (`firebase-tools >= 13`) for running local Firestore and Storage emulators.
+- **Android Studio / Android SDK:** Command-line tools, platform-tools, and Android Virtual Device (AVD).
+- **Firebase CLI:** Node.js package `firebase-tools` (`npm install -g firebase-tools`).
+- **FlutterFire CLI:** Activated via Dart pub (`dart pub global activate flutterfire_cli`).
+- **Firebase Project Access:** Access to the `machalert` Firebase project.
 
-Check Flutter installation:
+Verify your Flutter and toolchain installation:
 
 ```bash
 flutter doctor
@@ -419,72 +421,164 @@ flutter doctor
 
 ```bash
 git clone https://github.com/kalviumcommunity/SW2627-FlutterFire-MachAlert.git
-```
-
-Navigate into the project:
-
-```bash
 cd SW2627-FlutterFire-MachAlert
 ```
 
 ---
 
-## 📦 Install Flutter Dependencies
+## 🔥 Firebase Setup & Installation Guide
 
-After the Flutter project is initialized:
+MachAlert uses **Firebase Authentication**, **Cloud Firestore**, and **Firebase Storage**, along with the **Firebase Emulator Suite** for isolated local development and testing.
+
+### 1. Flutter Dependency Installation
+
+Fetch all required Dart and Flutter dependencies:
 
 ```bash
 flutter pub get
 ```
 
----
+### 2. Firebase CLI Installation
 
-## 🔥 Firebase Configuration
-
-Install Firebase CLI:
+Install or update the Firebase CLI globally:
 
 ```bash
 npm install -g firebase-tools
 ```
 
-Login:
+Verify the installed version:
+
+```bash
+firebase --version
+```
+
+### 3. Firebase Login
+
+Authenticate your CLI session:
 
 ```bash
 firebase login
 ```
 
-Install FlutterFire CLI:
+If working in a headless or cloud environment without a browser, use:
 
 ```bash
-dart pub global activate flutterfire_cli
+firebase login --no-localhost
 ```
 
-Configure Firebase:
+### 4. FlutterFire Configuration
+
+The repository already contains the verified `lib/firebase_options.dart` generated for the target project `machalert`. To re-synchronize or inspect options:
 
 ```bash
-flutterfire configure
+flutterfire configure --project=machalert
 ```
 
-Firebase services planned for this project:
+> **Platform Support Note:** Currently, Android is the active, fully-configured target platform in `lib/firebase_options.dart` and `android/app/google-services.json`. Configurations for iOS, macOS, Windows, Linux, and Web require platform-specific app registration in Firebase before enabling.
 
-- Firebase Authentication
-- Cloud Firestore
-- Firebase Storage
+### 5. Android Firebase Configuration
+
+Ensure `android/app/google-services.json` is present and matches the `machalert` project:
+- Package Name: `com.example.mach_alert`
+- Project ID: `machalert`
+- Storage Bucket: `machalert.firebasestorage.app`
+
+The Google Services Gradle plugin is registered in `android/settings.gradle.kts`:
+```kotlin
+id("com.google.gms.google-services") version("4.4.4") apply false
+```
+and applied in `android/app/build.gradle.kts`:
+```kotlin
+id("com.google.gms.google-services")
+```
+
+### 6. Starting Firestore and Storage Emulators
+
+MachAlert includes local emulator configuration in `firebase.json`:
+- **Firestore Emulator:** Port `8080` (HTTP / REST)
+- **Firebase Storage Emulator:** Port `9199`
+- **Emulator UI:** Port `4000`
+
+Ensure JDK 21+ is in your environment and start the emulators:
+
+```bash
+firebase emulators:start --only firestore,storage
+```
+
+The Emulator UI dashboard will be accessible at `http://127.0.0.1:4000`.
+
+### 7. Running MachAlert in Local Emulator Mode
+
+By default, debug builds run in **safe local emulator mode** via `EmulatorConfig`:
+- **Firestore Traffic:** Redirected to port `8080`.
+- **Storage Uploads:** Redirected to port `9199`.
+
+#### Emulator Network Host Resolution
+- **Android Virtual Device (AVD):** Automatically routes to `10.0.2.2` (the special loopback alias pointing to the host machine's `127.0.0.1`).
+- **macOS / Desktop / Local Environment:** Connects directly to `127.0.0.1`.
+
+Run the app in debug mode:
+
+```bash
+flutter run
+```
+
+### 8. Running MachAlert in Explicit Cloud Mode
+
+To bypass local emulators and connect the debug build directly to live Firebase Cloud Firestore and Firebase Storage:
+
+```bash
+flutter run --dart-define=USE_FIREBASE_EMULATOR=false
+```
+
+Or target cloud mode explicitly:
+
+```bash
+flutter run --dart-define=USE_CLOUD_FIRESTORE=true --dart-define=USE_CLOUD_STORAGE=true
+```
+
+> **Release Mode Safety:** Release builds compiled with `flutter build` or `flutter run --release` **never** connect to local emulators by default, preventing accidental emulator connections in production.
+
+### 9. Running Automated Security & Integration Tests
+
+Execute the complete Firestore and Storage security rules test suite inside a transient Firebase emulator session:
+
+```bash
+firebase emulators:exec --project machalert --only firestore,storage \
+  "flutter test test/services/firestore_security_rules_test.dart test/services/fault_security_rules_test.dart test/services/storage_security_rules_test.dart"
+```
+
+Or execute the complete repository test suite:
+
+```bash
+flutter test
+```
+
+### 10. Building the Android APK
+
+Compile the verified debug APK:
+
+```bash
+flutter build apk --debug
+```
+
+The output artifact will be generated at:
+`build/app/outputs/flutter-apk/app-debug.apk`
 
 ---
 
-## ▶️ Run the Application
+## ▶️ Device Selection & Execution
 
-Check available devices:
+Check connected physical devices and running virtual devices:
 
 ```bash
 flutter devices
 ```
 
-Run:
+Launch on a specific device:
 
 ```bash
-flutter run
+flutter run -d <device-id>
 ```
 
 ---
