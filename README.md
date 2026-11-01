@@ -621,13 +621,23 @@ Every team member must:
 
 ---
 
+## 📚 Documentation & Verification Guides
+
+Comprehensive project documentation, testing plans, and presentation guides are available in the `docs/` directory:
+
+- 📋 **[End-to-End Test Plan](docs/END_TO_END_TEST_PLAN.md):** Complete test matrix, scenario breakdown (Scenarios A through E), mock architecture, execution commands, and verification criteria.
+- 🎬 **[Demo Guide & Script](docs/DEMO_GUIDE.md):** Step-by-step 3-to-5 minute live demonstration walkthrough with persona credentials, realistic factory mock datasets, and presentation talking points.
+- 🏭 **[Project Completion Report](docs/PROJECT_COMPLETION_REPORT.md):** Comprehensive engineering report detailing system architecture, data models, RBAC matrix, PR contribution genealogy, security architecture, QA metrics, and future roadmap.
+
+---
+
 ## ✅ Current Project Status
 
 ```text
-🟡 Status: Sprint 2 — Development
+🟢 Status: Sprint 2 — Completed & Verified (Day 20)
 ```
 
-The project is currently being developed using Flutter and Firebase.
+The MachAlert application is fully implemented, verified, and documented across all three user personas (**Operator**, **Technician**, and **Manager**). All functional workflows, real-time Firestore listeners, Storage uploads, and production security rules are validated by an automated test suite of 709 passing tests.
 
 ---
 
