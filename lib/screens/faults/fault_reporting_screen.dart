@@ -6,8 +6,10 @@ import '../../models/fault_model.dart';
 import '../../models/machine_model.dart';
 import '../../services/fault_service.dart';
 import '../../services/storage_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_constants.dart';
 import '../../widgets/fault_image_attachment_picker.dart';
+import '../../widgets/main_bottom_navigation.dart';
 
 class FaultReportingScreen extends StatefulWidget {
   final List<MachineModel> machines;
@@ -31,6 +33,7 @@ class FaultReportingScreen extends StatefulWidget {
 
 class _FaultReportingScreenState extends State<FaultReportingScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final _descriptionController = TextEditingController();
 
   String? _selectedMachineId;
@@ -46,10 +49,10 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
   void initState() {
     super.initState();
 
-    final initialMachine = widget.initialMachine;
+    final initial = widget.initialMachine;
 
-    if (initialMachine != null) {
-      _selectedMachineId = initialMachine.id;
+    if (initial != null) {
+      _selectedMachineId = initial.id;
     } else if (widget.machines.isNotEmpty) {
       _selectedMachineId = widget.machines.first.id;
     }
@@ -58,17 +61,18 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
   @override
   void dispose() {
     _descriptionController.dispose();
+
     super.dispose();
   }
 
   List<MachineModel> get _availableMachines {
     final machines = [...widget.machines];
 
-    final initialMachine = widget.initialMachine;
+    final initial = widget.initialMachine;
 
-    if (initialMachine != null &&
-        !machines.any((machine) => machine.id == initialMachine.id)) {
-      machines.insert(0, initialMachine);
+    if (initial != null &&
+        !machines.any((machine) => machine.id == initial.id)) {
+      machines.insert(0, initial);
     }
 
     return machines;
@@ -92,6 +96,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
     if (widget.faultService != null) {
       return widget.faultService!;
     }
+
     try {
       return Provider.of<FaultService>(context, listen: false);
     } catch (_) {
@@ -103,6 +108,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
     if (widget.storageService != null) {
       return widget.storageService!;
     }
+
     try {
       return Provider.of<StorageService>(context, listen: false);
     } catch (_) {
@@ -112,15 +118,23 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
 
   String _determineContentType(String fileName) {
     final lower = fileName.toLowerCase();
+
     if (lower.endsWith('.png')) {
       return 'image/png';
-    } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+    }
+
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
       return 'image/jpeg';
-    } else if (lower.endsWith('.webp')) {
+    }
+
+    if (lower.endsWith('.webp')) {
       return 'image/webp';
-    } else if (lower.endsWith('.gif')) {
+    }
+
+    if (lower.endsWith('.gif')) {
       return 'image/gif';
     }
+
     return 'image/jpeg';
   }
 
@@ -140,9 +154,9 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
     final hasSeverity =
         _selectedSeverity != null && _selectedSeverity!.trim().isNotEmpty;
 
-    final trimmedDescription = _descriptionController.text.trim();
+    final description = _descriptionController.text.trim();
 
-    final hasDescription = trimmedDescription.length >= 10;
+    final hasDescription = description.length >= 10;
 
     setState(() {
       _showSeverityError = !hasSeverity;
@@ -170,25 +184,28 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       String? imageUrl;
 
       if (_selectedImage != null) {
-        final imageBytes = await _selectedImage!.readAsBytes();
+        final bytes = await _selectedImage!.readAsBytes();
+
         if (!mounted) {
           return;
         }
+
         final rawName = _selectedImage!.name.trim();
+
         final rawPath = _selectedImage!.path.trim();
+
         final pathName = rawPath.isNotEmpty
             ? rawPath.split(RegExp(r'[/\\]')).last.trim()
             : '';
-        final candidateName = rawName.isNotEmpty ? rawName : pathName;
-        final fileName = candidateName.isNotEmpty
-            ? candidateName
-            : 'fault_image.jpg';
-        final contentType = _determineContentType(fileName);
+
+        final candidate = rawName.isNotEmpty ? rawName : pathName;
+
+        final fileName = candidate.isNotEmpty ? candidate : 'fault_image.jpg';
 
         imageUrl = await _effectiveStorageService.uploadFaultImage(
-          bytes: imageBytes,
+          bytes: bytes,
           fileName: fileName,
-          contentType: contentType,
+          contentType: _determineContentType(fileName),
         );
 
         if (!mounted) {
@@ -202,7 +219,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
         machineName: _selectedMachine?.name,
         type: _selectedFaultType!.trim(),
         severity: _selectedSeverity!.trim(),
-        description: trimmedDescription,
+        description: description,
         reportedBy: '',
         status: AppConstants.faultStatusOpen,
         imageUrl: imageUrl,
@@ -268,47 +285,43 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Report Fault',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
+      appBar: AppBar(title: const Text('Log Event')),
+      bottomNavigationBar: const MainBottomNavigation(currentIndex: 2),
       body: SafeArea(
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildHeader(),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 18),
 
-                _buildMachineSelector(),
+                _SectionCard(child: _buildMachineSelector()),
+
+                const SizedBox(height: 12),
+
+                _SectionCard(child: _buildFaultTypeSection()),
+
+                const SizedBox(height: 12),
+
+                _SectionCard(child: _buildSeveritySection()),
+
+                const SizedBox(height: 12),
+
+                _SectionCard(child: _buildDateTimeSection()),
+
+                const SizedBox(height: 12),
+
+                _SectionCard(child: _buildDescriptionSection()),
+
+                const SizedBox(height: 12),
+
+                _SectionCard(child: _buildPhotoSection()),
 
                 const SizedBox(height: 20),
-
-                _buildFaultTypeSection(),
-
-                const SizedBox(height: 20),
-
-                _buildSeveritySection(),
-
-                const SizedBox(height: 20),
-
-                _buildDateTimeSection(),
-
-                const SizedBox(height: 20),
-
-                _buildDescriptionSection(),
-
-                const SizedBox(height: 20),
-
-                _buildPhotoSection(),
-
-                const SizedBox(height: 28),
 
                 FilledButton.icon(
                   onPressed: _isSubmitting ? null : _submit,
@@ -332,43 +345,55 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
   }
 
   Widget _buildHeader() {
-    return Row(
-      children: [
-        Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.errorContainer,
-            borderRadius: BorderRadius.circular(14),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.navy,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.report_problem_outlined,
+              color: AppTheme.green,
+            ),
           ),
-          child: Icon(
-            Icons.report_problem_outlined,
-            color: Theme.of(context).colorScheme.onErrorContainer,
+
+          const SizedBox(width: 13),
+
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Report Machine Fault',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Log the issue immediately so maintenance can respond quickly.',
+                  style: TextStyle(
+                    color: Color(0xFFC7D6E1),
+                    fontSize: 11,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-
-        const SizedBox(width: 14),
-
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Report Machine Fault',
-                style: Theme.of(context).textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-
-              const SizedBox(height: 4),
-
-              Text(
-                'Log an issue immediately so maintenance can respond quickly.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -380,31 +405,21 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       children: [
         _sectionTitle('Machine'),
 
-        const SizedBox(height: 8),
+        const SizedBox(height: 9),
 
         if (machines.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.precision_manufacturing_outlined),
-                SizedBox(width: 12),
-                Expanded(child: Text('No machines are available.')),
-              ],
-            ),
+          const Row(
+            children: [
+              Icon(Icons.precision_manufacturing_outlined),
+              SizedBox(width: 10),
+              Expanded(child: Text('No machines are available.')),
+            ],
           )
         else
           DropdownButtonFormField<String>(
             initialValue: _selectedMachineId,
             decoration: const InputDecoration(
               hintText: 'Select machine',
-              border: OutlineInputBorder(),
               prefixIcon: Icon(Icons.precision_manufacturing_outlined),
             ),
             items: machines
@@ -433,7 +448,6 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
 
         if (_selectedMachine != null) ...[
           const SizedBox(height: 10),
-
           _SelectedMachineCard(machine: _selectedMachine!),
         ],
       ],
@@ -446,13 +460,12 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       children: [
         _sectionTitle('Fault Type'),
 
-        const SizedBox(height: 8),
+        const SizedBox(height: 9),
 
         DropdownButtonFormField<String>(
           initialValue: _selectedFaultType,
           decoration: const InputDecoration(
             hintText: 'Select fault category',
-            border: OutlineInputBorder(),
             prefixIcon: Icon(Icons.category_outlined),
           ),
           items: AppConstants.faultTypes
@@ -486,11 +499,11 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       children: [
         _sectionTitle('Severity'),
 
-        const SizedBox(height: 4),
+        const SizedBox(height: 3),
 
-        Text(
+        const Text(
           'How serious is this machine issue?',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: TextStyle(color: Color(0xFF7C8C99), fontSize: 11),
         ),
 
         const SizedBox(height: 10),
@@ -507,16 +520,14 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
               selected: selected,
               label: Text(severity),
               avatar: Container(
-                width: 10,
-                height: 10,
+                width: 8,
+                height: 8,
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
               side: BorderSide(
-                color: selected
-                    ? color
-                    : Theme.of(context).colorScheme.outlineVariant,
+                color: selected ? color : const Color(0xFFDCE5EC),
               ),
-              selectedColor: color.withValues(alpha: 0.15),
+              selectedColor: color.withValues(alpha: 0.12),
               onSelected: _isSubmitting
                   ? null
                   : (isSelected) {
@@ -532,7 +543,6 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
 
         if (_showSeverityError) ...[
           const SizedBox(height: 8),
-
           Text(
             'Please select a severity.',
             style: TextStyle(
@@ -562,7 +572,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       children: [
         _sectionTitle('Date & Time'),
 
-        const SizedBox(height: 8),
+        const SizedBox(height: 9),
 
         Row(
           children: [
@@ -570,7 +580,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
               child: _InfoBox(icon: Icons.calendar_today_outlined, label: date),
             ),
 
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
 
             Expanded(
               child: _InfoBox(icon: Icons.access_time, label: time),
@@ -587,14 +597,14 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       children: [
         _sectionTitle('Fault Description'),
 
-        const SizedBox(height: 4),
+        const SizedBox(height: 3),
 
-        Text(
+        const Text(
           'Describe what happened or what you observed.',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: TextStyle(color: Color(0xFF7C8C99), fontSize: 11),
         ),
 
-        const SizedBox(height: 8),
+        const SizedBox(height: 9),
 
         TextFormField(
           controller: _descriptionController,
@@ -603,7 +613,6 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
           enabled: !_isSubmitting,
           decoration: const InputDecoration(
             hintText: 'Example: Motor overheating with unusual vibration...',
-            border: OutlineInputBorder(),
             alignLabelWithHint: true,
           ),
           validator: (value) {
@@ -628,11 +637,11 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       children: [
         _sectionTitle('Add Photo'),
 
-        const SizedBox(height: 4),
+        const SizedBox(height: 3),
 
-        Text(
+        const Text(
           'Optional • Attach a photo of the machine issue',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: TextStyle(color: Color(0xFF7C8C99), fontSize: 11),
         ),
 
         const SizedBox(height: 10),
@@ -650,15 +659,17 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
         if (_selectedImage != null) ...[
           const SizedBox(height: 8),
 
-          Row(
+          const Row(
             children: [
-              Icon(Icons.check_circle, size: 18, color: Colors.green.shade700),
-
-              const SizedBox(width: 6),
-
+              Icon(Icons.check_circle, size: 17, color: AppTheme.green),
+              SizedBox(width: 6),
               Text(
                 'Photo ready to upload',
-                style: Theme.of(context).textTheme.bodySmall,
+                style: TextStyle(
+                  color: AppTheme.green,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -670,28 +681,44 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
   Widget _sectionTitle(String title) {
     return Text(
       title,
-      style: Theme.of(context).textTheme.titleSmall
-          ?.copyWith(fontWeight: FontWeight.bold),
+      style: const TextStyle(
+        color: AppTheme.navy,
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 
   Color _severityColor(String severity) {
     switch (severity) {
       case AppConstants.severityLow:
-        return Colors.green;
+        return AppTheme.green;
 
       case AppConstants.severityMedium:
-        return Colors.orange;
+        return AppTheme.warning;
 
       case AppConstants.severityHigh:
         return Colors.deepOrange;
 
       case AppConstants.severityCritical:
-        return Colors.red;
+        return AppTheme.danger;
 
       default:
         return Colors.grey;
     }
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final Widget child;
+
+  const _SectionCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(padding: const EdgeInsets.all(15), child: child),
+    );
   }
 }
 
@@ -702,15 +729,52 @@ class _SelectedMachineCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.precision_manufacturing),
-        title: Text(machine.name),
-        subtitle: Text(machine.productionLine),
-        trailing: Text(
-          machine.status,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F8FA),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.precision_manufacturing,
+            color: AppTheme.navy,
+            size: 22,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  machine.name,
+                  style: const TextStyle(
+                    color: AppTheme.navy,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+                if (machine.productionLine.isNotEmpty)
+                  Text(
+                    machine.productionLine,
+                    style: const TextStyle(
+                      color: Color(0xFF7A8B98),
+                      fontSize: 10,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Text(
+            machine.status,
+            style: const TextStyle(
+              color: AppTheme.green,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -725,18 +789,22 @@ class _InfoBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
+        color: const Color(0xFFF5F8FA),
+        border: Border.all(color: const Color(0xFFDCE5EC)),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 20),
-
-          const SizedBox(width: 10),
-
-          Expanded(child: Text(label)),
+          Icon(icon, size: 18, color: AppTheme.navy),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: AppTheme.navy, fontSize: 11),
+            ),
+          ),
         ],
       ),
     );

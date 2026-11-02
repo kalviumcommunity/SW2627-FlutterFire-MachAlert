@@ -20,6 +20,8 @@ import '../services/machine_service.dart';
 import '../services/maintenance_service.dart';
 import '../services/storage_service.dart';
 import '../services/user_service.dart';
+import '../screens/reports/reports_screen.dart';
+import '../screens/profile/profile_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -35,6 +37,8 @@ class AppRoutes {
   static const String realtimeFaultsName = '/faults/live';
   static const String maintenanceName = '/maintenance';
   static const String createMaintenanceTaskName = '/maintenance/create';
+  static const String reportsName = '/reports';
+  static const String profileName = '/profile';
 
   static Route<T> _route<T>({
     required String name,
@@ -184,6 +188,20 @@ class AppRoutes {
         initialMachines: initialMachines,
         initialTechnicians: initialTechnicians,
       ),
+    );
+  }
+
+  static Route<void> reports() {
+    return _route<void>(
+      name: reportsName,
+      builder: (_) => const ReportsScreen(),
+    );
+  }
+
+  static Route<void> profile() {
+    return _route<void>(
+      name: profileName,
+      builder: (_) => const ProfileScreen(),
     );
   }
 }

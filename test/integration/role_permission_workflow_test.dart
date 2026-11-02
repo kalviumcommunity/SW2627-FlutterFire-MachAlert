@@ -220,7 +220,7 @@ void main() async {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Welcome, Sam Operator'), findsOneWidget);
+        expect(find.text('Hi, Sam'), findsOneWidget);
         expect(find.text('Operator Dashboard'), findsOneWidget);
         expect(find.text('Machine Operations'), findsOneWidget);
 
@@ -620,7 +620,7 @@ void main() async {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Welcome, Alex Technician'), findsOneWidget);
+        expect(find.text('Hi, Alex'), findsOneWidget);
         expect(find.text('Technician Dashboard'), findsOneWidget);
         expect(find.text('Maintenance Overview'), findsOneWidget);
 
@@ -939,7 +939,7 @@ void main() async {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Welcome, Sarah PlantManager'), findsOneWidget);
+        expect(find.text('Hi, Sarah'), findsOneWidget);
         expect(find.text('Manager Dashboard'), findsOneWidget);
         expect(find.text('Factory Overview'), findsOneWidget);
 

@@ -5,8 +5,10 @@ import '../../models/machine_model.dart';
 import '../../providers/app_state_provider.dart';
 import '../../providers/machine_provider.dart';
 import '../../services/machine_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_constants.dart';
 import '../../utils/app_routes.dart';
+import '../../widgets/main_bottom_navigation.dart';
 
 class MachineDetailsScreen extends StatefulWidget {
   final MachineModel machine;
@@ -29,19 +31,27 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   MachineModel get machine {
     try {
       final provider = Provider.of<MachineProvider>(context, listen: false);
+
       if (provider.selectedMachine?.id == widget.machine.id) {
         return provider.selectedMachine!;
       }
+
       final match = provider.getMachineById(widget.machine.id);
-      if (match != null) return match;
+
+      if (match != null) {
+        return match;
+      }
     } catch (_) {}
+
     return _localMachine ?? widget.machine;
   }
 
   bool _resolveCanManage(BuildContext context) {
     try {
       final appState = Provider.of<AppStateProvider>(context, listen: false);
+
       final role = appState.user?.role.trim().toLowerCase();
+
       return role == AppConstants.roleManager;
     } catch (_) {
       return false;
@@ -49,7 +59,9 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   }
 
   void _handleManagementAction(String action, bool canManage) {
-    if (!canManage || !_resolveCanManage(context)) return;
+    if (!canManage || !_resolveCanManage(context)) {
+      return;
+    }
 
     switch (action) {
       case 'edit':
@@ -63,7 +75,9 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   }
 
   Future<void> _openEditMachine(bool canManage) async {
-    if (!canManage || !_resolveCanManage(context)) return;
+    if (!canManage || !_resolveCanManage(context)) {
+      return;
+    }
 
     await Navigator.of(context).push<void>(AppRoutes.editMachine(machine));
 
@@ -73,7 +87,9 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   }
 
   Future<void> _showDeleteConfirmation(bool canManage) async {
-    if (!canManage || !_resolveCanManage(context)) return;
+    if (!canManage || !_resolveCanManage(context)) {
+      return;
+    }
 
     final currentMachine = machine;
 
@@ -94,6 +110,7 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
               onPressed: () {
                 Navigator.of(dialogContext).pop(true);
               },
@@ -110,6 +127,7 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
 
     try {
       MachineProvider? provider;
+
       try {
         provider = Provider.of<MachineProvider>(context, listen: false);
       } catch (_) {}
@@ -118,10 +136,13 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
         await provider.deleteMachine(currentMachine.id);
       } else {
         MachineService? service;
+
         try {
           service = Provider.of<MachineService>(context, listen: false);
         } catch (_) {}
+
         service ??= MachineService();
+
         await service.deleteMachine(currentMachine.id);
       }
 
@@ -157,16 +178,14 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          machine.id,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Machine Details'),
         actions: [
           if (canManage)
             PopupMenuButton<String>(
               tooltip: 'Manage machine',
-              onSelected: (action) =>
-                  _handleManagementAction(action, canManage),
+              onSelected: (action) {
+                _handleManagementAction(action, canManage);
+              },
               itemBuilder: (context) {
                 return const [
                   PopupMenuItem<String>(
@@ -183,7 +202,7 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
                     value: 'delete',
                     child: Row(
                       children: [
-                        Icon(Icons.delete_outline),
+                        Icon(Icons.delete_outline, color: AppTheme.danger),
                         SizedBox(width: 12),
                         Text('Delete Machine'),
                       ],
@@ -194,19 +213,20 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
             ),
         ],
       ),
+      bottomNavigationBar: const MainBottomNavigation(currentIndex: 1),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildMachineHeader(),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 18),
 
               _buildTabs(),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
               _buildSelectedTab(),
             ],
@@ -217,83 +237,105 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   }
 
   Widget _buildMachineHeader() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 88,
-          height: 88,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Icon(
-            Icons.precision_manufacturing,
-            size: 48,
-            color: Theme.of(context).colorScheme.onPrimaryContainer,
-          ),
-        ),
-
-        const SizedBox(width: 18),
-
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                machine.id,
-                style: Theme.of(context).textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-
-              const SizedBox(height: 4),
-
-              Text(machine.name, style: Theme.of(context).textTheme.bodyLarge),
-
-              if (machine.productionLine.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  machine.productionLine,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
-
-              const SizedBox(height: 10),
-
-              _buildStatusChip(),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusChip() {
-    final style = _statusStyle(machine.status);
+    final status = _statusStyle(machine.status);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: style.color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5ECF1)),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 8,
-            height: 8,
+            width: 74,
+            height: 74,
             decoration: BoxDecoration(
-              color: style.color,
-              shape: BoxShape.circle,
+              color: const Color(0xFFF0F5F7),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: const Icon(
+              Icons.precision_manufacturing,
+              size: 38,
+              color: AppTheme.navy,
             ),
           ),
 
-          const SizedBox(width: 6),
+          const SizedBox(width: 14),
 
-          Text(
-            style.label,
-            style: TextStyle(color: style.color, fontWeight: FontWeight.w600),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  machine.id,
+                  style: const TextStyle(
+                    color: AppTheme.navy,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+
+                const SizedBox(height: 2),
+
+                Text(
+                  machine.name,
+                  style: const TextStyle(
+                    color: Color(0xFF526575),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+
+                if (machine.productionLine.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    machine.productionLine,
+                    style: const TextStyle(
+                      color: Color(0xFF8A99A6),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 10),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: status.color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: status.color,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        status.label,
+                        style: TextStyle(
+                          color: status.color,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -303,43 +345,44 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   Widget _buildTabs() {
     const labels = ['Overview', 'Logs', 'Trend'];
 
-    return Row(
-      children: List.generate(labels.length, (index) {
-        final selected = _selectedTab == index;
+    return Container(
+      height: 43,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF4F7),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: List.generate(labels.length, (index) {
+          final selected = _selectedTab == index;
 
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: index == labels.length - 1 ? 0 : 8),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(10),
+          return Expanded(
+            child: GestureDetector(
               onTap: () {
                 setState(() {
                   _selectedTab = index;
                 });
               },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: selected
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(10),
+                  color: selected ? AppTheme.green : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   labels[index],
-                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                    color: selected
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
+                    color: selected ? Colors.white : AppTheme.navy,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
+      ),
     );
   }
 
@@ -367,22 +410,22 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
                 label: 'Total Inspections',
                 value: '--',
                 icon: Icons.fact_check_outlined,
+                color: AppTheme.green,
               ),
             ),
-
-            const SizedBox(width: 12),
-
+            const SizedBox(width: 10),
             Expanded(
               child: _MetricCard(
                 label: 'Total Breakdowns',
                 value: '--',
-                icon: Icons.warning_amber,
+                icon: Icons.warning_amber_rounded,
+                color: AppTheme.danger,
               ),
             ),
           ],
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
 
         Row(
           children: [
@@ -391,11 +434,10 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
                 label: 'Health Score',
                 value: '${machine.healthScore.toStringAsFixed(0)}%',
                 icon: Icons.favorite_outline,
+                color: AppTheme.green,
               ),
             ),
-
-            const SizedBox(width: 12),
-
+            const SizedBox(width: 10),
             Expanded(
               child: _MetricCard(
                 label: 'Temperature',
@@ -403,12 +445,13 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
                     ? '--'
                     : '${machine.temperature!.toStringAsFixed(1)}°C',
                 icon: Icons.thermostat,
+                color: AppTheme.warning,
               ),
             ),
           ],
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
 
         _MetricCard(
           label: 'Vibration',
@@ -416,17 +459,14 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
               ? '--'
               : machine.vibration!.toStringAsFixed(1),
           icon: Icons.vibration,
+          color: AppTheme.blue,
         ),
 
         const SizedBox(height: 24),
 
-        Text(
-          'Inspection Information',
-          style: Theme.of(context).textTheme.titleMedium
-              ?.copyWith(fontWeight: FontWeight.bold),
-        ),
+        const _SectionHeading(title: 'Inspection Information'),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
 
         _InformationTile(
           icon: Icons.event_available,
@@ -434,31 +474,36 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
           value: _formatDateTime(machine.lastInspection),
         ),
 
+        const SizedBox(height: 8),
+
         _InformationTile(
-          icon: Icons.tag,
+          icon: Icons.confirmation_number_outlined,
           title: 'Model Number',
           value: machine.modelNumber?.isNotEmpty == true
               ? machine.modelNumber!
               : '--',
         ),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: 22),
 
         _buildRecentLogsPreview(),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: 22),
 
-        FilledButton.icon(
-          onPressed: () {
-            Navigator.of(context).push<void>(
-              AppRoutes.reportFault(
-                machines: [machine],
-                initialMachine: machine,
-              ),
-            );
-          },
-          icon: const Icon(Icons.report_problem_outlined),
-          label: const Text('Report Fault'),
+        SizedBox(
+          height: 50,
+          child: FilledButton.icon(
+            onPressed: () {
+              Navigator.of(context).push<void>(
+                AppRoutes.reportFault(
+                  machines: [machine],
+                  initialMachine: machine,
+                ),
+              );
+            },
+            icon: const Icon(Icons.report_problem_outlined),
+            label: const Text('Report Fault'),
+          ),
         ),
       ],
     );
@@ -469,14 +514,8 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Recent Logs',
-              style: Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-
+            const Expanded(child: _SectionHeading(title: 'Recent Logs')),
             TextButton(
               onPressed: () {
                 setState(() {
@@ -492,19 +531,33 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
 
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(14),
             child: Row(
               children: [
-                Icon(
-                  Icons.history,
-                  color: Theme.of(context).colorScheme.primary,
+                Container(
+                  width: 39,
+                  height: 39,
+                  decoration: BoxDecoration(
+                    color: AppTheme.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.history,
+                    size: 20,
+                    color: AppTheme.green,
+                  ),
                 ),
 
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
 
                 const Expanded(
                   child: Text(
                     'Machine activity logs will appear here once available.',
+                    style: TextStyle(
+                      color: Color(0xFF6F8190),
+                      fontSize: 11,
+                      height: 1.4,
+                    ),
                   ),
                 ),
               ],
@@ -516,18 +569,68 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   }
 
   Widget _buildLogsTab() {
-    return const _PlaceholderSection(
-      icon: Icons.receipt_long_outlined,
-      title: 'Machine Logs',
-      description: 'Inspection and breakdown logs will appear here once connected to Firestore.',
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionHeading(title: 'Machine Logs'),
+
+        SizedBox(height: 12),
+
+        _EmptyPanel(
+          icon: Icons.receipt_long_outlined,
+          title: 'No logs yet',
+          description: 'Inspection and breakdown logs will appear here once connected to Firestore.',
+        ),
+      ],
     );
   }
 
   Widget _buildTrendTab() {
-    return const _PlaceholderSection(
-      icon: Icons.show_chart,
-      title: 'Machine Trend',
-      description: 'Machine health and sensor trends will appear here in a later analytics task.',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _SectionHeading(title: 'Machine Trend'),
+
+        const SizedBox(height: 12),
+
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _LegendDot(color: AppTheme.green, label: 'Health'),
+                    SizedBox(width: 18),
+                    _LegendDot(color: AppTheme.blue, label: 'Vibration'),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 170,
+                  child: CustomPaint(painter: _MachineTrendPainter()),
+                ),
+
+                const SizedBox(height: 12),
+
+                const Text(
+                  'Machine health and sensor trends will appear here in a later analytics task.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF7A8B98),
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -539,10 +642,13 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
     final local = value.toLocal();
 
     final day = local.day.toString().padLeft(2, '0');
+
     final month = local.month.toString().padLeft(2, '0');
+
     final year = local.year;
 
     final hour = local.hour.toString().padLeft(2, '0');
+
     final minute = local.minute.toString().padLeft(2, '0');
 
     return '$day/$month/$year • $hour:$minute';
@@ -552,21 +658,27 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
     final normalized = status.trim().toLowerCase();
 
     if (normalized == 'operational' || normalized == 'running') {
-      return const _MachineStatusStyle(label: 'Running', color: Colors.green);
+      return const _MachineStatusStyle(label: 'Running', color: AppTheme.green);
     }
 
     if (normalized.contains('maintenance') || normalized == 'warning') {
       return const _MachineStatusStyle(
         label: 'Under Maintenance',
-        color: Colors.orange,
+        color: AppTheme.warning,
       );
     }
 
     if (normalized == 'critical' || normalized == 'breakdown') {
-      return const _MachineStatusStyle(label: 'Breakdown', color: Colors.red);
+      return const _MachineStatusStyle(
+        label: 'Breakdown',
+        color: AppTheme.danger,
+      );
     }
 
-    return const _MachineStatusStyle(label: 'Unknown', color: Colors.grey);
+    return const _MachineStatusStyle(
+      label: 'Unknown',
+      color: Color(0xFF8A98A4),
+    );
   }
 }
 
@@ -574,34 +686,57 @@ class _MetricCard extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
+  final Color color;
 
   const _MetricCard({
     required this.label,
     required this.value,
     required this.icon,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.all(14),
+        child: Row(
           children: [
-            Icon(icon, color: Theme.of(context).colorScheme.primary),
-
-            const SizedBox(height: 12),
-
-            Text(
-              value,
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 20, color: color),
             ),
 
-            const SizedBox(height: 4),
+            const SizedBox(width: 10),
 
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: AppTheme.navy,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Color(0xFF7B8A97),
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -623,22 +758,76 @@ class _InformationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        leading: Icon(icon),
-        title: Text(title),
-        subtitle: Text(value),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F5F7),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 19, color: AppTheme.navy),
+            ),
+
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Color(0xFF7B8A97),
+                      fontSize: 10,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: AppTheme.navy,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _PlaceholderSection extends StatelessWidget {
+class _SectionHeading extends StatelessWidget {
+  final String title;
+
+  const _SectionHeading({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: AppTheme.navy,
+        fontSize: 16,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+class _EmptyPanel extends StatelessWidget {
   final IconData icon;
   final String title;
   final String description;
 
-  const _PlaceholderSection({
+  const _EmptyPanel({
     required this.icon,
     required this.title,
     required this.description,
@@ -646,22 +835,126 @@ class _PlaceholderSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48),
-      child: Column(
-        children: [
-          Icon(icon, size: 64, color: Theme.of(context).colorScheme.outline),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        child: Column(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F5F7),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 30, color: AppTheme.navy),
+            ),
 
-          const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              title,
+              style: const TextStyle(
+                color: AppTheme.navy,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
 
-          const SizedBox(height: 8),
+            const SizedBox(height: 6),
 
-          Text(description, textAlign: TextAlign.center),
-        ],
+            Text(
+              description,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF7A8B98),
+                fontSize: 11,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendDot({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(color: Color(0xFF647684), fontSize: 10),
+        ),
+      ],
+    );
+  }
+}
+
+class _MachineTrendPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final gridPaint = Paint()
+      ..color = const Color(0xFFE8EEF2)
+      ..strokeWidth = 1;
+
+    for (var i = 1; i < 5; i++) {
+      final y = size.height / 5 * i;
+
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final healthPaint = Paint()
+      ..color = AppTheme.green
+      ..strokeWidth = 2.2
+      ..style = PaintingStyle.stroke;
+
+    final vibrationPaint = Paint()
+      ..color = AppTheme.blue
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final healthPath = Path()
+      ..moveTo(0, size.height * .65)
+      ..lineTo(size.width * .14, size.height * .54)
+      ..lineTo(size.width * .28, size.height * .48)
+      ..lineTo(size.width * .42, size.height * .36)
+      ..lineTo(size.width * .57, size.height * .43)
+      ..lineTo(size.width * .72, size.height * .28)
+      ..lineTo(size.width * .86, size.height * .34)
+      ..lineTo(size.width, size.height * .24);
+
+    final vibrationPath = Path()
+      ..moveTo(0, size.height * .77)
+      ..lineTo(size.width * .14, size.height * .7)
+      ..lineTo(size.width * .28, size.height * .74)
+      ..lineTo(size.width * .42, size.height * .62)
+      ..lineTo(size.width * .57, size.height * .66)
+      ..lineTo(size.width * .72, size.height * .58)
+      ..lineTo(size.width * .86, size.height * .61)
+      ..lineTo(size.width, size.height * .52);
+
+    canvas.drawPath(healthPath, healthPaint);
+
+    canvas.drawPath(vibrationPath, vibrationPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return false;
   }
 }
 

@@ -10,6 +10,7 @@ import 'package:mach_alert/screens/auth/signup_screen.dart';
 import 'package:mach_alert/services/auth_service.dart';
 import 'package:mach_alert/services/user_service.dart';
 import 'package:mach_alert/utils/app_constants.dart';
+import 'package:mach_alert/widgets/mach_alert_logo.dart';
 import 'package:provider/provider.dart';
 
 void main() {
@@ -20,28 +21,23 @@ void main() {
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.text('Login'), findsOneWidget);
-    expect(
-      find.byWidgetPredicate(
-        (w) =>
-            w is Image &&
-            w.image is AssetImage &&
-            (w.image as AssetImage).assetName ==
-                'assets/branding/machalert_logo.png',
-      ),
-      findsOneWidget,
-    );
+
+    expect(find.byType(MachAlertLogo), findsOneWidget);
   });
 
   testWidgets('Login password visibility toggles', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
 
     TextField field = tester.widget<TextField>(find.byType(TextField).last);
+
     expect(field.obscureText, isTrue);
 
     await tester.tap(find.text('Show Password'));
+
     await tester.pump();
 
     field = tester.widget<TextField>(find.byType(TextField).last);
+
     expect(field.obscureText, isFalse);
   });
 
@@ -59,8 +55,11 @@ void main() {
       email: 'googleuser@test.com',
       displayName: 'Google User',
     );
+
     final mockAuth = _MockAuthService(user: fakeUser);
+
     final fakeFirestore = FakeFirebaseFirestore();
+
     final userService = UserService(firestore: fakeFirestore);
 
     await tester.pumpWidget(
@@ -74,8 +73,11 @@ void main() {
     );
 
     final googleButton = find.byKey(const Key('google_sign_in_button'));
+
     await tester.ensureVisible(googleButton);
+
     await tester.tap(googleButton);
+
     await tester.pumpAndSettle();
 
     expect(mockAuth.signInWithGoogleCalled, isTrue);
@@ -84,6 +86,7 @@ void main() {
         .collection('users')
         .doc('google_login_uid')
         .get();
+
     expect(doc.exists, isTrue);
     expect(doc.data()!['role'], AppConstants.roleOperator);
     expect(doc.data()!['email'], 'googleuser@test.com');
@@ -94,6 +97,7 @@ void main() {
     'Login screen does not overwrite existing Firestore profile for existing Google user',
     (tester) async {
       final fakeFirestore = FakeFirebaseFirestore();
+
       await fakeFirestore.collection('users').doc('existing_login_user').set({
         'uid': 'existing_login_user',
         'userId': 'existing_login_user',
@@ -108,7 +112,9 @@ void main() {
         email: 'manager@test.com',
         displayName: 'Existing Manager',
       );
+
       final mockAuth = _MockAuthService(user: fakeUser);
+
       final userService = UserService(firestore: fakeFirestore);
 
       await tester.pumpWidget(
@@ -122,8 +128,11 @@ void main() {
       );
 
       final googleButton = find.byKey(const Key('google_sign_in_button'));
+
       await tester.ensureVisible(googleButton);
+
       await tester.tap(googleButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInWithGoogleCalled, isTrue);
@@ -132,6 +141,7 @@ void main() {
           .collection('users')
           .doc('existing_login_user')
           .get();
+
       expect(doc.exists, isTrue);
       expect(doc.data()!['displayName'], 'Existing Manager');
       expect(doc.data()!['role'], AppConstants.roleManager);
@@ -146,7 +156,9 @@ void main() {
         email: 'unmounted@test.com',
         displayName: 'Unmounted Login User',
       );
+
       final fakeFirestore = FakeFirebaseFirestore();
+
       final userService = UserService(firestore: fakeFirestore);
 
       late StateSetter parentSetState;
@@ -155,7 +167,6 @@ void main() {
       final mockAuth = _MockAuthService(
         user: fakeUser,
         onSignInWithGoogle: () {
-          // Simulate AuthGate switching screens upon authStateChanges event:
           parentSetState(() {
             showLogin = false;
           });
@@ -172,6 +183,7 @@ void main() {
             home: StatefulBuilder(
               builder: (context, setState) {
                 parentSetState = setState;
+
                 return showLogin
                     ? const LoginScreen()
                     : const Scaffold(body: Text('Home Dashboard'));
@@ -182,8 +194,11 @@ void main() {
       );
 
       final googleButton = find.byKey(const Key('google_sign_in_button'));
+
       await tester.ensureVisible(googleButton);
+
       await tester.tap(googleButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInWithGoogleCalled, isTrue);
@@ -193,6 +208,7 @@ void main() {
           .collection('users')
           .doc('unmounted_login_user')
           .get();
+
       expect(doc.exists, isTrue);
       expect(doc.data()!['email'], 'unmounted@test.com');
       expect(doc.data()!['role'], AppConstants.roleOperator);
@@ -203,11 +219,14 @@ void main() {
     'Login screen displays error snackbar when Google Sign-In fails',
     (tester) async {
       final mockAuth = _MockAuthService();
+
       mockAuth.googleErrorToThrow = AuthServiceException(
         code: 'google-sign-in-failed',
         message: 'Google Sign-In failed. Please try again.',
       );
+
       final fakeFirestore = FakeFirebaseFirestore();
+
       final userService = UserService(firestore: fakeFirestore);
 
       await tester.pumpWidget(
@@ -221,11 +240,15 @@ void main() {
       );
 
       final googleButton = find.byKey(const Key('google_sign_in_button'));
+
       await tester.ensureVisible(googleButton);
+
       await tester.tap(googleButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInWithGoogleCalled, isTrue);
+
       expect(
         find.text('Google Sign-In failed. Please try again.'),
         findsOneWidget,
@@ -237,8 +260,11 @@ void main() {
     'Login screen handles cancelled Google Sign-In without error snackbar',
     (tester) async {
       final mockAuth = _MockAuthService();
+
       mockAuth.returnNullOnGoogleSignIn = true;
+
       final fakeFirestore = FakeFirebaseFirestore();
+
       final userService = UserService(firestore: fakeFirestore);
 
       await tester.pumpWidget(
@@ -252,8 +278,11 @@ void main() {
       );
 
       final googleButton = find.byKey(const Key('google_sign_in_button'));
+
       await tester.ensureVisible(googleButton);
+
       await tester.tap(googleButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInWithGoogleCalled, isTrue);
@@ -269,8 +298,11 @@ void main() {
         email: 'operator@test.com',
         displayName: 'Operator User',
       );
+
       final mockAuth = _MockAuthService(user: fakeUser);
+
       final fakeFirestore = FakeFirebaseFirestore();
+
       final userService = UserService(firestore: fakeFirestore);
 
       await tester.pumpWidget(
@@ -287,15 +319,20 @@ void main() {
         find.widgetWithText(TextFormField, 'Email'),
         'operator@test.com',
       );
+
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Password'),
         'password123',
       );
+
       await tester.pump();
 
       final loginButton = find.widgetWithText(ElevatedButton, 'Login');
+
       await tester.ensureVisible(loginButton);
+
       await tester.tap(loginButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInCalled, isTrue);
@@ -304,6 +341,7 @@ void main() {
           .collection('users')
           .doc('email_login_uid')
           .get();
+
       expect(doc.exists, isTrue);
       expect(doc.data()!['role'], AppConstants.roleOperator);
       expect(doc.data()!['email'], 'operator@test.com');
@@ -315,6 +353,7 @@ void main() {
     'Login screen preserves existing technician or manager profile on email/password login',
     (tester) async {
       final fakeFirestore = FakeFirebaseFirestore();
+
       await fakeFirestore.collection('users').doc('existing_tech_uid').set({
         'uid': 'existing_tech_uid',
         'userId': 'existing_tech_uid',
@@ -329,7 +368,9 @@ void main() {
         email: 'tech@test.com',
         displayName: 'Lead Technician',
       );
+
       final mockAuth = _MockAuthService(user: fakeUser);
+
       final userService = UserService(firestore: fakeFirestore);
 
       await tester.pumpWidget(
@@ -346,15 +387,20 @@ void main() {
         find.widgetWithText(TextFormField, 'Email'),
         'tech@test.com',
       );
+
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Password'),
         'password123',
       );
+
       await tester.pump();
 
       final loginButton = find.widgetWithText(ElevatedButton, 'Login');
+
       await tester.ensureVisible(loginButton);
+
       await tester.tap(loginButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInCalled, isTrue);
@@ -363,6 +409,7 @@ void main() {
           .collection('users')
           .doc('existing_tech_uid')
           .get();
+
       expect(doc.exists, isTrue);
       expect(doc.data()!['role'], AppConstants.roleTechnician);
       expect(doc.data()!['displayName'], 'Lead Technician');
@@ -373,6 +420,7 @@ void main() {
     'Login screen preserves existing manager profile on email/password login',
     (tester) async {
       final fakeFirestore = FakeFirebaseFirestore();
+
       await fakeFirestore.collection('users').doc('existing_mgr_uid').set({
         'uid': 'existing_mgr_uid',
         'userId': 'existing_mgr_uid',
@@ -387,7 +435,9 @@ void main() {
         email: 'manager@factory.com',
         displayName: 'Plant Manager',
       );
+
       final mockAuth = _MockAuthService(user: fakeUser);
+
       final userService = UserService(firestore: fakeFirestore);
 
       await tester.pumpWidget(
@@ -404,15 +454,20 @@ void main() {
         find.widgetWithText(TextFormField, 'Email'),
         'manager@factory.com',
       );
+
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Password'),
         'password123',
       );
+
       await tester.pump();
 
       final loginButton = find.widgetWithText(ElevatedButton, 'Login');
+
       await tester.ensureVisible(loginButton);
+
       await tester.tap(loginButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInCalled, isTrue);
@@ -421,6 +476,7 @@ void main() {
           .collection('users')
           .doc('existing_mgr_uid')
           .get();
+
       expect(doc.exists, isTrue);
       expect(doc.data()!['role'], AppConstants.roleManager);
       expect(doc.data()!['displayName'], 'Plant Manager');
@@ -440,12 +496,14 @@ void main() {
           message: 'Network offline',
         ),
       );
+
       final errorService = UserService(firestore: errorFirestore);
 
       final fakeUser = _FakeAuthUser(
         uid: 'failing_login_uid',
         email: 'fail_login@test.com',
       );
+
       final mockAuth = _MockAuthService(user: fakeUser);
 
       await tester.pumpWidget(
@@ -462,19 +520,25 @@ void main() {
         find.widgetWithText(TextFormField, 'Email'),
         'fail_login@test.com',
       );
+
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Password'),
         'password123',
       );
+
       await tester.pump();
 
       final loginButton = find.widgetWithText(ElevatedButton, 'Login');
+
       await tester.ensureVisible(loginButton);
+
       await tester.tap(loginButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInCalled, isTrue);
       expect(find.byType(SnackBar), findsOneWidget);
+
       expect(
         find.textContaining('could not set up user profile'),
         findsOneWidget,
@@ -490,7 +554,9 @@ void main() {
         email: 'unmounted_email@test.com',
         displayName: 'Unmounted Email User',
       );
+
       final fakeFirestore = FakeFirebaseFirestore();
+
       final userService = UserService(firestore: fakeFirestore);
 
       late StateSetter parentSetState;
@@ -499,7 +565,6 @@ void main() {
       final mockAuth = _MockAuthService(
         user: fakeUser,
         onSignIn: () {
-          // Simulate AuthGate switching screens upon authStateChanges event:
           parentSetState(() {
             showLogin = false;
           });
@@ -516,6 +581,7 @@ void main() {
             home: StatefulBuilder(
               builder: (context, setState) {
                 parentSetState = setState;
+
                 return showLogin
                     ? const LoginScreen()
                     : const Scaffold(body: Text('Home Dashboard'));
@@ -529,15 +595,20 @@ void main() {
         find.widgetWithText(TextFormField, 'Email'),
         'unmounted_email@test.com',
       );
+
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Password'),
         'password123',
       );
+
       await tester.pump();
 
       final loginButton = find.widgetWithText(ElevatedButton, 'Login');
+
       await tester.ensureVisible(loginButton);
+
       await tester.tap(loginButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInCalled, isTrue);
@@ -547,6 +618,7 @@ void main() {
           .collection('users')
           .doc('unmounted_email_user')
           .get();
+
       expect(doc.exists, isTrue);
       expect(doc.data()!['email'], 'unmounted_email@test.com');
       expect(doc.data()!['role'], AppConstants.roleOperator);
@@ -561,16 +633,8 @@ void main() {
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.text('Confirm Password'), findsOneWidget);
-    expect(
-      find.byWidgetPredicate(
-        (w) =>
-            w is Image &&
-            w.image is AssetImage &&
-            (w.image as AssetImage).assetName ==
-                'assets/branding/machalert_logo.png',
-      ),
-      findsOneWidget,
-    );
+
+    expect(find.byType(MachAlertLogo), findsOneWidget);
   });
 
   testWidgets('Signup submit button is enabled', (tester) async {
@@ -587,12 +651,14 @@ void main() {
     'Signup provisions user profile in Firestore when UserService is provided',
     (tester) async {
       final fakeFirestore = FakeFirebaseFirestore();
+
       final userService = UserService(firestore: fakeFirestore);
 
       final fakeUser = _FakeAuthUser(
         uid: 'new_signup_uid',
         email: 'signup@test.com',
       );
+
       final authService = _MockAuthService(user: fakeUser);
 
       await tester.pumpWidget(
@@ -609,31 +675,39 @@ void main() {
         find.widgetWithText(TextFormField, 'Full Name'),
         'Dev Patel',
       );
+
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Email'),
         'dev@test.com',
       );
+
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Password'),
         'secure123',
       );
+
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Confirm Password'),
         'secure123',
       );
+
       await tester.pump();
 
       final submitButton = find.widgetWithText(ElevatedButton, 'Sign Up');
+
       await tester.ensureVisible(submitButton);
+
       await tester.pumpAndSettle();
 
       await tester.tap(submitButton);
+
       await tester.pumpAndSettle();
 
       final doc = await fakeFirestore
           .collection('users')
           .doc('new_signup_uid')
           .get();
+
       expect(doc.exists, isTrue);
       expect(doc.data()!['displayName'], 'Dev Patel');
       expect(doc.data()!['role'], AppConstants.roleOperator);
@@ -650,12 +724,14 @@ void main() {
         message: 'Network offline',
       ),
     );
+
     final errorService = UserService(firestore: errorFirestore);
 
     final fakeUser = _FakeAuthUser(
       uid: 'failing_user_uid',
       email: 'fail@test.com',
     );
+
     final authService = _MockAuthService(user: fakeUser);
 
     await tester.pumpWidget(
@@ -672,25 +748,32 @@ void main() {
       find.widgetWithText(TextFormField, 'Full Name'),
       'Dev Patel',
     );
+
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Email'),
       'dev@test.com',
     );
+
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Password'),
       'secure123',
     );
+
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Confirm Password'),
       'secure123',
     );
+
     await tester.pump();
 
     final submitButton = find.widgetWithText(ElevatedButton, 'Sign Up');
+
     await tester.ensureVisible(submitButton);
+
     await tester.pumpAndSettle();
 
     await tester.tap(submitButton);
+
     await tester.pumpAndSettle();
 
     expect(
@@ -717,8 +800,11 @@ void main() {
         email: 'googlesignup@test.com',
         displayName: 'Google Newbie',
       );
+
       final mockAuth = _MockAuthService(user: fakeUser);
+
       final fakeFirestore = FakeFirebaseFirestore();
+
       final userService = UserService(firestore: fakeFirestore);
 
       await tester.pumpWidget(
@@ -732,8 +818,11 @@ void main() {
       );
 
       final googleButton = find.byKey(const Key('google_sign_up_button'));
+
       await tester.ensureVisible(googleButton);
+
       await tester.tap(googleButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInWithGoogleCalled, isTrue);
@@ -742,6 +831,7 @@ void main() {
           .collection('users')
           .doc('google_signup_user_1')
           .get();
+
       expect(doc.exists, isTrue);
       expect(doc.data()!['displayName'], 'Google Newbie');
       expect(doc.data()!['email'], 'googlesignup@test.com');
@@ -753,6 +843,7 @@ void main() {
     'Signup screen does not overwrite existing Firestore profile for existing Google user',
     (tester) async {
       final fakeFirestore = FakeFirebaseFirestore();
+
       await fakeFirestore.collection('users').doc('existing_google_user').set({
         'uid': 'existing_google_user',
         'userId': 'existing_google_user',
@@ -767,7 +858,9 @@ void main() {
         email: 'senior@test.com',
         displayName: 'Senior Technician',
       );
+
       final mockAuth = _MockAuthService(user: fakeUser);
+
       final userService = UserService(firestore: fakeFirestore);
 
       await tester.pumpWidget(
@@ -781,8 +874,11 @@ void main() {
       );
 
       final googleButton = find.byKey(const Key('google_sign_up_button'));
+
       await tester.ensureVisible(googleButton);
+
       await tester.tap(googleButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInWithGoogleCalled, isTrue);
@@ -791,6 +887,7 @@ void main() {
           .collection('users')
           .doc('existing_google_user')
           .get();
+
       expect(doc.exists, isTrue);
       expect(doc.data()!['displayName'], 'Senior Technician');
       expect(doc.data()!['role'], AppConstants.roleTechnician);
@@ -801,11 +898,14 @@ void main() {
     'Signup screen displays error snackbar when Google Sign-In fails',
     (tester) async {
       final mockAuth = _MockAuthService();
+
       mockAuth.googleErrorToThrow = AuthServiceException(
         code: 'google-sign-in-failed',
         message: 'Google Sign-In failed. Please try again.',
       );
+
       final fakeFirestore = FakeFirebaseFirestore();
+
       final userService = UserService(firestore: fakeFirestore);
 
       await tester.pumpWidget(
@@ -819,11 +919,15 @@ void main() {
       );
 
       final googleButton = find.byKey(const Key('google_sign_up_button'));
+
       await tester.ensureVisible(googleButton);
+
       await tester.tap(googleButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInWithGoogleCalled, isTrue);
+
       expect(
         find.text('Google Sign-In failed. Please try again.'),
         findsOneWidget,
@@ -835,8 +939,11 @@ void main() {
     'Signup screen handles cancelled Google Sign-In without error snackbar',
     (tester) async {
       final mockAuth = _MockAuthService();
+
       mockAuth.returnNullOnGoogleSignIn = true;
+
       final fakeFirestore = FakeFirebaseFirestore();
+
       final userService = UserService(firestore: fakeFirestore);
 
       await tester.pumpWidget(
@@ -850,8 +957,11 @@ void main() {
       );
 
       final googleButton = find.byKey(const Key('google_sign_up_button'));
+
       await tester.ensureVisible(googleButton);
+
       await tester.tap(googleButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInWithGoogleCalled, isTrue);
@@ -867,7 +977,9 @@ void main() {
         email: 'unmounted_signup@test.com',
         displayName: 'Unmounted Signup User',
       );
+
       final fakeFirestore = FakeFirebaseFirestore();
+
       final userService = UserService(firestore: fakeFirestore);
 
       late StateSetter parentSetState;
@@ -876,7 +988,6 @@ void main() {
       final mockAuth = _MockAuthService(
         user: fakeUser,
         onSignInWithGoogle: () {
-          // Simulate AuthGate switching screens upon authStateChanges event:
           parentSetState(() {
             showSignup = false;
           });
@@ -893,6 +1004,7 @@ void main() {
             home: StatefulBuilder(
               builder: (context, setState) {
                 parentSetState = setState;
+
                 return showSignup
                     ? const SignupScreen()
                     : const Scaffold(body: Text('Home Dashboard'));
@@ -903,8 +1015,11 @@ void main() {
       );
 
       final googleButton = find.byKey(const Key('google_sign_up_button'));
+
       await tester.ensureVisible(googleButton);
+
       await tester.tap(googleButton);
+
       await tester.pumpAndSettle();
 
       expect(mockAuth.signInWithGoogleCalled, isTrue);
@@ -914,6 +1029,7 @@ void main() {
           .collection('users')
           .doc('unmounted_signup_user')
           .get();
+
       expect(doc.exists, isTrue);
       expect(doc.data()!['email'], 'unmounted_signup@test.com');
       expect(doc.data()!['role'], AppConstants.roleOperator);
@@ -946,13 +1062,19 @@ class _FakeCredential extends Fake implements UserCredential {
 
 class _MockAuthService extends Fake implements AuthService {
   final User? user;
+
   bool signInWithGoogleCalled = false;
+
   Object? googleErrorToThrow;
+
   bool returnNullOnGoogleSignIn = false;
+
   VoidCallback? onSignInWithGoogle;
 
   bool signInCalled = false;
+
   Object? signInErrorToThrow;
+
   VoidCallback? onSignIn;
 
   _MockAuthService({this.user, this.onSignInWithGoogle, this.onSignIn});
@@ -971,23 +1093,30 @@ class _MockAuthService extends Fake implements AuthService {
     required String password,
   }) async {
     signInCalled = true;
+
     onSignIn?.call();
+
     if (signInErrorToThrow != null) {
       throw signInErrorToThrow!;
     }
+
     return _FakeCredential(user: user);
   }
 
   @override
   Future<UserCredential?> signInWithGoogle() async {
     signInWithGoogleCalled = true;
+
     onSignInWithGoogle?.call();
+
     if (googleErrorToThrow != null) {
       throw googleErrorToThrow!;
     }
+
     if (returnNullOnGoogleSignIn) {
       return null;
     }
+
     return _FakeCredential(user: user);
   }
 }

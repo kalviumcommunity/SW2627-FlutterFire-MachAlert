@@ -5,11 +5,13 @@ import 'package:provider/provider.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_constants.dart';
 import '../../utils/app_routes.dart';
 import '../../utils/validators.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/mach_alert_logo.dart';
 
 class LoginScreen extends StatefulWidget {
   final UserService? userService;
@@ -25,6 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _emailController = TextEditingController();
+
   final _passwordController = TextEditingController();
 
   bool _showPassword = false;
@@ -35,6 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+
     super.dispose();
   }
 
@@ -51,6 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       AuthService? authService = widget.authService;
+
       if (authService == null) {
         try {
           authService = context.read<AuthService>();
@@ -67,6 +72,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       UserService? userService = widget.userService;
+
       if (userService == null) {
         try {
           userService = context.read<UserService>();
@@ -81,13 +87,10 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       final user = credential.user;
+
       if (user != null) {
         await _ensureUserProfile(userService: userService, user: user);
       }
-
-      // Do not navigate to Home manually.
-      // Firebase auth state -> AppStateProvider -> AuthGate
-      // will handle navigation.
     } on AuthServiceException catch (error) {
       if (!mounted) {
         return;
@@ -128,12 +131,14 @@ class _LoginScreenState extends State<LoginScreen> {
           '[LoginScreen] Ensuring profile exists for UID: ${user.uid}',
         );
       }
+
       final profile = await userService.createProfileIfAbsent(
         uid: user.uid,
         email: user.email ?? '',
         displayName: user.displayName,
         role: AppConstants.roleOperator,
       );
+
       if (kDebugMode) {
         debugPrint(
           '[LoginScreen] Profile confirmed for UID: ${profile.id}, role: ${profile.role}',
@@ -145,6 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
           '[LoginScreen] Profile creation failed for UID: ${user.uid}: code=${profileError.code}, message=${profileError.message}',
         );
       }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -160,6 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
           '[LoginScreen] Profile creation unexpected error for UID: ${user.uid}: $e',
         );
       }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -178,9 +185,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _isGoogleLoading = true;
     });
 
-    // Capture services before async boundary so unmounting upon auth state change
-    // does not prevent user profile creation or context lookup failure.
     AuthService? authService = widget.authService;
+
     if (authService == null) {
       try {
         authService = context.read<AuthService>();
@@ -195,16 +201,19 @@ class _LoginScreenState extends State<LoginScreen> {
           _isLoading = false;
           _isGoogleLoading = false;
         });
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Authentication service is not available.'),
           ),
         );
       }
+
       return;
     }
 
     UserService? userService = widget.userService;
+
     if (userService == null) {
       try {
         userService = context.read<UserService>();
@@ -218,6 +227,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (credential?.user != null) {
         final user = credential!.user!;
+
         if (kDebugMode) {
           debugPrint(
             '[LoginScreen] Google Sign-In succeeded for UID: ${user.uid}, email: ${user.email ?? 'unknown'}',
@@ -226,16 +236,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
         await _ensureUserProfile(userService: userService, user: user);
       }
-
-      // Do not navigate to Home manually.
-      // Firebase auth state -> AppStateProvider -> AuthGate
-      // will handle navigation.
     } on AuthServiceException catch (error) {
       if (kDebugMode) {
         debugPrint(
           '[LoginScreen] Google Sign-In AuthServiceException: code=${error.code}, message=${error.message}',
         );
       }
+
       if (!mounted) {
         return;
       }
@@ -246,6 +253,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (kDebugMode) {
         debugPrint('[LoginScreen] Google Sign-In unexpected error: $e');
       }
+
       if (!mounted) {
         return;
       }
@@ -274,7 +282,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Form(
@@ -282,25 +290,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: 260,
-                          maxHeight: 80,
-                        ),
-                        child: Image.asset(
-                          'assets/branding/machalert_logo.png',
-                          fit: BoxFit.contain,
-                          semanticLabel: 'MachAlert Logo',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
+                    const Center(child: MachAlertLogo()),
 
-                    Text(
+                    const SizedBox(height: 28),
+
+                    const Text(
                       'Welcome Back',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium,
+                      style: TextStyle(
+                        color: AppTheme.navy,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
 
                     const SizedBox(height: 8),
@@ -308,107 +309,118 @@ class _LoginScreenState extends State<LoginScreen> {
                     const Text(
                       'Login to continue to MachAlert',
                       textAlign: TextAlign.center,
+                      style: TextStyle(color: Color(0xFF748694), fontSize: 13),
                     ),
 
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 30),
 
-                    AppTextField(
-                      label: 'Email',
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      validator: Validators.email,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    AppTextField(
-                      label: 'Password',
-                      controller: _passwordController,
-                      obscureText: !_showPassword,
-                      validator: Validators.password,
-                    ),
-
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: _isLoading
-                            ? null
-                            : () {
-                                setState(() {
-                                  _showPassword = !_showPassword;
-                                });
-                              },
-                        child: Text(
-                          _showPassword ? 'Hide Password' : 'Show Password',
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    AppButton(
-                      text: 'Login',
-                      isLoading: _isLoading && !_isGoogleLoading,
-                      onPressed: _isLoading ? null : _handleLogin,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    Row(
-                      children: [
-                        Expanded(child: Divider(color: Colors.grey.shade300)),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'OR',
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w500,
-                              fontSize: 13,
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            AppTextField(
+                              label: 'Email',
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              validator: Validators.email,
                             ),
-                          ),
-                        ),
-                        Expanded(child: Divider(color: Colors.grey.shade300)),
-                      ],
-                    ),
 
-                    const SizedBox(height: 16),
+                            const SizedBox(height: 16),
 
-                    OutlinedButton.icon(
-                      key: const Key('google_sign_in_button'),
-                      onPressed: _isLoading ? null : _handleGoogleSignIn,
-                      icon: _isGoogleLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Container(
-                              width: 22,
-                              height: 22,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade600,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Text(
-                                'G',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
+                            AppTextField(
+                              label: 'Password',
+                              controller: _passwordController,
+                              obscureText: !_showPassword,
+                              validator: Validators.password,
+                            ),
+
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _showPassword = !_showPassword;
+                                        });
+                                      },
+                                child: Text(
+                                  _showPassword
+                                      ? 'Hide Password'
+                                      : 'Show Password',
                                 ),
                               ),
                             ),
-                      label: Text(
-                        _isGoogleLoading
-                            ? 'Signing in with Google...'
-                            : 'Sign in with Google',
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+
+                            const SizedBox(height: 6),
+
+                            AppButton(
+                              text: 'Login',
+                              isLoading: _isLoading && !_isGoogleLoading,
+                              onPressed: _isLoading ? null : _handleLogin,
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            const Row(
+                              children: [
+                                Expanded(child: Divider()),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 14),
+                                  child: Text(
+                                    'OR',
+                                    style: TextStyle(
+                                      color: Color(0xFF8796A2),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(child: Divider()),
+                              ],
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            OutlinedButton.icon(
+                              key: const Key('google_sign_in_button'),
+                              onPressed: _isLoading
+                                  ? null
+                                  : _handleGoogleSignIn,
+                              icon: _isGoogleLoading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Container(
+                                      width: 22,
+                                      height: 22,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade600,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Text(
+                                        'G',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                              label: Text(
+                                _isGoogleLoading
+                                    ? 'Signing in with Google...'
+                                    : 'Sign in with Google',
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

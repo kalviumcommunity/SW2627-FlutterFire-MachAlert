@@ -389,7 +389,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.byType(HomeScreen), findsOneWidget);
-        expect(find.text('Welcome, Alice Operator'), findsOneWidget);
+        expect(find.text('Hi, Alice'), findsOneWidget);
         expect(find.text('Operator Dashboard'), findsOneWidget);
 
         // 8. Log out returns cleanly to LoginScreen
