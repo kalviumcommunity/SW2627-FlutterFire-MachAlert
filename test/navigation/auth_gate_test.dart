@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:mach_alert/models/user_model.dart';
 import 'package:mach_alert/providers/app_state_provider.dart';
@@ -24,8 +25,14 @@ UserModel createTestUser() {
 
 Future<void> pumpAuthGate(
   WidgetTester tester,
-  AppStateProvider appState,
-) async {
+  AppStateProvider appState, {
+  Duration minSplashDuration = Duration.zero,
+  bool completedOnboarding = true,
+}) async {
+  SharedPreferences.setMockInitialValues({
+    AuthGate.hasCompletedOnboardingKey: completedOnboarding,
+  });
+
   // ChangeNotifierProvider.value does not own this test's provider.
   // Unmount the widgets before disposing it.
   addTearDown(() async {
@@ -36,7 +43,7 @@ Future<void> pumpAuthGate(
   await tester.pumpWidget(
     ChangeNotifierProvider<AppStateProvider>.value(
       value: appState,
-      child: const MaterialApp(home: AuthGate()),
+      child: MaterialApp(home: AuthGate(minSplashDuration: minSplashDuration)),
     ),
   );
 

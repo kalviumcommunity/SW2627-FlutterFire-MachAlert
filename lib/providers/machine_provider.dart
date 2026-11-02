@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/machine_model.dart';
+import '../models/machine_statistics.dart';
 import '../services/machine_service.dart';
+
+export '../models/machine_statistics.dart';
 
 /// State management provider for industrial machine inventory.
 ///
@@ -51,6 +54,9 @@ class MachineProvider extends ChangeNotifier {
 
   /// Complete list of machines in the factory inventory.
   List<MachineModel> get machines => List.unmodifiable(_machines);
+
+  /// Factory-wide machine inventory statistics computed from authoritative machine documents.
+  MachineStatistics get statistics => MachineStatistics.fromMachines(_machines);
 
   /// Filtered machine list applying active production line, status, and search query filters.
   List<MachineModel> get filteredMachines {

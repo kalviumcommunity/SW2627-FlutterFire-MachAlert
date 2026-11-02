@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mach_alert/models/fault_model.dart';
 import 'package:mach_alert/models/machine_model.dart';
@@ -250,12 +251,21 @@ Widget _createTestHarness({
       ChangeNotifierProvider<AppStateProvider>.value(value: appStateProvider),
       ChangeNotifierProvider<MachineProvider>.value(value: machineProvider),
     ],
-    child: MaterialApp(theme: AppTheme.light, home: const AuthGate()),
+    child: MaterialApp(
+      theme: AppTheme.light,
+      home: const AuthGate(minSplashDuration: Duration.zero),
+    ),
   );
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({
+      AuthGate.hasCompletedOnboardingKey: true,
+    });
+  });
 
   // -------------------------------------------------------------------------
   // END-TO-END SCENARIO A: AUTHENTICATION & ROLE PROVISIONING

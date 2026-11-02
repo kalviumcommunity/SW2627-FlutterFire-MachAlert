@@ -23,6 +23,21 @@ void main() {
     expect(find.text('Login'), findsOneWidget);
 
     expect(find.byType(MachAlertLogo), findsOneWidget);
+    final logoFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is Image &&
+          widget.image is AssetImage &&
+          (widget.image as AssetImage).assetName ==
+              'assets/branding/machalert_logo.png',
+    );
+    expect(logoFinder, findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('MachAlert'),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('Login password visibility toggles', (tester) async {
@@ -45,7 +60,21 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
 
     expect(find.text('Sign in with Google'), findsOneWidget);
-    expect(find.byKey(const Key('google_sign_in_button')), findsOneWidget);
+    final googleButton = find.byKey(const Key('google_sign_in_button'));
+    expect(googleButton, findsOneWidget);
+    expect(
+      find.descendant(
+        of: googleButton,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Image &&
+              widget.image is AssetImage &&
+              (widget.image as AssetImage).assetName ==
+                  'assets/branding/google_g_logo.png',
+        ),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('OR'), findsOneWidget);
   });
 
@@ -635,6 +664,21 @@ void main() {
     expect(find.text('Confirm Password'), findsOneWidget);
 
     expect(find.byType(MachAlertLogo), findsOneWidget);
+    final logoFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is Image &&
+          widget.image is AssetImage &&
+          (widget.image as AssetImage).assetName ==
+              'assets/branding/machalert_logo.png',
+    );
+    expect(logoFinder, findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('MachAlert'),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('Signup submit button is enabled', (tester) async {
@@ -788,7 +832,21 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: SignupScreen()));
 
     expect(find.text('Sign up with Google'), findsOneWidget);
-    expect(find.byKey(const Key('google_sign_up_button')), findsOneWidget);
+    final googleButton = find.byKey(const Key('google_sign_up_button'));
+    expect(googleButton, findsOneWidget);
+    expect(
+      find.descendant(
+        of: googleButton,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Image &&
+              widget.image is AssetImage &&
+              (widget.image as AssetImage).assetName ==
+                  'assets/branding/google_g_logo.png',
+        ),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('OR'), findsOneWidget);
   });
 

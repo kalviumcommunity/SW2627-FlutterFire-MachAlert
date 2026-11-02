@@ -9,7 +9,7 @@ class SplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.navy,
+      backgroundColor: AppTheme.background,
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -17,7 +17,7 @@ class SplashScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const MachAlertLogo(light: true),
+                const MachAlertLogo(),
 
                 const SizedBox(height: 22),
 
@@ -25,7 +25,7 @@ class SplashScreen extends StatelessWidget {
                   'Real-time machine monitoring\nfor a smarter factory',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Color(0xFFD9E7F1),
+                    color: AppTheme.navy,
                     fontSize: 15,
                     height: 1.5,
                   ),
@@ -47,7 +47,7 @@ class SplashScreen extends StatelessWidget {
                 Text(
                   'Checking your session...',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.65),
+                    color: AppTheme.navy.withValues(alpha: 0.65),
                     fontSize: 13,
                   ),
                 ),

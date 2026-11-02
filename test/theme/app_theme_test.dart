@@ -4,6 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mach_alert/theme/app_theme.dart';
 
 void main() {
+  test('MachAlert approved color palette values match brand specification', () {
+    expect(AppTheme.navy, const Color(0xFF344C6B));
+    expect(AppTheme.sageTeal, const Color(0xFF78B5A8));
+    expect(AppTheme.green, const Color(0xFF78B5A8));
+    expect(AppTheme.teal, const Color(0xFF78B5A8));
+    expect(AppTheme.background, const Color(0xFFF8FAFC));
+  });
+
   test('MachAlert light theme uses Material 3', () {
     final theme = AppTheme.light;
 

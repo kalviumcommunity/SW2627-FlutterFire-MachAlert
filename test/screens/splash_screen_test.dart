@@ -19,6 +19,15 @@ void main() {
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    expect(find.byIcon(Icons.monitor_heart_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.monitor_heart_outlined), findsNothing);
+
+    final logoFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is Image &&
+          widget.image is AssetImage &&
+          (widget.image as AssetImage).assetName ==
+              'assets/branding/machalert_logo.png',
+    );
+    expect(logoFinder, findsOneWidget);
   });
 }

@@ -417,6 +417,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
           )
         else
           DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: _selectedMachineId,
             decoration: const InputDecoration(
               hintText: 'Select machine',
@@ -426,7 +427,11 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
                 .map(
                   (machine) => DropdownMenuItem<String>(
                     value: machine.id,
-                    child: Text('${machine.id} - ${machine.name}'),
+                    child: Text(
+                      '${machine.id} - ${machine.name}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 )
                 .toList(),
@@ -463,6 +468,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
         const SizedBox(height: 9),
 
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: _selectedFaultType,
           decoration: const InputDecoration(
             hintText: 'Select fault category',
@@ -470,8 +476,14 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
           ),
           items: AppConstants.faultTypes
               .map(
-                (type) =>
-                    DropdownMenuItem<String>(value: type, child: Text(type)),
+                (type) => DropdownMenuItem<String>(
+                  value: type,
+                  child: Text(
+                    type,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               )
               .toList(),
           onChanged: _isSubmitting
@@ -755,6 +767,14 @@ class _SelectedMachineCard extends StatelessWidget {
                     fontSize: 12,
                   ),
                 ),
+                Text(
+                  machine.id,
+                  style: const TextStyle(
+                    color: Color(0xFF7A8B98),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 if (machine.productionLine.isNotEmpty)
                   Text(
                     machine.productionLine,
@@ -766,6 +786,7 @@ class _SelectedMachineCard extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             machine.status,
             style: const TextStyle(

@@ -271,6 +271,7 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
                       // 1. Machine Dropdown
                       DropdownButtonFormField<MachineModel>(
                         key: const ValueKey('maintenance-machine-dropdown'),
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Machine *',
                           prefixIcon: Icon(
@@ -282,7 +283,11 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
                         items: _machines.map((machine) {
                           return DropdownMenuItem<MachineModel>(
                             value: machine,
-                            child: Text('${machine.name} (${machine.id})'),
+                            child: Text(
+                              '${machine.name} (${machine.id})',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           );
                         }).toList(),
                         onChanged: _isSubmitting
@@ -305,6 +310,7 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
                       // 2. Technician Dropdown
                       DropdownButtonFormField<UserModel>(
                         key: const ValueKey('maintenance-technician-dropdown'),
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Assigned Technician *',
                           prefixIcon: Icon(Icons.person_outline),
@@ -317,7 +323,11 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
                               : tech.id;
                           return DropdownMenuItem<UserModel>(
                             value: tech,
-                            child: Text(label),
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           );
                         }).toList(),
                         onChanged: _isSubmitting
@@ -340,6 +350,7 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
                       // 3. Priority Dropdown
                       DropdownButtonFormField<String>(
                         key: const ValueKey('maintenance-priority-dropdown'),
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Priority *',
                           prefixIcon: Icon(Icons.flag_outlined),

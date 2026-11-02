@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 class AppTheme {
   AppTheme._();
 
-  static const Color navy = Color(0xFF082A46);
-  static const Color green = Color(0xFF0BBF73);
-  static const Color background = Color(0xFFF7FAFC);
+  static const Color navy = Color(0xFF344C6B);
+  static const Color sageTeal = Color(0xFF78B5A8);
+  static const Color green = Color(0xFF78B5A8);
+  static const Color teal = Color(0xFF78B5A8);
+  static const Color background = Color(0xFFF8FAFC);
   static const Color danger = Color(0xFFFF4D4F);
   static const Color warning = Color(0xFFFFA31A);
   static const Color blue = Color(0xFF4096F7);
@@ -125,7 +127,7 @@ class AppTheme {
 
       navigationBarTheme: const NavigationBarThemeData(
         backgroundColor: Colors.white,
-        indicatorColor: Color(0x1A0BBF73),
+        indicatorColor: Color(0x1A78B5A8),
         elevation: 0,
         height: 68,
       ),

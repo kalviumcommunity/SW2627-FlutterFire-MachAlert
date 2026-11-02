@@ -278,7 +278,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('MachAlert')),
+      appBar: AppBar(),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -389,30 +389,36 @@ class _LoginScreenState extends State<LoginScreen> {
                               onPressed: _isLoading
                                   ? null
                                   : _handleGoogleSignIn,
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: AppTheme.navy,
+                                minimumSize: const Size.fromHeight(50),
+                                side: const BorderSide(
+                                  color: Color(0xFFDCE5EC),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                               icon: _isGoogleLoading
                                   ? const SizedBox(
                                       width: 20,
                                       height: 20,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
+                                        color: AppTheme.green,
                                       ),
                                     )
-                                  : Container(
-                                      width: 22,
-                                      height: 22,
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: Colors.red.shade600,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Text(
-                                        'G',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
-                                      ),
+                                  : Image.asset(
+                                      'assets/branding/google_g_logo.png',
+                                      width: 20,
+                                      height: 20,
+                                      fit: BoxFit.contain,
+                                      semanticLabel: 'Google logo',
                                     ),
                               label: Text(
                                 _isGoogleLoading
