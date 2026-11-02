@@ -146,6 +146,49 @@ class UserService {
     return sanitized;
   }
 
+  /// Retrieves all users matching [role] (e.g., 'technician', 'manager', 'operator').
+  ///
+  /// Validates [role] against [recognizedRoles].
+  /// Queries the `users` collection server-side using `.where('role', isEqualTo: sanitizedRole)`.
+  /// Returns users sorted alphabetically by display name.
+  /// Throws [UserServiceException] on validation or Firestore failure without exposing raw backend errors.
+  Future<List<UserModel>> getUsersByRole(String role) async {
+    final sanitizedRole = role.trim().toLowerCase();
+    if (!recognizedRoles.contains(sanitizedRole)) {
+      throw UserServiceException(
+        code: 'invalid-role',
+        message:
+            'Role "$role" is not recognized. Recognized roles are operator, technician, or manager.',
+      );
+    }
+
+    try {
+      final snapshot = await _usersCollection
+          .where('role', isEqualTo: sanitizedRole)
+          .get();
+
+      final users = snapshot.docs
+          .map((doc) => UserModel.fromFirestore(doc))
+          .toList();
+
+      users.sort((a, b) {
+        final nameA = a.name.trim().isNotEmpty ? a.name.trim() : a.email.trim();
+        final nameB = b.name.trim().isNotEmpty ? b.name.trim() : b.email.trim();
+        return nameA.toLowerCase().compareTo(nameB.toLowerCase());
+      });
+
+      return users;
+    } on FirebaseException catch (e) {
+      throw UserServiceException.fromFirebaseException(e);
+    } catch (e) {
+      if (e is UserServiceException) rethrow;
+      throw UserServiceException(
+        code: 'unknown',
+        message: UserServiceException.messageForErrorCode('unknown'),
+      );
+    }
+  }
+
   /// Retrieves a user profile by UID from `users/{uid}`.
   ///
   /// Returns `null` if the document does not exist.

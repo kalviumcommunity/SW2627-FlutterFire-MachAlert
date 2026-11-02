@@ -13,6 +13,8 @@ class MaintenanceDetailsScreen extends StatefulWidget {
   final String priority;
   final String status;
   final String dueDate;
+  final String? dateLabel;
+  final String? notes;
 
   /// Optional callback for Day 18/Member 3 backend integration.
   final MaintenanceStatusUpdateCallback? onStatusUpdate;
@@ -26,6 +28,8 @@ class MaintenanceDetailsScreen extends StatefulWidget {
     required this.priority,
     required this.status,
     required this.dueDate,
+    this.dateLabel,
+    this.notes,
     this.onStatusUpdate,
   });
 
@@ -266,7 +270,7 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
 
             _DetailsRow(
               icon: Icons.event_outlined,
-              label: 'Due',
+              label: widget.dateLabel ?? 'Due',
               value: widget.dueDate,
             ),
 
@@ -298,8 +302,8 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
 
             const SizedBox(height: 10),
 
-            const Text(
-              'Inspect the reported machine issue, document findings, and complete the required maintenance checks.',
+            Text(
+              widget.notes?.trim().isNotEmpty == true ? widget.notes!.trim() : 'Inspect the reported machine issue, document findings, and complete the required maintenance checks.',
             ),
           ],
         ),

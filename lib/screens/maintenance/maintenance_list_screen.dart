@@ -1,11 +1,24 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/maintenance_model.dart';
+import '../../providers/app_state_provider.dart';
+import '../../services/maintenance_service.dart';
+import '../../utils/app_constants.dart';
 import 'maintenance_details_screen.dart';
+import 'maintenance_task_form_screen.dart';
 
 class MaintenanceListScreen extends StatefulWidget {
   final bool assignedOnly;
+  final MaintenanceService? maintenanceService;
 
-  const MaintenanceListScreen({super.key, this.assignedOnly = false});
+  const MaintenanceListScreen({
+    super.key,
+    this.assignedOnly = false,
+    this.maintenanceService,
+  });
 
   @override
   State<MaintenanceListScreen> createState() => _MaintenanceListScreenState();
@@ -16,110 +29,297 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
 
   static const _statuses = ['All', 'Pending', 'In Progress', 'Completed'];
 
-  final List<_MaintenancePreview> _items = const [
-    _MaintenancePreview(
+  Stream<List<MaintenanceModel>>? _stream;
+  MaintenanceService? _resolvedService;
+  bool _initialized = false;
+
+  static final List<MaintenanceModel> _sampleTasks = [
+    MaintenanceModel(
       id: 'MNT-001',
-      title: 'Inspect spindle vibration',
+      machineId: 'CNC Milling Unit 01',
       machineName: 'CNC Milling Unit 01',
-      technician: 'Technician Team',
+      technicianId: 'Technician Team',
+      technicianName: 'Technician Team',
       priority: 'High',
       status: 'Pending',
-      dueDate: 'Today',
+      notes: 'Inspect spindle vibration',
+      createdAt: DateTime.now(),
     ),
-    _MaintenancePreview(
+    MaintenanceModel(
       id: 'MNT-002',
-      title: 'Check hydraulic pressure',
+      machineId: 'Hydraulic Press 02',
       machineName: 'Hydraulic Press 02',
-      technician: 'Technician Team',
+      technicianId: 'Technician Team',
+      technicianName: 'Technician Team',
       priority: 'Critical',
       status: 'In Progress',
-      dueDate: 'Today',
+      notes: 'Check hydraulic pressure',
+      createdAt: DateTime.now(),
     ),
-    _MaintenancePreview(
+    MaintenanceModel(
       id: 'MNT-003',
-      title: 'Lubricate conveyor bearings',
+      machineId: 'Assembly Conveyor 04',
       machineName: 'Assembly Conveyor 04',
-      technician: 'Technician Team',
+      technicianId: 'Technician Team',
+      technicianName: 'Technician Team',
       priority: 'Medium',
-      status: 'Completed',
-      dueDate: 'Yesterday',
+      status: 'Resolved',
+      notes: 'Lubricate conveyor bearings',
+      createdAt: DateTime.now(),
     ),
   ];
 
-  List<_MaintenancePreview> get _filteredItems {
-    if (_selectedStatus == 'All') {
-      return _items;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _resolvedService = _resolveService();
+      _initStream();
+      _initialized = true;
+    }
+  }
+
+  MaintenanceService? _resolveService() {
+    if (widget.maintenanceService != null) {
+      return widget.maintenanceService;
+    }
+    try {
+      return context.read<MaintenanceService>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _isTechnicianMode(AppStateProvider? appState) {
+    final user = appState?.user;
+    if (user != null) {
+      return user.role.trim().toLowerCase() == AppConstants.roleTechnician;
+    }
+    return widget.assignedOnly;
+  }
+
+  bool _isManagerMode(AppStateProvider? appState) {
+    final user = appState?.user;
+    if (user != null) {
+      return user.role.trim().toLowerCase() == AppConstants.roleManager;
+    }
+    return !widget.assignedOnly;
+  }
+
+  bool _isOperatorMode(AppStateProvider? appState) {
+    final user = appState?.user;
+    if (user != null) {
+      return user.role.trim().toLowerCase() == AppConstants.roleOperator;
+    }
+    return false;
+  }
+
+  List<MaintenanceModel> _getFilteredSampleTasks() {
+    Iterable<MaintenanceModel> items = _sampleTasks;
+    if (_selectedStatus != 'All') {
+      items = items.where((t) {
+        final s = t.status == 'Resolved' ? 'Completed' : t.status;
+        return s == _selectedStatus;
+      });
+    }
+    return items.toList();
+  }
+
+  void _initStream() {
+    final service = _resolvedService;
+    final appState = Provider.of<AppStateProvider?>(context, listen: false);
+
+    if (service == null) {
+      // Standalone/fallback test mode when no service is injected or provided
+      _stream = Stream.value(_getFilteredSampleTasks());
+      return;
     }
 
-    return _items.where((item) => item.status == _selectedStatus).toList();
+    final String? filterStatus = _selectedStatus == 'All'
+        ? null
+        : _selectedStatus;
+
+    if (_isTechnicianMode(appState)) {
+      _stream = service.streamAssignedMaintenanceTasks(status: filterStatus);
+    } else {
+      _stream = service.streamMaintenanceTasks(status: filterStatus);
+    }
+  }
+
+  void _retry() {
+    setState(() {
+      _initStream();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = _filteredItems;
+    final appState = Provider.of<AppStateProvider?>(context);
+
+    if (_isOperatorMode(appState)) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'Maintenance',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.lock_outline, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'Access Restricted',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Maintenance tasks are only accessible to technicians and managers.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final isTechnician = _isTechnicianMode(appState);
+    final canManage = _isManagerMode(appState);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.assignedOnly ? 'Assigned Maintenance' : 'Maintenance',
+          isTechnician ? 'Assigned Maintenance' : 'Maintenance',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
+      floatingActionButton: canManage
+          ? FloatingActionButton.extended(
+              key: const ValueKey('create-maintenance-task-fab'),
+              onPressed: () async {
+                final result = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute<bool>(
+                    builder: (_) => MaintenanceTaskFormScreen(
+                      maintenanceService: _resolvedService,
+                    ),
+                  ),
+                );
+                if (result == true && mounted) {
+                  _retry();
+                }
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Create Task'),
+            )
+          : null,
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
+        child: StreamBuilder<List<MaintenanceModel>>(
+          initialData: _resolvedService == null
+              ? _getFilteredSampleTasks()
+              : null,
+          stream: _stream,
+          builder: (context, snapshot) {
+            final isLoading =
+                _resolvedService != null &&
+                snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData &&
+                !snapshot.hasError;
 
-            _buildFilters(),
+            final hasError = _resolvedService != null && snapshot.hasError;
+            final items = _resolvedService != null
+                ? (snapshot.data ?? [])
+                : _getFilteredSampleTasks();
 
-            Expanded(
-              child: items.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      itemCount: items.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-
-                        return _MaintenanceCard(
-                          item: item,
-                          onTap: () {
-                            Navigator.of(context).push<void>(
-                              MaterialPageRoute<void>(
-                                builder: (_) => MaintenanceDetailsScreen(
-                                  maintenanceId: item.id,
-                                  title: item.title,
-                                  machineName: item.machineName,
-                                  technician: item.technician,
-                                  priority: item.priority,
-                                  status: item.status,
-                                  dueDate: item.dueDate,
-                                ),
-                              ),
+            return Column(
+              children: [
+                _buildHeader(isTechnician, items),
+                _buildFilters(),
+                Expanded(
+                  child: isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            key: ValueKey('maintenance-loading-indicator'),
+                          ),
+                        )
+                      : hasError
+                      ? _buildErrorState(snapshot.error)
+                      : items.isEmpty
+                      ? _buildEmptyState(isTechnician)
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          itemCount: items.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            return _MaintenanceCard(
+                              item: item,
+                              onTap: () {
+                                Navigator.of(context).push<void>(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => MaintenanceDetailsScreen(
+                                      maintenanceId: item.id,
+                                      title:
+                                          item.notes?.trim().isNotEmpty == true
+                                          ? item.notes!.trim()
+                                          : 'Maintenance Task #${item.id}',
+                                      machineName:
+                                          item.machineName?.trim().isNotEmpty ==
+                                              true
+                                          ? item.machineName!.trim()
+                                          : item.machineId,
+                                      technician:
+                                          item.technicianName
+                                                  ?.trim()
+                                                  .isNotEmpty ==
+                                              true
+                                          ? item.technicianName!.trim()
+                                          : item.technicianId,
+                                      priority: item.priority,
+                                      status: item.status == 'Resolved'
+                                          ? 'Completed'
+                                          : item.status,
+                                      dueDate: item.createdAt != null
+                                          ? _formatDate(item.createdAt!)
+                                          : 'Today',
+                                      dateLabel: 'Assigned',
+                                      notes: item.notes,
+                                    ),
+                                  ),
+                                );
+                              },
                             );
                           },
-                        );
-                      },
-                    ),
-            ),
-          ],
+                        ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
-    final pendingCount = _items
-        .where((item) => item.status == 'Pending')
+  Widget _buildHeader(bool isTechnician, List<MaintenanceModel> items) {
+    final pendingCount = items
+        .where((item) => item.status.toLowerCase() == 'pending')
         .length;
 
-    final inProgressCount = _items
-        .where((item) => item.status == 'In Progress')
+    final inProgressCount = items
+        .where((item) => item.status.toLowerCase() == 'in progress')
         .length;
 
-    final completedCount = _items
-        .where((item) => item.status == 'Completed')
+    final completedCount = items
+        .where(
+          (item) =>
+              item.status.toLowerCase() == 'resolved' ||
+              item.status.toLowerCase() == 'completed',
+        )
         .length;
 
     return Padding(
@@ -128,15 +328,13 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            widget.assignedOnly
+            isTechnician
                 ? 'Your assigned maintenance work'
                 : 'Track machine maintenance activity',
             style: Theme.of(context).textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
-
           const SizedBox(height: 12),
-
           Row(
             children: [
               Expanded(
@@ -146,9 +344,7 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
                   icon: Icons.schedule_outlined,
                 ),
               ),
-
               const SizedBox(width: 8),
-
               Expanded(
                 child: _SummaryCard(
                   label: 'Active',
@@ -156,9 +352,7 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
                   icon: Icons.engineering_outlined,
                 ),
               ),
-
               const SizedBox(width: 8),
-
               Expanded(
                 child: _SummaryCard(
                   label: 'Done',
@@ -190,6 +384,7 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
             onSelected: (_) {
               setState(() {
                 _selectedStatus = status;
+                _initStream();
               });
             },
           );
@@ -198,30 +393,91 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return const Center(
+  Widget _buildErrorState(Object? error) {
+    final message = error is MaintenanceServiceException
+        ? error.message
+        : 'Failed to load maintenance tasks. Please check your connection.';
+
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(32),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.build_circle_outlined, size: 64),
-            SizedBox(height: 12),
-            Text(
-              'No maintenance tasks found',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Icon(
+              Icons.error_outline,
+              size: 56,
+              color: Theme.of(context).colorScheme.error,
             ),
-            SizedBox(height: 6),
-            Text('Try another status filter.', textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            Text(
+              'Unable to load maintenance tasks',
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _retry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildEmptyState(bool isTechnician) {
+    final hasFilter = _selectedStatus != 'All';
+
+    final String title;
+    final String subtitle;
+    final IconData icon;
+
+    if (hasFilter) {
+      title = 'No maintenance tasks found';
+      subtitle = 'Try another status filter.';
+      icon = Icons.filter_list_off;
+    } else if (isTechnician) {
+      title = 'No assigned maintenance tasks';
+      subtitle = 'You have no maintenance tasks assigned.';
+      icon = Icons.assignment_turned_in_outlined;
+    } else {
+      title = 'No maintenance tasks found';
+      subtitle = 'There are currently no maintenance tasks recorded.';
+      icon = Icons.build_circle_outlined;
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 64, color: Colors.grey),
+            const SizedBox(height: 12),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Text(subtitle, textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
 }
 
 class _MaintenanceCard extends StatelessWidget {
-  final _MaintenancePreview item;
+  final MaintenanceModel item;
   final VoidCallback onTap;
 
   const _MaintenanceCard({required this.item, required this.onTap});
@@ -229,6 +485,24 @@ class _MaintenanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final priorityColor = _priorityColor(item.priority);
+
+    final title = item.notes?.trim().isNotEmpty == true
+        ? item.notes!.trim()
+        : 'Maintenance Task #${item.id}';
+
+    final machineName = item.machineName?.trim().isNotEmpty == true
+        ? item.machineName!.trim()
+        : (item.machineId.isNotEmpty ? item.machineId : 'Machine');
+
+    final technician = item.technicianName?.trim().isNotEmpty == true
+        ? item.technicianName!.trim()
+        : (item.technicianId.isNotEmpty ? item.technicianId : 'Technician');
+
+    final dateText = item.createdAt != null
+        ? 'Assigned: ${item.createdAt!.year}-${item.createdAt!.month.toString().padLeft(2, '0')}-${item.createdAt!.day.toString().padLeft(2, '0')}'
+        : 'Assigned: Today';
+
+    final displayStatus = item.status == 'Resolved' ? 'Completed' : item.status;
 
     return Card(
       child: InkWell(
@@ -243,14 +517,12 @@ class _MaintenanceCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      item.title,
+                      title,
                       style: Theme.of(context).textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
-
                   const SizedBox(width: 8),
-
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
@@ -271,33 +543,20 @@ class _MaintenanceCard extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 10),
-
               _InfoRow(
                 icon: Icons.precision_manufacturing_outlined,
-                text: item.machineName,
+                text: machineName,
               ),
-
               const SizedBox(height: 6),
-
-              _InfoRow(icon: Icons.person_outline, text: item.technician),
-
+              _InfoRow(icon: Icons.person_outline, text: technician),
               const SizedBox(height: 6),
-
-              _InfoRow(
-                icon: Icons.event_outlined,
-                text: 'Due: ${item.dueDate}',
-              ),
-
+              _InfoRow(icon: Icons.event_outlined, text: dateText),
               const SizedBox(height: 12),
-
               Row(
                 children: [
-                  _StatusBadge(status: item.status),
-
+                  _StatusBadge(status: displayStatus),
                   const Spacer(),
-
                   const Icon(Icons.chevron_right),
                 ],
               ),
@@ -312,13 +571,10 @@ class _MaintenanceCard extends StatelessWidget {
     switch (priority) {
       case 'Critical':
         return Colors.red;
-
       case 'High':
         return Colors.deepOrange;
-
       case 'Medium':
         return Colors.orange;
-
       default:
         return Colors.green;
     }
@@ -409,24 +665,4 @@ class _StatusBadge extends StatelessWidget {
       ),
     );
   }
-}
-
-class _MaintenancePreview {
-  final String id;
-  final String title;
-  final String machineName;
-  final String technician;
-  final String priority;
-  final String status;
-  final String dueDate;
-
-  const _MaintenancePreview({
-    required this.id,
-    required this.title,
-    required this.machineName,
-    required this.technician,
-    required this.priority,
-    required this.status,
-    required this.dueDate,
-  });
 }
