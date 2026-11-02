@@ -297,13 +297,20 @@ class _SignupScreenState extends State<SignupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(
-                      Icons.person_add_alt_1,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.primary,
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: 260,
+                          maxHeight: 80,
+                        ),
+                        child: Image.asset(
+                          'assets/branding/machalert_logo.png',
+                          fit: BoxFit.contain,
+                          semanticLabel: 'MachAlert Logo',
+                        ),
+                      ),
                     ),
-
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
 
                     Text(
                       'Create Account',

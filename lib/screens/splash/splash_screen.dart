@@ -8,45 +8,24 @@ class SplashScreen extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  width: 112,
-                  height: 112,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  child: Icon(
-                    Icons.precision_manufacturing,
-                    size: 64,
-                    color: colorScheme.onPrimaryContainer,
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 320),
+                  child: Image.asset(
+                    'assets/branding/machalert_logo.png',
+                    fit: BoxFit.contain,
+                    semanticLabel: 'MachAlert',
                   ),
                 ),
 
-                const SizedBox(height: 28),
-
-                Text(
-                  'MachAlert',
-                  style: Theme.of(context).textTheme.headlineLarge
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  'Machine Monitoring & Maintenance',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyLarge
-                      ?.copyWith(color: colorScheme.onSurfaceVariant),
-                ),
-
-                const SizedBox(height: 44),
+                const SizedBox(height: 48),
 
                 SizedBox(
                   width: 32,
