@@ -282,12 +282,20 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(
-                      Icons.precision_manufacturing,
-                      size: 72,
-                      color: Colors.blue,
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: 260,
+                          maxHeight: 80,
+                        ),
+                        child: Image.asset(
+                          'assets/branding/machalert_logo.png',
+                          fit: BoxFit.contain,
+                          semanticLabel: 'MachAlert Logo',
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
 
                     Text(
                       'Welcome Back',
