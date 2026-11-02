@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/maintenance_model.dart';
 import '../../services/maintenance_service.dart';
 import 'maintenance_details_screen.dart';
+import 'maintenance_task_form_screen.dart';
 
 class MaintenanceListScreen extends StatefulWidget {
   final bool assignedOnly;
@@ -24,33 +27,43 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
 
   static const _statuses = ['All', 'Pending', 'In Progress', 'Completed'];
 
-  final List<_MaintenancePreview> _items = const [
-    _MaintenancePreview(
+  Stream<List<MaintenanceModel>>? _stream;
+  MaintenanceService? _resolvedService;
+  bool _initialized = false;
+
+  static final List<MaintenanceModel> _sampleTasks = [
+    MaintenanceModel(
       id: 'MNT-001',
-      title: 'Inspect spindle vibration',
+      machineId: 'CNC Milling Unit 01',
       machineName: 'CNC Milling Unit 01',
-      technician: 'Technician Team',
+      technicianId: 'Technician Team',
+      technicianName: 'Technician Team',
       priority: 'High',
       status: 'Pending',
-      dueDate: 'Today',
+      notes: 'Inspect spindle vibration',
+      createdAt: DateTime.now(),
     ),
-    _MaintenancePreview(
+    MaintenanceModel(
       id: 'MNT-002',
-      title: 'Check hydraulic pressure',
+      machineId: 'Hydraulic Press 02',
       machineName: 'Hydraulic Press 02',
-      technician: 'Technician Team',
+      technicianId: 'Technician Team',
+      technicianName: 'Technician Team',
       priority: 'Critical',
       status: 'In Progress',
-      dueDate: 'Today',
+      notes: 'Check hydraulic pressure',
+      createdAt: DateTime.now(),
     ),
-    _MaintenancePreview(
+    MaintenanceModel(
       id: 'MNT-003',
-      title: 'Lubricate conveyor bearings',
+      machineId: 'Assembly Conveyor 04',
       machineName: 'Assembly Conveyor 04',
-      technician: 'Technician Team',
+      technicianId: 'Technician Team',
+      technicianName: 'Technician Team',
       priority: 'Medium',
-      status: 'Completed',
-      dueDate: 'Yesterday',
+      status: 'Resolved',
+      notes: 'Lubricate conveyor bearings',
+      createdAt: DateTime.now(),
     ),
   ];
 
@@ -122,10 +135,29 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.assignedOnly ? 'Assigned Maintenance' : 'Maintenance',
+          isTechnician ? 'Assigned Maintenance' : 'Maintenance',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
+      floatingActionButton: canManage
+          ? FloatingActionButton.extended(
+              key: const ValueKey('create-maintenance-task-fab'),
+              onPressed: () async {
+                final result = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute<bool>(
+                    builder: (_) => MaintenanceTaskFormScreen(
+                      maintenanceService: _resolvedService,
+                    ),
+                  ),
+                );
+                if (result == true && mounted) {
+                  _retry();
+                }
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Create Task'),
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -161,11 +193,11 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
                               ),
                             );
                           },
-                        );
-                      },
-                    ),
-            ),
-          ],
+                        ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -190,15 +222,13 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            widget.assignedOnly
+            isTechnician
                 ? 'Your assigned maintenance work'
                 : 'Track machine maintenance activity',
             style: Theme.of(context).textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
-
           const SizedBox(height: 12),
-
           Row(
             children: [
               Expanded(
@@ -208,9 +238,7 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
                   icon: Icons.schedule_outlined,
                 ),
               ),
-
               const SizedBox(width: 8),
-
               Expanded(
                 child: _SummaryCard(
                   label: 'Active',
@@ -218,9 +246,7 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
                   icon: Icons.engineering_outlined,
                 ),
               ),
-
               const SizedBox(width: 8),
-
               Expanded(
                 child: _SummaryCard(
                   label: 'Done',
@@ -252,6 +278,7 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
             onSelected: (_) {
               setState(() {
                 _selectedStatus = status;
+                _initStream();
               });
             },
           );
@@ -260,30 +287,91 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return const Center(
+  Widget _buildErrorState(Object? error) {
+    final message = error is MaintenanceServiceException
+        ? error.message
+        : 'Failed to load maintenance tasks. Please check your connection.';
+
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(32),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.build_circle_outlined, size: 64),
-            SizedBox(height: 12),
-            Text(
-              'No maintenance tasks found',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Icon(
+              Icons.error_outline,
+              size: 56,
+              color: Theme.of(context).colorScheme.error,
             ),
-            SizedBox(height: 6),
-            Text('Try another status filter.', textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            Text(
+              'Unable to load maintenance tasks',
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _retry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildEmptyState(bool isTechnician) {
+    final hasFilter = _selectedStatus != 'All';
+
+    final String title;
+    final String subtitle;
+    final IconData icon;
+
+    if (hasFilter) {
+      title = 'No maintenance tasks found';
+      subtitle = 'Try another status filter.';
+      icon = Icons.filter_list_off;
+    } else if (isTechnician) {
+      title = 'No assigned maintenance tasks';
+      subtitle = 'You have no maintenance tasks assigned.';
+      icon = Icons.assignment_turned_in_outlined;
+    } else {
+      title = 'No maintenance tasks found';
+      subtitle = 'There are currently no maintenance tasks recorded.';
+      icon = Icons.build_circle_outlined;
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 64, color: Colors.grey),
+            const SizedBox(height: 12),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Text(subtitle, textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
 }
 
 class _MaintenanceCard extends StatelessWidget {
-  final _MaintenancePreview item;
+  final MaintenanceModel item;
   final VoidCallback onTap;
 
   const _MaintenanceCard({required this.item, required this.onTap});
@@ -291,6 +379,24 @@ class _MaintenanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final priorityColor = _priorityColor(item.priority);
+
+    final title = item.notes?.trim().isNotEmpty == true
+        ? item.notes!.trim()
+        : 'Maintenance Task #${item.id}';
+
+    final machineName = item.machineName?.trim().isNotEmpty == true
+        ? item.machineName!.trim()
+        : (item.machineId.isNotEmpty ? item.machineId : 'Machine');
+
+    final technician = item.technicianName?.trim().isNotEmpty == true
+        ? item.technicianName!.trim()
+        : (item.technicianId.isNotEmpty ? item.technicianId : 'Technician');
+
+    final dateText = item.createdAt != null
+        ? 'Assigned: ${item.createdAt!.year}-${item.createdAt!.month.toString().padLeft(2, '0')}-${item.createdAt!.day.toString().padLeft(2, '0')}'
+        : 'Assigned: Today';
+
+    final displayStatus = item.status == 'Resolved' ? 'Completed' : item.status;
 
     return Card(
       child: InkWell(
@@ -305,14 +411,12 @@ class _MaintenanceCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      item.title,
+                      title,
                       style: Theme.of(context).textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
-
                   const SizedBox(width: 8),
-
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
@@ -333,33 +437,20 @@ class _MaintenanceCard extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 10),
-
               _InfoRow(
                 icon: Icons.precision_manufacturing_outlined,
-                text: item.machineName,
+                text: machineName,
               ),
-
               const SizedBox(height: 6),
-
-              _InfoRow(icon: Icons.person_outline, text: item.technician),
-
+              _InfoRow(icon: Icons.person_outline, text: technician),
               const SizedBox(height: 6),
-
-              _InfoRow(
-                icon: Icons.event_outlined,
-                text: 'Due: ${item.dueDate}',
-              ),
-
+              _InfoRow(icon: Icons.event_outlined, text: dateText),
               const SizedBox(height: 12),
-
               Row(
                 children: [
-                  _StatusBadge(status: item.status),
-
+                  _StatusBadge(status: displayStatus),
                   const Spacer(),
-
                   const Icon(Icons.chevron_right),
                 ],
               ),
@@ -374,13 +465,10 @@ class _MaintenanceCard extends StatelessWidget {
     switch (priority) {
       case 'Critical':
         return Colors.red;
-
       case 'High':
         return Colors.deepOrange;
-
       case 'Medium':
         return Colors.orange;
-
       default:
         return Colors.green;
     }
@@ -471,24 +559,4 @@ class _StatusBadge extends StatelessWidget {
       ),
     );
   }
-}
-
-class _MaintenancePreview {
-  final String id;
-  final String title;
-  final String machineName;
-  final String technician;
-  final String priority;
-  final String status;
-  final String dueDate;
-
-  const _MaintenancePreview({
-    required this.id,
-    required this.title,
-    required this.machineName,
-    required this.technician,
-    required this.priority,
-    required this.status,
-    required this.dueDate,
-  });
 }

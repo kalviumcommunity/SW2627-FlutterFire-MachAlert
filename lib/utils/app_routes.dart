@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/fault_model.dart';
 import '../models/machine_model.dart';
+import '../models/user_model.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/dashboard/home_screen.dart';
 import '../screens/faults/fault_history_screen.dart';
@@ -13,8 +14,12 @@ import '../screens/machines/machine_details_screen.dart';
 import '../screens/machines/machine_form_screen.dart';
 import '../screens/machines/machine_list_screen.dart';
 import '../screens/maintenance/maintenance_list_screen.dart';
+import '../screens/maintenance/maintenance_task_form_screen.dart';
 import '../services/fault_service.dart';
+import '../services/machine_service.dart';
+import '../services/maintenance_service.dart';
 import '../services/storage_service.dart';
+import '../services/user_service.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -29,6 +34,7 @@ class AppRoutes {
   static const String faultHistoryName = '/faults/history';
   static const String realtimeFaultsName = '/faults/live';
   static const String maintenanceName = '/maintenance';
+  static const String createMaintenanceTaskName = '/maintenance/create';
 
   static Route<T> _route<T>({
     required String name,
@@ -149,10 +155,35 @@ class AppRoutes {
     );
   }
 
-  static Route<void> maintenance({bool assignedOnly = false}) {
+  static Route<void> maintenance({
+    bool assignedOnly = false,
+    MaintenanceService? maintenanceService,
+  }) {
     return _route<void>(
       name: maintenanceName,
-      builder: (_) => MaintenanceListScreen(assignedOnly: assignedOnly),
+      builder: (_) => MaintenanceListScreen(
+        assignedOnly: assignedOnly,
+        maintenanceService: maintenanceService,
+      ),
+    );
+  }
+
+  static Route<void> createMaintenanceTask({
+    MaintenanceService? maintenanceService,
+    UserService? userService,
+    MachineService? machineService,
+    List<MachineModel>? initialMachines,
+    List<UserModel>? initialTechnicians,
+  }) {
+    return _route<void>(
+      name: createMaintenanceTaskName,
+      builder: (_) => MaintenanceTaskFormScreen(
+        maintenanceService: maintenanceService,
+        userService: userService,
+        machineService: machineService,
+        initialMachines: initialMachines,
+        initialTechnicians: initialTechnicians,
+      ),
     );
   }
 }

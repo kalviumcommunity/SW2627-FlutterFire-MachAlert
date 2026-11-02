@@ -44,6 +44,29 @@ class FakeErrorCollectionReference extends Fake
   DocumentReference<Map<String, dynamic>> doc([String? path]) {
     return FakeErrorDocumentReference(exception);
   }
+
+  @override
+  Query<Map<String, dynamic>> where(
+    Object field, {
+    Object? isEqualTo,
+    Object? isNotEqualTo,
+    Object? isLessThan,
+    Object? isLessThanOrEqualTo,
+    Object? isGreaterThan,
+    Object? isGreaterThanOrEqualTo,
+    Object? arrayContains,
+    Iterable<Object?>? arrayContainsAny,
+    Iterable<Object?>? whereIn,
+    Iterable<Object?>? whereNotIn,
+    bool? isNull,
+  }) {
+    return this;
+  }
+
+  @override
+  Future<QuerySnapshot<Map<String, dynamic>>> get([GetOptions? options]) async {
+    throw exception;
+  }
 }
 
 class FakeErrorFirestore extends Fake implements FirebaseFirestore {
@@ -548,6 +571,154 @@ void main() {
         expect(ex1.hashCode, equals(ex2.hashCode));
         expect(ex1, isNot(equals(ex3)));
         expect(ex1.toString(), contains('not-found'));
+      });
+    });
+
+    group('getUsersByRole', () {
+      test(
+        'rejects unrecognized role with typed UserServiceException',
+        () async {
+          expect(
+            () => userService.getUsersByRole('invalid_role'),
+            throwsA(
+              isA<UserServiceException>().having(
+                (e) => e.code,
+                'code',
+                'invalid-role',
+              ),
+            ),
+          );
+        },
+      );
+
+      test(
+        'queries users collection by role and sorts by display name',
+        () async {
+          await fakeFirestore.collection('users').doc('u1').set({
+            'uid': 'u1',
+            'name': 'Zach Technician',
+            'email': 'zach@factory.com',
+            'role': 'technician',
+          });
+          await fakeFirestore.collection('users').doc('u2').set({
+            'uid': 'u2',
+            'name': 'Alice Technician',
+            'email': 'alice@factory.com',
+            'role': 'technician',
+          });
+          await fakeFirestore.collection('users').doc('u3').set({
+            'uid': 'u3',
+            'name': 'Manager Bob',
+            'email': 'bob@factory.com',
+            'role': 'manager',
+          });
+
+          final technicians = await userService.getUsersByRole('technician');
+
+          expect(technicians.length, 2);
+          expect(technicians.first.name, 'Alice Technician');
+          expect(technicians.last.name, 'Zach Technician');
+          expect(technicians.every((u) => u.role == 'technician'), isTrue);
+        },
+      );
+
+      test(
+        'maps Firestore failures safely without raw error leakage',
+        () async {
+          const rawInternalError =
+              'Database internal memory fault at 0xdeadbeef';
+          final errorFirestore = FakeErrorFirestore(
+            FirebaseException(
+              plugin: 'cloud_firestore',
+              code: 'permission-denied',
+              message: rawInternalError,
+            ),
+          );
+
+          final errorService = UserService(firestore: errorFirestore);
+
+          expect(
+            () => errorService.getUsersByRole('technician'),
+            throwsA(
+              isA<UserServiceException>()
+                  .having((e) => e.code, 'code', 'permission-denied')
+                  .having(
+                    (e) => e.message,
+                    'message',
+                    isNot(contains(rawInternalError)),
+                  ),
+            ),
+          );
+        },
+      );
+    });
+
+    group('getUsersByRole', () {
+      test('rejects unrecognized role with typed UserServiceException', () async {
+        expect(
+          () => userService.getUsersByRole('invalid_role'),
+          throwsA(
+            isA<UserServiceException>().having(
+              (e) => e.code,
+              'code',
+              'invalid-role',
+            ),
+          ),
+        );
+      });
+
+      test('queries users collection by role and sorts by display name', () async {
+        await fakeFirestore.collection('users').doc('u1').set({
+          'uid': 'u1',
+          'name': 'Zach Technician',
+          'email': 'zach@factory.com',
+          'role': 'technician',
+        });
+        await fakeFirestore.collection('users').doc('u2').set({
+          'uid': 'u2',
+          'name': 'Alice Technician',
+          'email': 'alice@factory.com',
+          'role': 'technician',
+        });
+        await fakeFirestore.collection('users').doc('u3').set({
+          'uid': 'u3',
+          'name': 'Manager Bob',
+          'email': 'bob@factory.com',
+          'role': 'manager',
+        });
+
+        final technicians = await userService.getUsersByRole('technician');
+
+        expect(technicians.length, 2);
+        expect(technicians.first.name, 'Alice Technician');
+        expect(technicians.last.name, 'Zach Technician');
+        expect(technicians.every((u) => u.role == 'technician'), isTrue);
+      });
+
+      test('maps Firestore failures safely without raw error leakage', () async {
+        const rawInternalError = 'Database internal memory fault at 0xdeadbeef';
+        final errorFirestore = FakeErrorFirestore(
+          FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+            message: rawInternalError,
+          ),
+        );
+
+        final errorService = UserService(firestore: errorFirestore);
+
+        expect(
+          () => errorService.getUsersByRole('technician'),
+          throwsA(
+            isA<UserServiceException>()
+                .having((e) => e.code, 'code', 'permission-denied')
+                .having(
+                  (e) => e.message,
+                  'message',
+                  isNot(contains(rawInternalError)),
+                ),
+          ),
+        );
       });
     });
   });
