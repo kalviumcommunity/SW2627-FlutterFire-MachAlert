@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/maintenance_model.dart';
+import '../../providers/app_state_provider.dart';
 import '../../services/maintenance_service.dart';
+import '../../utils/app_constants.dart';
 import 'maintenance_details_screen.dart';
 import 'maintenance_task_form_screen.dart';
 
@@ -67,70 +69,127 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
     ),
   ];
 
-  MaintenanceService? get _resolvedService {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _resolvedService = _resolveService();
+      _initStream();
+      _initialized = true;
+    }
+  }
+
+  MaintenanceService? _resolveService() {
     if (widget.maintenanceService != null) {
       return widget.maintenanceService;
     }
     try {
-      return Provider.of<MaintenanceService>(context, listen: false);
+      return context.read<MaintenanceService>();
     } catch (_) {
       return null;
     }
   }
 
-  Stream<List<MaintenanceModel>> _taskStream(MaintenanceService service) {
-    if (widget.assignedOnly) {
-      return service.streamAssignedMaintenanceTasks();
+  bool _isTechnicianMode(AppStateProvider? appState) {
+    final user = appState?.user;
+    if (user != null) {
+      return user.role.trim().toLowerCase() == AppConstants.roleTechnician;
     }
-    return service.streamMaintenanceTasks();
+    return widget.assignedOnly;
+  }
+
+  bool _isManagerMode(AppStateProvider? appState) {
+    final user = appState?.user;
+    if (user != null) {
+      return user.role.trim().toLowerCase() == AppConstants.roleManager;
+    }
+    return !widget.assignedOnly;
+  }
+
+  bool _isOperatorMode(AppStateProvider? appState) {
+    final user = appState?.user;
+    if (user != null) {
+      return user.role.trim().toLowerCase() == AppConstants.roleOperator;
+    }
+    return false;
+  }
+
+  List<MaintenanceModel> _getFilteredSampleTasks() {
+    Iterable<MaintenanceModel> items = _sampleTasks;
+    if (_selectedStatus != 'All') {
+      items = items.where((t) {
+        final s = t.status == 'Resolved' ? 'Completed' : t.status;
+        return s == _selectedStatus;
+      });
+    }
+    return items.toList();
+  }
+
+  void _initStream() {
+    final service = _resolvedService;
+    final appState = Provider.of<AppStateProvider?>(context, listen: false);
+
+    if (service == null) {
+      // Standalone/fallback test mode when no service is injected or provided
+      _stream = Stream.value(_getFilteredSampleTasks());
+      return;
+    }
+
+    final String? filterStatus = _selectedStatus == 'All'
+        ? null
+        : _selectedStatus;
+
+    if (_isTechnicianMode(appState)) {
+      _stream = service.streamAssignedMaintenanceTasks(status: filterStatus);
+    } else {
+      _stream = service.streamMaintenanceTasks(status: filterStatus);
+    }
+  }
+
+  void _retry() {
+    setState(() {
+      _initStream();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final service = _resolvedService;
+    final appState = Provider.of<AppStateProvider?>(context);
 
-    if (service != null) {
-      return StreamBuilder<List<MaintenanceModel>>(
-        stream: _taskStream(service),
-        builder: (context, snapshot) {
-          final items = (snapshot.data ?? const <MaintenanceModel>[])
-              .map(
-                (task) => _MaintenancePreview(
-                  id: task.id,
-                  title: (task.notes?.trim().isNotEmpty == true)
-                      ? task.notes!.trim()
-                      : 'Maintenance Task #${task.id}',
-                  machineName: (task.machineName?.trim().isNotEmpty == true)
-                      ? task.machineName!.trim()
-                      : task.machineId,
-                  technician: (task.technicianName?.trim().isNotEmpty == true)
-                      ? task.technicianName!.trim()
-                      : task.technicianId,
-                  priority: task.priority,
-                  status: task.status == 'Resolved' ? 'Completed' : task.status,
-                  dueDate: task.createdAt != null
-                      ? '${task.createdAt!.year}-${task.createdAt!.month.toString().padLeft(2, '0')}-${task.createdAt!.day.toString().padLeft(2, '0')}'
-                      : 'Today',
+    if (_isOperatorMode(appState)) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'Maintenance',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.lock_outline, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'Access Restricted',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-              )
-              .toList();
-
-          return _buildContent(context, items, service);
-        },
+                SizedBox(height: 8),
+                Text(
+                  'Maintenance tasks are only accessible to technicians and managers.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
-    return _buildContent(context, _items, null);
-  }
-
-  Widget _buildContent(
-    BuildContext context,
-    List<_MaintenancePreview> allItems,
-    MaintenanceService? service,
-  ) {
-    final filtered = _selectedStatus == 'All'
-        ? allItems
-        : allItems.where((item) => item.status == _selectedStatus).toList();
+    final isTechnician = _isTechnicianMode(appState);
+    final canManage = _isManagerMode(appState);
 
     return Scaffold(
       appBar: AppBar(
@@ -159,38 +218,82 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
             )
           : null,
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(allItems),
+        child: StreamBuilder<List<MaintenanceModel>>(
+          initialData: _resolvedService == null
+              ? _getFilteredSampleTasks()
+              : null,
+          stream: _stream,
+          builder: (context, snapshot) {
+            final isLoading =
+                _resolvedService != null &&
+                snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData &&
+                !snapshot.hasError;
 
-            _buildFilters(),
+            final hasError = _resolvedService != null && snapshot.hasError;
+            final items = _resolvedService != null
+                ? (snapshot.data ?? [])
+                : _getFilteredSampleTasks();
 
-            Expanded(
-              child: filtered.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        final item = filtered[index];
-
-                        return _MaintenanceCard(
-                          item: item,
-                          onTap: () {
-                            Navigator.of(context).push<void>(
-                              MaterialPageRoute<void>(
-                                builder: (_) => MaintenanceDetailsScreen(
-                                  maintenanceId: item.id,
-                                  title: item.title,
-                                  machineName: item.machineName,
-                                  technician: item.technician,
-                                  priority: item.priority,
-                                  status: item.status,
-                                  dueDate: item.dueDate,
-                                  maintenanceService: service,
-                                ),
-                              ),
+            return Column(
+              children: [
+                _buildHeader(isTechnician, items),
+                _buildFilters(),
+                Expanded(
+                  child: isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            key: ValueKey('maintenance-loading-indicator'),
+                          ),
+                        )
+                      : hasError
+                      ? _buildErrorState(snapshot.error)
+                      : items.isEmpty
+                      ? _buildEmptyState(isTechnician)
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          itemCount: items.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            return _MaintenanceCard(
+                              item: item,
+                              onTap: () {
+                                Navigator.of(context).push<void>(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => MaintenanceDetailsScreen(
+                                      maintenanceId: item.id,
+                                      title:
+                                          item.notes?.trim().isNotEmpty == true
+                                          ? item.notes!.trim()
+                                          : 'Maintenance Task #${item.id}',
+                                      machineName:
+                                          item.machineName?.trim().isNotEmpty ==
+                                              true
+                                          ? item.machineName!.trim()
+                                          : item.machineId,
+                                      technician:
+                                          item.technicianName
+                                                  ?.trim()
+                                                  .isNotEmpty ==
+                                              true
+                                          ? item.technicianName!.trim()
+                                          : item.technicianId,
+                                      priority: item.priority,
+                                      status: item.status == 'Resolved'
+                                          ? 'Completed'
+                                          : item.status,
+                                      dueDate: item.createdAt != null
+                                          ? _formatDate(item.createdAt!)
+                                          : 'Today',
+                                      dateLabel: 'Assigned',
+                                      notes: item.notes,
+                                      maintenanceService: _resolvedService,
+                                    ),
+                                  ),
+                                );
+                              },
                             );
                           },
                         ),
@@ -203,16 +306,20 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
     );
   }
 
-  Widget _buildHeader(List<_MaintenancePreview> items) {
-    final pendingCount = items.where((item) => item.status == 'Pending').length;
+  Widget _buildHeader(bool isTechnician, List<MaintenanceModel> items) {
+    final pendingCount = items
+        .where((item) => item.status.toLowerCase() == 'pending')
+        .length;
 
     final inProgressCount = items
-        .where((item) => item.status == 'In Progress')
+        .where((item) => item.status.toLowerCase() == 'in progress')
         .length;
 
     final completedCount = items
         .where(
-          (item) => item.status == 'Completed' || item.status == 'Resolved',
+          (item) =>
+              item.status.toLowerCase() == 'resolved' ||
+              item.status.toLowerCase() == 'completed',
         )
         .length;
 
