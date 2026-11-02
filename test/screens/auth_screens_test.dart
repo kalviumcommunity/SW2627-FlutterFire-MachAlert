@@ -20,6 +20,16 @@ void main() {
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.text('Login'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (w) =>
+            w is Image &&
+            w.image is AssetImage &&
+            (w.image as AssetImage).assetName ==
+                'assets/branding/machalert_logo.png',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Login password visibility toggles', (tester) async {
@@ -551,6 +561,16 @@ void main() {
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.text('Confirm Password'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (w) =>
+            w is Image &&
+            w.image is AssetImage &&
+            (w.image as AssetImage).assetName ==
+                'assets/branding/machalert_logo.png',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Signup submit button is enabled', (tester) async {
