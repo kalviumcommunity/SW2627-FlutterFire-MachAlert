@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/fault_model.dart';
 import '../../models/machine_model.dart';
 import '../../providers/app_state_provider.dart';
 import '../../providers/machine_provider.dart';
@@ -14,8 +15,9 @@ import '../../widgets/dashboard_stat_card.dart';
 
 class HomeScreen extends StatefulWidget {
   final FaultService? faultService;
+  final MachineProvider? machineProvider;
 
-  const HomeScreen({super.key, this.faultService});
+  const HomeScreen({super.key, this.faultService, this.machineProvider});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -23,6 +25,123 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isSigningOut = false;
+  Stream<List<FaultModel>>? _managerFaultStream;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.machineProvider?.addListener(_onMachineProviderChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _checkAndInitManagerServices();
+  }
+
+  @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.machineProvider != oldWidget.machineProvider) {
+      oldWidget.machineProvider?.removeListener(_onMachineProviderChanged);
+      widget.machineProvider?.addListener(_onMachineProviderChanged);
+    }
+    if (widget.faultService != oldWidget.faultService) {
+      _managerFaultStream = null;
+      _initFaultStream();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.machineProvider?.removeListener(_onMachineProviderChanged);
+    super.dispose();
+  }
+
+  void _onMachineProviderChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  FaultService? _resolveFaultService() {
+    if (widget.faultService != null) {
+      return widget.faultService;
+    }
+    try {
+      return context.read<FaultService>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  MachineProvider? _resolveMachineProvider() {
+    if (widget.machineProvider != null) {
+      return widget.machineProvider;
+    }
+    try {
+      return context.read<MachineProvider>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _checkAndInitManagerServices() {
+    try {
+      final role = context
+          .read<AppStateProvider>()
+          .user
+          ?.role
+          .trim()
+          .toLowerCase();
+      if (role == AppConstants.roleManager) {
+        _initFaultStream();
+        _scheduleMachineSubscription();
+      }
+    } catch (_) {}
+  }
+
+  void _initFaultStream() {
+    if (_managerFaultStream != null) return;
+    try {
+      final role = context
+          .read<AppStateProvider>()
+          .user
+          ?.role
+          .trim()
+          .toLowerCase();
+      if (role != AppConstants.roleManager) {
+        return;
+      }
+      final faultService = _resolveFaultService();
+      if (faultService != null) {
+        _managerFaultStream = faultService.streamFaults();
+      }
+    } catch (_) {
+      _managerFaultStream = null;
+    }
+  }
+
+  void _scheduleMachineSubscription() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        final currentRole = context
+            .read<AppStateProvider>()
+            .user
+            ?.role
+            .trim()
+            .toLowerCase();
+        if (currentRole == AppConstants.roleManager) {
+          final machineProvider = _resolveMachineProvider();
+          if (machineProvider != null &&
+              !machineProvider.hasActiveSubscription) {
+            machineProvider.subscribeToMachines();
+          }
+        }
+      } catch (_) {}
+    });
+  }
 
   Future<void> _handleLogout() async {
     setState(() {
@@ -74,19 +193,14 @@ class _HomeScreenState extends State<HomeScreen> {
     List<MachineModel> machines = const [];
 
     try {
-      machines = context.read<MachineProvider>().machines;
+      machines = _resolveMachineProvider()?.machines ?? const [];
     } catch (_) {}
 
     Navigator.of(context).push<void>(AppRoutes.reportFault(machines: machines));
   }
 
   void _openFaultHistory() {
-    FaultService? faultService = widget.faultService;
-    if (faultService == null) {
-      try {
-        faultService = context.read<FaultService>();
-      } catch (_) {}
-    }
+    final faultService = _resolveFaultService();
 
     Navigator.of(context)
         .push<void>(AppRoutes.faultHistory(faultService: faultService));
@@ -99,12 +213,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openRealtimeFaults() {
-    FaultService? faultService = widget.faultService;
-    if (faultService == null) {
-      try {
-        faultService = context.read<FaultService>();
-      } catch (_) {}
-    }
+    final faultService = _resolveFaultService();
 
     Navigator.of(context)
         .push<void>(AppRoutes.realtimeFaults(faultService: faultService));
@@ -120,6 +229,9 @@ class _HomeScreenState extends State<HomeScreen> {
         : 'MachAlert User';
 
     final role = user?.role.trim().toLowerCase() ?? '';
+    if (role != AppConstants.roleManager && _managerFaultStream != null) {
+      _managerFaultStream = null;
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('MachAlert')),
@@ -192,15 +304,25 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildManagerDashboard() {
-    MachineProvider? machineProvider;
+    _initFaultStream();
+    _scheduleMachineSubscription();
 
-    try {
-      machineProvider = context.watch<MachineProvider>();
-    } catch (_) {}
+    MachineProvider? machineProvider = widget.machineProvider;
+    if (machineProvider == null) {
+      try {
+        machineProvider = context.watch<MachineProvider>();
+      } catch (_) {}
+    }
 
-    final machineCount = machineProvider != null && !machineProvider.isLoading
-        ? machineProvider.machines.length.toString()
-        : '--';
+    final String machineCount;
+    if (machineProvider == null ||
+        !machineProvider.hasActiveSubscription ||
+        machineProvider.isLoading ||
+        machineProvider.hasError) {
+      machineCount = '--';
+    } else {
+      machineCount = machineProvider.machines.length.toString();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -221,11 +343,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(width: 12),
 
-            const Expanded(
-              child: DashboardStatCard(
-                label: 'Active Faults',
-                value: '--',
-                icon: Icons.warning_amber,
+            Expanded(
+              child: StreamBuilder<List<FaultModel>>(
+                stream: _managerFaultStream,
+                builder: (context, snapshot) {
+                  final String faultCount;
+
+                  if (_managerFaultStream == null ||
+                      snapshot.hasError ||
+                      snapshot.connectionState == ConnectionState.waiting) {
+                    faultCount = '--';
+                  } else if (snapshot.hasData) {
+                    final faults = snapshot.data ?? const [];
+                    final activeCount = faults.where((fault) {
+                      final s = fault.status.trim().toLowerCase();
+                      return s == AppConstants.faultStatusOpen.toLowerCase() ||
+                          s == AppConstants.faultStatusInProgress.toLowerCase();
+                    }).length;
+                    faultCount = activeCount.toString();
+                  } else {
+                    faultCount = '--';
+                  }
+
+                  return DashboardStatCard(
+                    label: 'Active Faults',
+                    value: faultCount,
+                    icon: Icons.warning_amber,
+                  );
+                },
               ),
             ),
           ],
