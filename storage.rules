@@ -1,0 +1,74 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper: Check if request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Cross-service role helpers checking canonical /users/{uid} document in Firestore
+    function userDocExists() {
+      return isAuthenticated()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserRole() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isManager() {
+      return userDocExists() && getUserRole() == 'manager';
+    }
+
+    function isTechnician() {
+      return userDocExists() && getUserRole() == 'technician';
+    }
+
+    // Verifies whether the authenticated technician is assigned to the task referenced in Storage metadata
+    function isAssignedTechnicianForTask() {
+      return isTechnician()
+        && resource.metadata != null
+        && ('taskId' in resource.metadata)
+        && firestore.exists(/databases/(default)/documents/maintenance/$(resource.metadata.taskId))
+        && firestore.get(/databases/(default)/documents/maintenance/$(resource.metadata.taskId)).data.technicianId == request.auth.uid;
+    }
+
+    // Helper: Validate image content type, max size (5 MB), and user-scoped path
+    function isValidImageUpload(uid) {
+      return isAuthenticated()
+        && request.auth.uid == uid
+        && request.resource != null
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Fault incident photo attachments: fault_images/{uid}/{fileName}
+    // Read authorization:
+    // - Owner (reporter who uploaded the photo)
+    // - Technicians (to inspect and diagnose machine faults)
+    // - Managers (to oversee plant incidents)
+    // - Foreign operators and unauthenticated users are denied
+    match /fault_images/{uid}/{fileName} {
+      allow read: if isAuthenticated() && (request.auth.uid == uid || isTechnician() || isManager());
+      allow create: if isValidImageUpload(uid);
+      allow update, delete: if false;
+    }
+
+    // Maintenance repair photo proof attachments: maintenance_proofs/{uid}/{fileName}
+    // Read authorization:
+    // - Owner / Uploader (who uploaded the repair proof)
+    // - Manager (can access all maintenance proof images)
+    // - Assigned technician for the task (via custom metadata taskId referencing Firestore /maintenance/{taskId})
+    // - Unassigned technicians, foreign operators, and unauthenticated users are denied
+    match /maintenance_proofs/{uid}/{fileName} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == uid
+        || isManager()
+        || isAssignedTechnicianForTask()
+      );
+      allow create: if isValidImageUpload(uid);
+      allow update, delete: if false;
+    }
+  }
+}

@@ -2,32 +2,185 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function: Check if request is authenticated
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // 1. Collection: users (/users/{userId})
+    //    Document ID: Firebase Auth UID
+    //    Fields:
+    //      - id: string (optional, UID alias, max 128 chars)
+    //      - uid: string (required, UID alias, immutable, max 128 chars)
+    //      - userId: string (optional, UID alias, immutable, max 128 chars)
+    //      - name: string (optional, max 100 chars)
+    //      - displayName: string (optional, max 100 chars)
+    //      - email: string (required, valid email pattern, immutable by client, max 254 chars)
+    //      - role: string (required, 'operator' | 'technician' | 'manager')
+    //      - createdAt: timestamp | string (optional, immutable, max 50 chars)
+    //      - updatedAt: timestamp | string (optional, max 50 chars)
+    //
+    // 2. Collection: machines (/machines/{machineId})
+    //    Document ID: Canonical machine identifier string
+    //    Fields:
+    //      - id / machineId: string (required/optional, max 100 chars, immutable)
+    //      - name: string (required, non-empty, max 100 chars)
+    //      - productionLine: string (required, non-empty, max 100 chars)
+    //      - modelNumber: string (optional, max 100 chars)
+    //      - status: string (required, 'Operational' | 'Warning' | 'Critical' | 'Under Maintenance')
+    //      - healthScore: number (required, 0 <= score <= 100)
+    //      - temperature: number (optional, telemetry float/int)
+    //      - vibration: number (optional, telemetry float/int)
+    //      - lastInspection: timestamp | null (optional)
+    //      - createdAt: timestamp | string (optional, immutable)
+    //      - updatedAt: timestamp | string (optional)
+    //
+    // 3. Collection: faults (/faults/{faultId})
+    //    Document ID: Auto-generated fault identifier string
+    //    Fields:
+    //      - id / faultId: string (optional, max 100 chars)
+    //      - machineId: string (required, non-empty, immutable, max 100 chars)
+    //      - machineName: string (optional, max 100 chars)
+    //      - type: string (required, 'Mechanical' | 'Electrical' | 'Hydraulic' | 'Thermal' | 'Pneumatic' | 'Other')
+    //      - severity: string (required, 'Low' | 'Medium' | 'High' | 'Critical')
+    //      - description: string (required, non-empty, max 2000 chars)
+    //      - reportedBy: string (required, Firebase Auth UID, immutable, max 128 chars)
+    //      - reportedByName: string (optional, max 100 chars)
+    //      - status: string (required, 'Open' | 'In Progress' | 'Resolved')
+    //      - imageUrl: string (optional, download URL, max 1000 chars)
+    //      - createdAt: timestamp | string (optional, immutable)
+    //
+    // 4. Collection: maintenance (/maintenance/{taskId})
+    //    Document ID: Auto-generated maintenance task identifier string
+    //    Fields:
+    //      - id / maintenanceId: string (required/optional, immutable, max 100 chars)
+    //      - machineId: string (required, immutable, max 100 chars)
+    //      - machineName: string (optional, max 100 chars)
+    //      - faultId: string (optional, immutable, max 100 chars)
+    //      - technicianId: string (required, assigned technician UID, immutable, max 128 chars)
+    //      - technicianName: string (optional, max 100 chars)
+    //      - priority: string (required, immutable, 'Low' | 'Medium' | 'High' | 'Critical')
+    //      - status: string (required, 'Pending' | 'In Progress' | 'Resolved')
+    //      - notes: string (optional, original assignment notes, immutable, max 2000 chars)
+    //      - createdAt: timestamp | string (optional, immutable)
+    //      - updatedAt: timestamp | string (optional)
+    //      - updateHistory: map (optional, audit log of repair entries, append-only)
+    //
+    // 5. Collection: alerts (/alerts/{alertId})
+    //    Document ID: Auto-generated alert identifier string
+    //    Fields:
+    //      - id / alertId: string (optional, max 100 chars)
+    //      - machineId: string (required, max 100 chars)
+    //      - machineName: string (optional, max 100 chars)
+    //      - type: string (required, max 100 chars)
+    //      - severity: string (required, 'Low' | 'Medium' | 'High' | 'Critical' | 'Warning')
+    //      - message: string (required, max 1000 chars)
+    //      - acknowledged: bool (required)
+    //      - createdAt: timestamp | string (optional)
+    //      - updatedAt: timestamp | string (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions: Authentication & Role-Based Access Control
+    // ===============================================================
+
+    // Checks whether the incoming request is authenticated with Firebase Auth
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Helper function: Fetch user document from users collection
+    // Checks whether a user document exists in canonical /users collection
+    function userDocExists() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Fetches the user profile document for the authenticated caller
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    // Helper function: Check if authenticated user is a manager
+    // Checks if authenticated caller has the manager role
     function isManager() {
-      return isAuthenticated() && getUserData().role == 'manager';
+      return isAuthenticated() && userDocExists() && getUserData().role == 'manager';
     }
 
-    // Helper function: Check if authenticated user is a technician
+    // Checks if authenticated caller has the technician role
     function isTechnician() {
-      return isAuthenticated() && getUserData().role == 'technician';
+      return isAuthenticated() && userDocExists() && getUserData().role == 'technician';
     }
 
-    // Helper function: Check if authenticated user is an operator
+    // Checks if authenticated caller has the operator role
     function isOperator() {
-      return isAuthenticated() && getUserData().role == 'operator';
+      return isAuthenticated() && userDocExists() && getUserData().role == 'operator';
     }
 
-    // Helper function: Validate allowed fault types matching AppConstants.faultTypes
+    // ===============================================================
+    // Helper Functions: Field Validation & Sanitization
+    // ===============================================================
+
+    // Validates standard email address format
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // Validates createdAt timestamp or ISO string representation
+    function isValidCreatedAt(time) {
+      return time is timestamp || (time is string && time.size() <= 50);
+    }
+
+    // Validates updatedAt timestamp or ISO string representation
+    function isValidUpdatedAt(time) {
+      return time is timestamp || (time is string && time.size() <= 50);
+    }
+
+    // ===============================================================
+    // Domain Validators: Users Collection
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasOnly(['id', 'uid', 'userId', 'name', 'displayName', 'email', 'role', 'createdAt', 'updatedAt'])
+        && ('uid' in data) && data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128
+        && ('role' in data) && data.role is string && data.role in ['operator', 'technician', 'manager']
+        && ('email' in data) && data.email is string && data.email.size() <= 254 && isValidEmail(data.email)
+        && (!('name' in data) || data.name == null || (data.name is string && data.name.size() <= 100))
+        && (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() <= 100))
+        && (!('id' in data) || data.id == null || (data.id is string && data.id.size() <= 128))
+        && (!('userId' in data) || data.userId == null || (data.userId is string && data.userId.size() <= 128))
+        && (!('createdAt' in data) || data.createdAt == null || isValidCreatedAt(data.createdAt))
+        && (!('updatedAt' in data) || data.updatedAt == null || isValidUpdatedAt(data.updatedAt));
+    }
+
+    // ===============================================================
+    // Domain Validators: Machines Collection
+    // ===============================================================
+
+    function isValidMachine(data) {
+      return data.keys().hasOnly(['id', 'machineId', 'name', 'productionLine', 'modelNumber', 'status', 'healthScore', 'temperature', 'vibration', 'lastInspection', 'createdAt', 'updatedAt'])
+        && ('name' in data) && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && ('productionLine' in data) && data.productionLine is string && data.productionLine.size() > 0 && data.productionLine.size() <= 100
+        && ('status' in data) && data.status is string && data.status in ['Operational', 'Warning', 'Critical', 'Under Maintenance']
+        && ('healthScore' in data) && (data.healthScore is int || data.healthScore is float) && data.healthScore >= 0 && data.healthScore <= 100
+        && (!('id' in data) || data.id == null || (data.id is string && data.id.size() <= 100))
+        && (!('machineId' in data) || data.machineId == null || (data.machineId is string && data.machineId.size() <= 100))
+        && (!('modelNumber' in data) || data.modelNumber == null || (data.modelNumber is string && data.modelNumber.size() <= 100))
+        && (!('temperature' in data) || data.temperature == null || (data.temperature is int || data.temperature is float))
+        && (!('vibration' in data) || data.vibration == null || (data.vibration is int || data.vibration is float))
+        && (!('lastInspection' in data) || data.lastInspection == null || data.lastInspection is timestamp)
+        && (!('createdAt' in data) || data.createdAt == null || isValidCreatedAt(data.createdAt))
+        && (!('updatedAt' in data) || data.updatedAt == null || isValidUpdatedAt(data.updatedAt));
+    }
+
+    function areMachineImmutableFieldsPreserved() {
+      return (!('id' in resource.data) || request.resource.data.id == resource.data.id)
+        && (!('machineId' in resource.data) || request.resource.data.machineId == resource.data.machineId)
+        && (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt);
+    }
+
+    // ===============================================================
+    // Domain Validators: Faults Collection
+    // ===============================================================
+
     function isValidFaultType(type) {
       return type in [
         'Mechanical',
@@ -39,120 +192,353 @@ service cloud.firestore {
       ];
     }
 
-    // Helper function: Validate allowed fault severities matching AppConstants.severities
     function isValidFaultSeverity(severity) {
       return severity in ['Low', 'Medium', 'High', 'Critical'];
     }
 
-    // Helper function: Validate allowed fault statuses matching AppConstants.faultStatuses
     function isValidFaultStatus(status) {
       return status in ['Open', 'In Progress', 'Resolved'];
     }
 
-    // Helper function: Validate fault document creation schema and constraints
-    function isValidFaultCreate() {
-      let data = request.resource.data;
-      return isAuthenticated()
-        // Required fields must exist, be strings, and satisfy constraints
-        && ('machineId' in data) && data.machineId is string && data.machineId.size() > 0
+    function isValidFault(data) {
+      return data.keys().hasOnly(['id', 'faultId', 'machineId', 'machineName', 'type', 'severity', 'description', 'reportedBy', 'reportedByName', 'status', 'imageUrl', 'createdAt'])
+        && ('machineId' in data) && data.machineId is string && data.machineId.size() > 0 && data.machineId.size() <= 100
         && ('type' in data) && data.type is string && isValidFaultType(data.type)
         && ('severity' in data) && data.severity is string && isValidFaultSeverity(data.severity)
-        && ('description' in data) && data.description is string && data.description.size() > 0
-        && ('reportedBy' in data) && data.reportedBy is string && data.reportedBy == request.auth.uid
+        && ('description' in data) && data.description is string && data.description.size() > 0 && data.description.size() <= 2000
+        && ('reportedBy' in data) && data.reportedBy is string && data.reportedBy.size() > 0 && data.reportedBy.size() <= 128
         && ('status' in data) && data.status is string && isValidFaultStatus(data.status)
-        // Optional fields validate if present
-        && (!('machineName' in data) || data.machineName == null || data.machineName is string)
-        && (!('reportedByName' in data) || data.reportedByName == null || data.reportedByName is string)
-        && (!('imageUrl' in data) || data.imageUrl == null || data.imageUrl is string)
-        && (!('id' in data) || data.id == null || data.id is string)
-        && (!('faultId' in data) || data.faultId == null || data.faultId is string)
-        && (!('createdAt' in data) || data.createdAt == null || data.createdAt is timestamp || data.createdAt is string);
+        && (!('id' in data) || data.id == null || (data.id is string && data.id.size() <= 100))
+        && (!('faultId' in data) || data.faultId == null || (data.faultId is string && data.faultId.size() <= 100))
+        && (!('machineName' in data) || data.machineName == null || (data.machineName is string && data.machineName.size() <= 100))
+        && (!('reportedByName' in data) || data.reportedByName == null || (data.reportedByName is string && data.reportedByName.size() <= 100))
+        && (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000))
+        && (!('createdAt' in data) || data.createdAt == null || isValidCreatedAt(data.createdAt));
     }
+
+    function areFaultImmutableFieldsPreserved() {
+      return request.resource.data.reportedBy == resource.data.reportedBy
+        && request.resource.data.machineId == resource.data.machineId
+        && (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt)
+        && (!('id' in resource.data) || request.resource.data.id == resource.data.id)
+        && (!('faultId' in resource.data) || request.resource.data.faultId == resource.data.faultId);
+    }
+
+    // ===============================================================
+    // Domain Validators: Maintenance Collection
+    // ===============================================================
+
+    function isValidMaintenancePriority(priority) {
+      return priority in ['Low', 'Medium', 'High', 'Critical'];
+    }
+
+    function isValidMaintenanceStatus(status) {
+      return status in ['Pending', 'In Progress', 'Resolved'];
+    }
+
+    function isValidMaintenance(data) {
+      return data.keys().hasOnly(['id', 'maintenanceId', 'machineId', 'machineName', 'faultId', 'technicianId', 'technicianName', 'priority', 'status', 'notes', 'createdAt', 'updatedAt', 'updateHistory'])
+        && ('machineId' in data) && data.machineId is string && data.machineId.size() > 0 && data.machineId.size() <= 100
+        && ('technicianId' in data) && data.technicianId is string && data.technicianId.size() > 0 && data.technicianId.size() <= 128
+        && ('priority' in data) && data.priority is string && isValidMaintenancePriority(data.priority)
+        && ('status' in data) && data.status is string && isValidMaintenanceStatus(data.status)
+        && (!('id' in data) || data.id == null || (data.id is string && data.id.size() <= 100))
+        && (!('maintenanceId' in data) || data.maintenanceId == null || (data.maintenanceId is string && data.maintenanceId.size() <= 100))
+        && (!('machineName' in data) || data.machineName == null || (data.machineName is string && data.machineName.size() <= 100))
+        && (!('faultId' in data) || data.faultId == null || (data.faultId is string && data.faultId.size() <= 100))
+        && (!('technicianName' in data) || data.technicianName == null || (data.technicianName is string && data.technicianName.size() <= 100))
+        && (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 2000))
+        && (!('createdAt' in data) || data.createdAt == null || isValidCreatedAt(data.createdAt))
+        && (!('updatedAt' in data) || data.updatedAt == null || isValidUpdatedAt(data.updatedAt))
+        && (!('updateHistory' in data) || data.updateHistory == null || data.updateHistory is map);
+    }
+
+    // Checks if the maintenance task is assigned to the authenticated user
+    function isTaskAssignedToCurrentUser() {
+      return isAuthenticated() && resource.data.technicianId == request.auth.uid;
+    }
+
+    // Preserves original task assignment fields and prevents tampering
+    function areMaintenanceImmutableFieldsPreserved() {
+      return (!('id' in resource.data) || request.resource.data.id == resource.data.id)
+        && (!('machineId' in resource.data) || request.resource.data.machineId == resource.data.machineId)
+        && (!('technicianId' in resource.data) || request.resource.data.technicianId == resource.data.technicianId)
+        && (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt)
+        && (
+          ('notes' in resource.data)
+            ? (('notes' in request.resource.data) && request.resource.data.notes == resource.data.notes)
+            : (!('notes' in request.resource.data) || request.resource.data.notes == null)
+        )
+        && (!('maintenanceId' in resource.data) || request.resource.data.maintenanceId == resource.data.maintenanceId)
+        && (!('faultId' in resource.data) || request.resource.data.faultId == resource.data.faultId)
+        && (!('priority' in resource.data) || request.resource.data.priority == resource.data.priority)
+        && (!('machineName' in resource.data) || request.resource.data.machineName == resource.data.machineName)
+        && (!('technicianName' in resource.data) || request.resource.data.technicianName == resource.data.technicianName);
+    }
+
+    // Validates state machine workflow transitions:
+    // Pending -> Pending (note/proof log) | In Progress
+    // In Progress -> In Progress (note/proof log) | Resolved
+    // Resolved is strictly terminal
+    function isValidMaintenanceStatusTransition() {
+      let prev = resource.data.status;
+      let next = request.resource.data.status;
+      return (prev == 'Pending' && (next == 'Pending' || next == 'In Progress'))
+        || (prev == 'In Progress' && (next == 'In Progress' || next == 'Resolved'));
+    }
+
+    // Validates an individual maintenance updateHistory entry
+    function isValidUpdateHistoryEntry(entry) {
+      return entry is map
+        && ('updatedBy' in entry)
+        && entry.updatedBy == request.auth.uid
+        && (!('id' in entry) || (entry.id is string && entry.id.size() <= 100))
+        && (!('taskId' in entry) || (entry.taskId is string && entry.taskId.size() <= 100))
+        && (!('previousStatus' in entry) || (entry.previousStatus is string && entry.previousStatus.size() <= 50))
+        && (!('newStatus' in entry) || (entry.newStatus is string && entry.newStatus.size() <= 50))
+        && (!('notes' in entry) || entry.notes == null || (entry.notes is string && entry.notes.size() <= 2000))
+        && (!('proofImageUrl' in entry) || entry.proofImageUrl == null || (entry.proofImageUrl is string && entry.proofImageUrl.size() <= 1000))
+        && (!('updatedAt' in entry) || entry.updatedAt is timestamp || (entry.updatedAt is string && entry.updatedAt.size() <= 50));
+    }
+
+    // Verifies whether an update entry includes repair notes or photo proof URL
+    function hasProofOrNotes(entry) {
+      return (('notes' in entry) && entry.notes is string && entry.notes.size() > 0)
+        || (('proofImageUrl' in entry) && entry.proofImageUrl is string && entry.proofImageUrl.size() > 0);
+    }
+
+    // Validates initial history map creation (task created without history, first update entry appended)
+    function isValidNewHistory() {
+      let history = request.resource.data.updateHistory;
+      let keys = history.keys();
+      let entry = history[keys[0]];
+      return keys.size() == 1
+        && isValidUpdateHistoryEntry(entry)
+        && (request.resource.data.status != resource.data.status || hasProofOrNotes(entry));
+    }
+
+    // Helper to find the newly added key in updateHistory using rules.List.removeAll
+    function getAddedHistoryKey() {
+      let allKeys = request.resource.data.updateHistory.keys();
+      let oldKeys = resource.data.updateHistory.keys();
+      return allKeys.removeAll(oldKeys)[0];
+    }
+
+    // Validates append-only history update: existing keys preserved, exactly 1 entry added, updatedBy verified
+    function isValidExistingHistory() {
+      let diff = request.resource.data.updateHistory.diff(resource.data.updateHistory);
+      let addedKey = getAddedHistoryKey();
+      let entry = request.resource.data.updateHistory[addedKey];
+      return diff.removedKeys().size() == 0
+        && diff.changedKeys().size() == 0
+        && diff.addedKeys().size() == 1
+        && isValidUpdateHistoryEntry(entry)
+        && (request.resource.data.status != resource.data.status || hasProofOrNotes(entry));
+    }
+
+    // Master validator for updateHistory map integrity and proof requirements
+    function isValidMaintenanceHistoryUpdate() {
+      return ('updateHistory' in request.resource.data)
+        && (request.resource.data.updateHistory is map)
+        && (
+          (!('updateHistory' in resource.data) || resource.data.updateHistory == null || !(resource.data.updateHistory is map) || resource.data.updateHistory.keys().size() == 0)
+            ? isValidNewHistory()
+            : isValidExistingHistory()
+        );
+    }
+
+    // ===============================================================
+    // Domain Validators: Alerts Collection
+    // ===============================================================
+
+    function isValidAlertSeverity(severity) {
+      return severity in ['Low', 'Medium', 'High', 'Critical', 'Warning'];
+    }
+
+    function isValidAlert(data) {
+      return data.keys().hasOnly(['id', 'alertId', 'machineId', 'machineName', 'type', 'severity', 'message', 'acknowledged', 'createdAt', 'updatedAt'])
+        && ('machineId' in data) && data.machineId is string && data.machineId.size() > 0 && data.machineId.size() <= 100
+        && ('type' in data) && data.type is string && data.type.size() > 0 && data.type.size() <= 100
+        && ('severity' in data) && data.severity is string && isValidAlertSeverity(data.severity)
+        && ('message' in data) && data.message is string && data.message.size() > 0 && data.message.size() <= 1000
+        && ('acknowledged' in data) && data.acknowledged is bool
+        && (!('id' in data) || data.id == null || (data.id is string && data.id.size() <= 100))
+        && (!('alertId' in data) || data.alertId == null || (data.alertId is string && data.alertId.size() <= 100))
+        && (!('machineName' in data) || data.machineName == null || (data.machineName is string && data.machineName.size() <= 100))
+        && (!('createdAt' in data) || data.createdAt == null || isValidCreatedAt(data.createdAt))
+        && (!('updatedAt' in data) || data.updatedAt == null || isValidUpdatedAt(data.updatedAt));
+    }
+
+    // ===============================================================
+    // Collection Match Rules
+    // ===============================================================
 
     // --- USERS COLLECTION ---
     // Canonical path: /users/{userId} where userId == FirebaseAuth.currentUser.uid
     match /users/{userId} {
-      // Any authenticated user can read user profiles (needed for technician/manager names & greetings)
+      // Authenticated users can read user profiles (needed for technician/manager names & greetings)
       allow read: if isAuthenticated();
 
       // On CREATE:
       // 1. Must be authenticated and creating their own document
-      // 2. Newly registered users CANNOT assign themselves the 'manager' role
+      // 2. Client UID must match userId and authenticated UID
       // 3. Allowed client-assigned roles are strictly 'operator' or 'technician'
-      // 4. UID in document must match authenticated UID
+      // 4. Newly registered users CANNOT assign themselves the 'manager' role
+      // 5. Must satisfy user profile domain validator
       allow create: if isAuthenticated()
         && request.auth.uid == userId
         && request.resource.data.uid == userId
         && request.resource.data.role in ['operator', 'technician']
-        && request.resource.data.role != 'manager';
+        && request.resource.data.role != 'manager'
+        && isValidUser(request.resource.data);
 
       // On UPDATE:
-      // 1. Manager updating another user's profile: can update role, but role must be recognized
+      // 1. Manager updating another user's profile: can update role to a recognized role
+      //    (['operator', 'technician', 'manager']); cannot alter immutable uid, userId, email, createdAt
       // 2. Any user updating their own profile: can ONLY edit permitted profile fields
-      //    (displayName, name, updatedAt); cannot alter role, uid, userId, or createdAt
-      allow update: if isAuthenticated() && (
+      //    (displayName, name, updatedAt); cannot alter role, uid, userId, email, or createdAt
+      // 3. Both branches must strictly satisfy domain schema validator
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (
         (
           isManager()
           && request.auth.uid != userId
           && request.resource.data.role in ['operator', 'technician', 'manager']
-        ) ||
-        (
+          && request.resource.data.uid == resource.data.uid
+          && (!('userId' in resource.data) || request.resource.data.userId == resource.data.userId)
+          && (!('email' in resource.data) || request.resource.data.email == resource.data.email)
+          && (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'updatedAt'])
+        ) || (
           request.auth.uid == userId
           && request.resource.data.role == resource.data.role
           && request.resource.data.uid == resource.data.uid
-          && request.resource.data.createdAt == resource.data.createdAt
+          && (!('userId' in resource.data) || request.resource.data.userId == resource.data.userId)
+          && (!('email' in resource.data) || request.resource.data.email == resource.data.email)
+          && (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'name', 'updatedAt'])
         )
       );
 
       // On DELETE:
-      // Managers can delete other user accounts, but CANNOT delete their own account
+      // Managers can delete other accounts, but CANNOT delete their own account
       allow delete: if isManager() && request.auth.uid != userId;
     }
 
     // --- MACHINES COLLECTION ---
+    // Canonical path: /machines/{machineId}
     match /machines/{machineId} {
+      // Authenticated users can inspect machine fleet status
       allow read: if isAuthenticated();
-      allow create, delete: if isManager();
-      allow update: if isAuthenticated();
+
+      // Only managers can create, update, or delete machine records
+      allow create: if isManager()
+        && isValidMachine(request.resource.data)
+        && (!('id' in request.resource.data) || request.resource.data.id == machineId)
+        && (!('machineId' in request.resource.data) || request.resource.data.machineId == machineId);
+
+      allow update: if isManager()
+        && isValidMachine(request.resource.data)
+        && areMachineImmutableFieldsPreserved();
+
+      allow delete: if isManager();
     }
 
     // --- FAULTS COLLECTION ---
-    // Path: /faults/{faultId}
-    // Schema:
-    //   - machineId: string (required, non-empty) - target machine reference ID
-    //   - type: string (required) - category: Mechanical, Electrical, Hydraulic, Thermal, Pneumatic, Other
-    //   - severity: string (required) - Low, Medium, High, Critical
-    //   - description: string (required, non-empty) - symptom narrative
-    //   - reportedBy: string (required) - Firebase Auth UID of reporting user (must match auth.uid)
-    //   - status: string (required) - Open, In Progress, Resolved
-    //   - machineName: string (optional) - denormalized machine name
-    //   - reportedByName: string (optional) - denormalized reporting user name
-    //   - imageUrl: string (optional) - Firebase Storage image download URL
-    //   - createdAt: timestamp | string (optional) - incident report timestamp
-    //   - id / faultId: string (optional) - document ID alias
+    // Canonical path: /faults/{faultId}
     match /faults/{faultId} {
+      // Authenticated users can read fault incidents
       allow read: if isAuthenticated();
-      allow create: if isValidFaultCreate();
+
+      // Authenticated users can log faults for themselves:
+      // - Must set reportedBy to authenticated UID
+      // - Must satisfy schema validator with valid type, severity, and initial status
+      allow create: if isAuthenticated()
+        && request.resource.data.reportedBy == request.auth.uid
+        && isValidFault(request.resource.data);
+
+      // Technicians and managers can perform authorized resolution operations.
+      // Original reporter (operator) may update symptom notes/images without changing status.
+      // Unrelated operators cannot modify faults, and operators cannot resolve faults.
       allow update: if isAuthenticated()
-        && request.resource.data.reportedBy == resource.data.reportedBy
-        && (isTechnician() || isManager() || resource.data.reportedBy == request.auth.uid);
+        && areFaultImmutableFieldsPreserved()
+        && isValidFault(request.resource.data)
+        && (
+          isManager()
+          || isTechnician()
+          || (
+            resource.data.reportedBy == request.auth.uid
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['description', 'imageUrl'])
+          )
+        );
+
+      // Only managers can delete fault records
       allow delete: if isManager();
     }
 
     // --- MAINTENANCE COLLECTION ---
+    // Canonical path: /maintenance/{taskId}
     match /maintenance/{taskId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (isTechnician() || isManager());
-      allow update: if isAuthenticated() && (isTechnician() || isManager());
+      // Maintenance read authorization:
+      // - Manager: can read all maintenance records
+      // - Technician: can read only records assigned to their authenticated UID
+      // - Operator: cannot read maintenance records
+      // - Unauthenticated users: cannot read
+      allow read: if isAuthenticated()
+        && (isManager() || (isTechnician() && isTaskAssignedToCurrentUser()));
+
+      // Only managers can create and assign maintenance tasks:
+      // - Initial status must strictly be 'Pending'
+      // - Validated against maintenance schema
+      allow create: if isManager()
+        && isValidMaintenance(request.resource.data)
+        && request.resource.data.status == 'Pending';
+
+      // Updates permitted strictly for:
+      // 1. Plant Manager, OR
+      // 2. Assigned technician (technicianId == request.auth.uid)
+      // Operators CANNOT modify maintenance tasks
+      //
+      // Invariant checks:
+      // - Preserves original assignment fields: id, machineId, technicianId, notes, createdAt
+      // - Terminal status: Resolved tasks cannot be modified (resource.data.status != 'Resolved')
+      // - Valid target status: status in ['Pending', 'In Progress', 'Resolved']
+      // - Valid workflow transitions:
+      //     Pending -> Pending | In Progress
+      //     In Progress -> In Progress | Resolved
+      // - updateHistory validation:
+      //     Existing history keys preserved
+      //     Added entry must record updatedBy == request.auth.uid (no spoofing)
+      //     Same-status update requires technician notes or photo proof URL
+      allow update: if isAuthenticated()
+        && (isManager() || (isTechnician() && isTaskAssignedToCurrentUser()))
+        && resource.data.status != 'Resolved'
+        && isValidMaintenanceStatusTransition()
+        && areMaintenanceImmutableFieldsPreserved()
+        && isValidMaintenanceHistoryUpdate()
+        && isValidMaintenance(request.resource.data);
+
+      // Only managers can delete maintenance tasks
       allow delete: if isManager();
     }
 
     // --- ALERTS COLLECTION ---
+    // Canonical path: /alerts/{alertId}
     match /alerts/{alertId} {
+      // Authenticated users can read system alerts
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (isTechnician() || isManager());
+
+      // System alerts generated/created by managers
+      allow create: if isManager() && isValidAlert(request.resource.data);
+
+      // Only managers can update alerts (acknowledging alerts)
+      // Must only touch acknowledged and updatedAt fields; acknowledged must be boolean
+      allow update: if isManager()
+        && isValidAlert(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acknowledged', 'updatedAt'])
+        && request.resource.data.acknowledged is bool;
+
+      // Only managers can delete alerts
       allow delete: if isManager();
     }
   }

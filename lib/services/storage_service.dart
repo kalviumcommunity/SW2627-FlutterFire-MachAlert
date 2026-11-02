@@ -252,6 +252,7 @@ class StorageService {
     required String fileName,
     String contentType = 'image/jpeg',
     String folder = defaultFolder,
+    Map<String, String>? customMetadata,
   }) async {
     if (bytes.isEmpty) {
       throw StorageServiceException(
@@ -284,6 +285,7 @@ class StorageService {
       customMetadata: {
         'uploadedBy': user.uid.trim(),
         'originalFileName': sanitized,
+        ...?customMetadata,
       },
     );
 
