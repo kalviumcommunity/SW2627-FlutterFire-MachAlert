@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/machine_model.dart';
+import '../theme/app_theme.dart';
 
 class MachineListTile extends StatelessWidget {
   final MachineModel machine;
@@ -10,7 +11,7 @@ class MachineListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusStyle = _statusStyle(machine.status);
+    final status = _statusStyle(machine.status);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -18,23 +19,24 @@ class MachineListTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
           child: Row(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 51,
+                height: 51,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+                  color: const Color(0xFFF0F4F7),
+                  borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.precision_manufacturing,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  color: AppTheme.navy,
+                  size: 27,
                 ),
               ),
 
-              const SizedBox(width: 14),
+              const SizedBox(width: 13),
 
               Expanded(
                 child: Column(
@@ -42,22 +44,34 @@ class MachineListTile extends StatelessWidget {
                   children: [
                     Text(
                       machine.id,
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: AppTheme.navy,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
 
                     const SizedBox(height: 2),
 
                     Text(
                       machine.name,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF5F7282),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
 
-                    if (machine.productionLine.isNotEmpty) ...[
+                    if (machine.productionLine.trim().isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(
                         machine.productionLine,
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: const TextStyle(
+                          color: Color(0xFF94A1AD),
+                          fontSize: 10,
+                        ),
                       ),
                     ],
                   ],
@@ -73,26 +87,32 @@ class MachineListTile extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 8,
-                        height: 8,
+                        width: 7,
+                        height: 7,
                         decoration: BoxDecoration(
-                          color: statusStyle.color,
+                          color: status.color,
                           shape: BoxShape.circle,
                         ),
                       ),
-
-                      const SizedBox(width: 6),
-
+                      const SizedBox(width: 5),
                       Text(
-                        statusStyle.label,
-                        style: Theme.of(context).textTheme.bodySmall,
+                        status.label,
+                        style: TextStyle(
+                          color: status.color,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 7),
 
-                  const Icon(Icons.chevron_right, size: 20),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: Color(0xFF95A3AF),
+                    size: 19,
+                  ),
                 ],
               ),
             ],
@@ -106,21 +126,27 @@ class MachineListTile extends StatelessWidget {
     final normalized = status.trim().toLowerCase();
 
     if (normalized == 'operational' || normalized == 'running') {
-      return const _MachineStatusStyle(label: 'Running', color: Colors.green);
+      return const _MachineStatusStyle(label: 'Running', color: AppTheme.green);
     }
 
     if (normalized.contains('maintenance') || normalized == 'warning') {
       return const _MachineStatusStyle(
-        label: 'Under Maintenance',
-        color: Colors.orange,
+        label: 'Maintenance',
+        color: AppTheme.warning,
       );
     }
 
     if (normalized == 'critical' || normalized == 'breakdown') {
-      return const _MachineStatusStyle(label: 'Breakdown', color: Colors.red);
+      return const _MachineStatusStyle(
+        label: 'Breakdown',
+        color: AppTheme.danger,
+      );
     }
 
-    return const _MachineStatusStyle(label: 'Unknown', color: Colors.grey);
+    return const _MachineStatusStyle(
+      label: 'Unknown',
+      color: Color(0xFF8795A2),
+    );
   }
 }
 

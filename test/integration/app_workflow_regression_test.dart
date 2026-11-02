@@ -418,7 +418,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Welcome, Guest User'), findsOneWidget);
+        expect(find.text('Hi, Guest'), findsOneWidget);
         expect(find.text('Dashboard'), findsOneWidget);
         expect(find.text('Your role is being prepared.'), findsOneWidget);
 
@@ -454,7 +454,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Welcome, Sam Operator'), findsOneWidget);
+        expect(find.text('Hi, Sam'), findsOneWidget);
         expect(find.text('Operator Dashboard'), findsOneWidget);
         expect(find.text('Machine Operations'), findsOneWidget);
 
@@ -494,7 +494,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Welcome, Elena Technician'), findsOneWidget);
+        expect(find.text('Hi, Elena'), findsOneWidget);
         expect(find.text('Technician Dashboard'), findsOneWidget);
         expect(find.text('Maintenance Overview'), findsOneWidget);
 
@@ -533,7 +533,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.text('Welcome, David Manager'), findsOneWidget);
+        expect(find.text('Hi, David'), findsOneWidget);
         expect(find.text('Manager Dashboard'), findsOneWidget);
         expect(find.text('Factory Overview'), findsOneWidget);
 

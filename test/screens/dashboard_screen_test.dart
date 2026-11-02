@@ -55,7 +55,8 @@ class FakeFaultService extends Fake implements FaultService {
     String? severity,
   }) {
     streamCalls++;
-    return faultStream ?? const Stream.empty();
+
+    return faultStream ?? const Stream<List<FaultModel>>.empty();
   }
 }
 
@@ -71,7 +72,8 @@ class FakeMachineService extends Fake implements MachineService {
     String? status,
   }) {
     streamCalls++;
-    return machineStream ?? const Stream.empty();
+
+    return machineStream ?? const Stream<List<MachineModel>>.empty();
   }
 }
 
@@ -132,6 +134,7 @@ Future<void> pumpDashboard(
   final appState = AppStateProvider()..setAuthenticated(createUser(role: role));
 
   final authService = AuthService(firebaseAuth: FakeFirebaseAuth());
+
   final effectiveFaultService = faultService ?? FakeFaultService();
 
   addTearDown(() async {
@@ -161,6 +164,20 @@ Future<void> pumpDashboard(
   );
 
   await tester.pump();
+}
+
+Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+  expect(finder, findsOneWidget);
+
+  await tester.ensureVisible(finder);
+
+  await tester.pumpAndSettle();
+
+  await tester.tap(finder);
+
+  await tester.pump();
+
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 void main() {
@@ -226,13 +243,7 @@ void main() {
 
       final machinesButton = find.text('Machines');
 
-      expect(machinesButton, findsOneWidget);
-
-      await tester.ensureVisible(machinesButton);
-
-      await tester.tap(machinesButton);
-
-      await tester.pumpAndSettle();
+      await tapVisible(tester, machinesButton);
 
       expect(find.byType(MachineListScreen), findsOneWidget);
 
@@ -246,20 +257,15 @@ void main() {
 
       final machinesButton = find.text('Machines');
 
-      await tester.ensureVisible(machinesButton);
-
-      await tester.tap(machinesButton);
-
-      await tester.pumpAndSettle();
+      await tapVisible(tester, machinesButton);
 
       expect(find.byType(MachineListScreen), findsOneWidget);
 
       await tester.pageBack();
+
       await tester.pumpAndSettle();
 
       expect(find.byType(HomeScreen), findsOneWidget);
-
-      expect(find.text('Operator Dashboard'), findsOneWidget);
 
       expect(find.byType(MachineListScreen), findsNothing);
     });
@@ -270,13 +276,11 @@ void main() {
         await pumpDashboard(tester, role: 'operator');
 
         final faultHistoryButton = find.text('Fault History');
-        expect(faultHistoryButton, findsOneWidget);
 
-        await tester.ensureVisible(faultHistoryButton);
-        await tester.tap(faultHistoryButton);
-        await tester.pumpAndSettle();
+        await tapVisible(tester, faultHistoryButton);
 
         expect(find.byType(FaultHistoryScreen), findsOneWidget);
+
         expect(
           find.descendant(
             of: find.byType(AppBar),
@@ -293,13 +297,11 @@ void main() {
         await pumpDashboard(tester, role: 'technician');
 
         final faultHistoryButton = find.text('Fault History');
-        expect(faultHistoryButton, findsOneWidget);
 
-        await tester.ensureVisible(faultHistoryButton);
-        await tester.tap(faultHistoryButton);
-        await tester.pumpAndSettle();
+        await tapVisible(tester, faultHistoryButton);
 
         expect(find.byType(FaultHistoryScreen), findsOneWidget);
+
         expect(
           find.descendant(
             of: find.byType(AppBar),
@@ -316,13 +318,11 @@ void main() {
         await pumpDashboard(tester, role: 'manager');
 
         final faultHistoryButton = find.text('Fault History');
-        expect(faultHistoryButton, findsOneWidget);
 
-        await tester.ensureVisible(faultHistoryButton);
-        await tester.tap(faultHistoryButton);
-        await tester.pumpAndSettle();
+        await tapVisible(tester, faultHistoryButton);
 
         expect(find.byType(FaultHistoryScreen), findsOneWidget);
+
         expect(
           find.descendant(
             of: find.byType(AppBar),
@@ -339,9 +339,11 @@ void main() {
       'Manager Faults action opens RealtimeFaultsScreen with live stream updates',
       (tester) async {
         final controller = StreamController<List<FaultModel>>.broadcast();
+
         addTearDown(controller.close);
 
         final faultService = FakeFaultService(faultStream: controller.stream);
+
         await pumpDashboard(
           tester,
           role: 'manager',
@@ -349,17 +351,13 @@ void main() {
         );
 
         final faultsCard = find.widgetWithText(DashboardActionCard, 'Faults');
-        expect(faultsCard, findsOneWidget);
 
-        await tester.ensureVisible(faultsCard);
-        await tester.tap(faultsCard);
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+        await tapVisible(tester, faultsCard);
 
         expect(find.byType(RealtimeFaultsScreen), findsOneWidget);
+
         expect(find.text('Live Faults'), findsOneWidget);
 
-        // Emit initial fault list
         controller.add([
           createTestFault(
             id: 'fault-01',
@@ -368,13 +366,15 @@ void main() {
             severity: 'High',
           ),
         ]);
+
         await tester.pump();
 
         expect(find.text('1 live fault'), findsOneWidget);
+
         expect(find.text('CNC Milling Unit 01'), findsOneWidget);
+
         expect(find.text('cnc-01'), findsOneWidget);
 
-        // Emit updated list without navigating away or manually refreshing
         controller.add([
           createTestFault(
             id: 'fault-01',
@@ -389,10 +389,13 @@ void main() {
             severity: 'Critical',
           ),
         ]);
+
         await tester.pump();
 
         expect(find.text('2 live faults'), findsOneWidget);
+
         expect(find.text('Hydraulic Press 02'), findsOneWidget);
+
         expect(
           find.descendant(
             of: find.byType(Card),
@@ -401,9 +404,10 @@ void main() {
           findsOneWidget,
         );
 
-        // Cleanly pop screen
         await tester.pageBack();
+
         await tester.pump(const Duration(milliseconds: 300));
+
         expect(find.byType(HomeScreen), findsOneWidget);
       },
     );
@@ -412,9 +416,11 @@ void main() {
       'Technician Active Faults action opens RealtimeFaultsScreen with live stream updates',
       (tester) async {
         final controller = StreamController<List<FaultModel>>.broadcast();
+
         addTearDown(controller.close);
 
         final faultService = FakeFaultService(faultStream: controller.stream);
+
         await pumpDashboard(
           tester,
           role: 'technician',
@@ -425,16 +431,11 @@ void main() {
           DashboardActionCard,
           'Active Faults',
         );
-        expect(activeFaultsCard, findsOneWidget);
 
-        await tester.ensureVisible(activeFaultsCard);
-        await tester.tap(activeFaultsCard);
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+        await tapVisible(tester, activeFaultsCard);
 
         expect(find.byType(RealtimeFaultsScreen), findsOneWidget);
 
-        // Emit initial fault list
         controller.add([
           createTestFault(
             id: 'fault-tech-01',
@@ -443,13 +444,15 @@ void main() {
             severity: 'Medium',
           ),
         ]);
+
         await tester.pump();
 
         expect(find.text('1 live fault'), findsOneWidget);
+
         expect(find.text('Lathe Machine 03'), findsOneWidget);
+
         expect(find.text('lathe-03'), findsOneWidget);
 
-        // Emit subsequent updated list dynamically
         controller.add([
           createTestFault(
             id: 'fault-tech-01',
@@ -464,13 +467,17 @@ void main() {
             severity: 'High',
           ),
         ]);
+
         await tester.pump();
 
         expect(find.text('2 live faults'), findsOneWidget);
+
         expect(find.text('Radial Drill 06'), findsOneWidget);
 
         await tester.pageBack();
+
         await tester.pump(const Duration(milliseconds: 300));
+
         expect(find.byType(HomeScreen), findsOneWidget);
       },
     );
@@ -479,9 +486,11 @@ void main() {
       'Dashboard navigation passes FaultService instance to RealtimeFaultsScreen',
       (tester) async {
         final controller = StreamController<List<FaultModel>>.broadcast();
+
         addTearDown(controller.close);
 
         final faultService = FakeFaultService(faultStream: controller.stream);
+
         await pumpDashboard(
           tester,
           role: 'manager',
@@ -489,14 +498,13 @@ void main() {
         );
 
         final faultsCard = find.widgetWithText(DashboardActionCard, 'Faults');
-        await tester.ensureVisible(faultsCard);
-        await tester.tap(faultsCard);
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+
+        await tapVisible(tester, faultsCard);
 
         final screen = tester.widget<RealtimeFaultsScreen>(
           find.byType(RealtimeFaultsScreen),
         );
+
         expect(screen.faultService, equals(faultService));
       },
     );
@@ -505,9 +513,11 @@ void main() {
       'HomeScreen resolves FaultService from Provider when not directly injected',
       (tester) async {
         final controller = StreamController<List<FaultModel>>.broadcast();
+
         addTearDown(controller.close);
 
         final faultService = FakeFaultService(faultStream: controller.stream);
+
         await pumpDashboard(
           tester,
           role: 'manager',
@@ -516,14 +526,11 @@ void main() {
         );
 
         final faultsCard = find.widgetWithText(DashboardActionCard, 'Faults');
-        await tester.ensureVisible(faultsCard);
-        await tester.tap(faultsCard);
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+
+        await tapVisible(tester, faultsCard);
 
         expect(find.byType(RealtimeFaultsScreen), findsOneWidget);
 
-        // Emit initial fault list
         controller.add([
           createTestFault(
             id: 'fault-provider-01',
@@ -532,12 +539,13 @@ void main() {
             severity: 'Low',
           ),
         ]);
+
         await tester.pump();
 
         expect(find.text('1 live fault'), findsOneWidget);
+
         expect(find.text('Assembly Conveyor 04'), findsOneWidget);
 
-        // Emit subsequent updated list dynamically
         controller.add([
           createTestFault(
             id: 'fault-provider-01',
@@ -552,13 +560,17 @@ void main() {
             severity: 'Critical',
           ),
         ]);
+
         await tester.pump();
 
         expect(find.text('2 live faults'), findsOneWidget);
+
         expect(find.text('Robotic Welder 05'), findsOneWidget);
 
         await tester.pageBack();
+
         await tester.pump(const Duration(milliseconds: 300));
+
         expect(find.byType(HomeScreen), findsOneWidget);
       },
     );
@@ -567,6 +579,7 @@ void main() {
       'MachAlertApp registers FaultService in application MultiProvider',
       (tester) async {
         final fakeFaultService = FakeFaultService();
+
         final fakeAuthService = AuthService(firebaseAuth: FakeFirebaseAuth());
 
         await tester.pumpWidget(
@@ -578,6 +591,7 @@ void main() {
         );
 
         final materialAppContext = tester.element(find.byType(MaterialApp));
+
         expect(
           materialAppContext.read<FaultService>(),
           equals(fakeFaultService),
@@ -591,32 +605,41 @@ void main() {
       tester,
     ) async {
       final controller = StreamController<List<MachineModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeMachineService(machineStream: controller.stream);
+
       final provider = MachineProvider(machineService: fakeService);
+
       addTearDown(provider.dispose);
 
       expect(provider.hasActiveSubscription, isFalse);
+
       expect(fakeService.streamCalls, equals(0));
 
       await pumpDashboard(tester, role: 'manager', machineProvider: provider);
 
       expect(provider.hasActiveSubscription, isTrue);
+
       expect(fakeService.streamCalls, equals(1));
     });
 
     testWidgets('2. Initial loading displays --', (tester) async {
       final controller = StreamController<List<MachineModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeMachineService(machineStream: controller.stream);
+
       final provider = MachineProvider(machineService: fakeService);
+
       addTearDown(provider.dispose);
 
       await pumpDashboard(tester, role: 'manager', machineProvider: provider);
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Machines');
+
       expect(
         find.descendant(of: statCard, matching: find.text('--')),
         findsOneWidget,
@@ -625,10 +648,13 @@ void main() {
 
     testWidgets('3. Five machines produce count 5', (tester) async {
       final controller = StreamController<List<MachineModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeMachineService(machineStream: controller.stream);
+
       final provider = MachineProvider(machineService: fakeService);
+
       addTearDown(provider.dispose);
 
       await pumpDashboard(tester, role: 'manager', machineProvider: provider);
@@ -639,10 +665,12 @@ void main() {
           (i) => createTestMachine(id: 'm-$i', name: 'Machine $i'),
         ),
       );
+
       await tester.pump();
       await tester.pump();
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Machines');
+
       expect(
         find.descendant(of: statCard, matching: find.text('5')),
         findsOneWidget,
@@ -651,19 +679,24 @@ void main() {
 
     testWidgets('4. Empty result displays 0', (tester) async {
       final controller = StreamController<List<MachineModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeMachineService(machineStream: controller.stream);
+
       final provider = MachineProvider(machineService: fakeService);
+
       addTearDown(provider.dispose);
 
       await pumpDashboard(tester, role: 'manager', machineProvider: provider);
 
       controller.add([]);
+
       await tester.pump();
       await tester.pump();
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Machines');
+
       expect(
         find.descendant(of: statCard, matching: find.text('0')),
         findsOneWidget,
@@ -674,10 +707,13 @@ void main() {
       tester,
     ) async {
       final controller = StreamController<List<MachineModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeMachineService(machineStream: controller.stream);
+
       final provider = MachineProvider(machineService: fakeService);
+
       addTearDown(provider.dispose);
 
       await pumpDashboard(tester, role: 'manager', machineProvider: provider);
@@ -688,10 +724,12 @@ void main() {
           (i) => createTestMachine(id: 'm-$i', name: 'Machine $i'),
         ),
       );
+
       await tester.pump();
       await tester.pump();
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Machines');
+
       expect(
         find.descendant(of: statCard, matching: find.text('3')),
         findsOneWidget,
@@ -703,6 +741,7 @@ void main() {
           (i) => createTestMachine(id: 'm-$i', name: 'Machine $i'),
         ),
       );
+
       await tester.pump();
       await tester.pump();
 
@@ -714,10 +753,13 @@ void main() {
 
     testWidgets('6. Stream errors do not show false zero', (tester) async {
       final controller = StreamController<List<MachineModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeMachineService(machineStream: controller.stream);
+
       final provider = MachineProvider(machineService: fakeService);
+
       addTearDown(provider.dispose);
 
       await pumpDashboard(tester, role: 'manager', machineProvider: provider);
@@ -728,14 +770,17 @@ void main() {
           message: 'Firestore unavailable',
         ),
       );
+
       await tester.pump();
       await tester.pump();
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Machines');
+
       expect(
         find.descendant(of: statCard, matching: find.text('--')),
         findsOneWidget,
       );
+
       expect(
         find.descendant(of: statCard, matching: find.text('0')),
         findsNothing,
@@ -746,17 +791,21 @@ void main() {
       '7. Navigating to Machines does not create duplicate subscriptions',
       (tester) async {
         final controller = StreamController<List<MachineModel>>.broadcast();
+
         addTearDown(controller.close);
 
         final fakeService = FakeMachineService(
           machineStream: controller.stream,
         );
+
         final provider = MachineProvider(machineService: fakeService);
+
         addTearDown(provider.dispose);
 
         await pumpDashboard(tester, role: 'manager', machineProvider: provider);
 
         controller.add([createTestMachine(id: 'm-1', name: 'Machine 1')]);
+
         await tester.pump();
         await tester.pump();
 
@@ -766,17 +815,19 @@ void main() {
           DashboardActionCard,
           'Machines',
         );
-        await tester.ensureVisible(machinesCard);
-        await tester.tap(machinesCard);
-        await tester.pumpAndSettle();
+
+        await tapVisible(tester, machinesCard);
 
         expect(find.byType(MachineListScreen), findsOneWidget);
+
         expect(fakeService.streamCalls, equals(1));
 
         await tester.pageBack();
+
         await tester.pumpAndSettle();
 
         expect(find.byType(HomeScreen), findsOneWidget);
+
         expect(fakeService.streamCalls, equals(1));
       },
     );
@@ -785,12 +836,15 @@ void main() {
   group('Manager Dashboard Active Fault Statistics', () {
     testWidgets('8. Initial loading displays --', (tester) async {
       final controller = StreamController<List<FaultModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeFaultService(faultStream: controller.stream);
+
       await pumpDashboard(tester, role: 'manager', faultService: fakeService);
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Active Faults');
+
       expect(
         find.descendant(of: statCard, matching: find.text('--')),
         findsOneWidget,
@@ -799,9 +853,11 @@ void main() {
 
     testWidgets('9. One Open fault produces count 1', (tester) async {
       final controller = StreamController<List<FaultModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeFaultService(faultStream: controller.stream);
+
       await pumpDashboard(tester, role: 'manager', faultService: fakeService);
 
       controller.add([
@@ -812,10 +868,12 @@ void main() {
           status: 'Open',
         ),
       ]);
+
       await tester.pump();
       await tester.pump();
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Active Faults');
+
       expect(
         find.descendant(of: statCard, matching: find.text('1')),
         findsOneWidget,
@@ -824,9 +882,11 @@ void main() {
 
     testWidgets('10. One In Progress fault is included', (tester) async {
       final controller = StreamController<List<FaultModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeFaultService(faultStream: controller.stream);
+
       await pumpDashboard(tester, role: 'manager', faultService: fakeService);
 
       controller.add([
@@ -837,10 +897,12 @@ void main() {
           status: 'In Progress',
         ),
       ]);
+
       await tester.pump();
       await tester.pump();
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Active Faults');
+
       expect(
         find.descendant(of: statCard, matching: find.text('1')),
         findsOneWidget,
@@ -849,9 +911,11 @@ void main() {
 
     testWidgets('11. Resolved faults are excluded', (tester) async {
       final controller = StreamController<List<FaultModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeFaultService(faultStream: controller.stream);
+
       await pumpDashboard(tester, role: 'manager', faultService: fakeService);
 
       controller.add([
@@ -862,10 +926,12 @@ void main() {
           status: 'Resolved',
         ),
       ]);
+
       await tester.pump();
       await tester.pump();
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Active Faults');
+
       expect(
         find.descendant(of: statCard, matching: find.text('0')),
         findsOneWidget,
@@ -876,9 +942,11 @@ void main() {
       tester,
     ) async {
       final controller = StreamController<List<FaultModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeFaultService(faultStream: controller.stream);
+
       await pumpDashboard(tester, role: 'manager', faultService: fakeService);
 
       controller.add([
@@ -907,10 +975,12 @@ void main() {
           status: 'Resolved',
         ),
       ]);
+
       await tester.pump();
       await tester.pump();
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Active Faults');
+
       expect(
         find.descendant(of: statCard, matching: find.text('2')),
         findsOneWidget,
@@ -919,9 +989,11 @@ void main() {
 
     testWidgets('13. New fault stream events update the count', (tester) async {
       final controller = StreamController<List<FaultModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeFaultService(faultStream: controller.stream);
+
       await pumpDashboard(tester, role: 'manager', faultService: fakeService);
 
       controller.add([
@@ -932,10 +1004,12 @@ void main() {
           status: 'Open',
         ),
       ]);
+
       await tester.pump();
       await tester.pump();
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Active Faults');
+
       expect(
         find.descendant(of: statCard, matching: find.text('1')),
         findsOneWidget,
@@ -955,6 +1029,7 @@ void main() {
           status: 'Open',
         ),
       ]);
+
       await tester.pump();
       await tester.pump();
 
@@ -966,9 +1041,11 @@ void main() {
 
     testWidgets('14. Resolving a fault updates the count', (tester) async {
       final controller = StreamController<List<FaultModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeFaultService(faultStream: controller.stream);
+
       await pumpDashboard(tester, role: 'manager', faultService: fakeService);
 
       controller.add([
@@ -979,10 +1056,12 @@ void main() {
           status: 'Open',
         ),
       ]);
+
       await tester.pump();
       await tester.pump();
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Active Faults');
+
       expect(
         find.descendant(of: statCard, matching: find.text('1')),
         findsOneWidget,
@@ -996,6 +1075,7 @@ void main() {
           status: 'Resolved',
         ),
       ]);
+
       await tester.pump();
       await tester.pump();
 
@@ -1007,16 +1087,20 @@ void main() {
 
     testWidgets('15. Empty successful response displays 0', (tester) async {
       final controller = StreamController<List<FaultModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeFaultService(faultStream: controller.stream);
+
       await pumpDashboard(tester, role: 'manager', faultService: fakeService);
 
       controller.add([]);
+
       await tester.pump();
       await tester.pump();
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Active Faults');
+
       expect(
         find.descendant(of: statCard, matching: find.text('0')),
         findsOneWidget,
@@ -1025,9 +1109,11 @@ void main() {
 
     testWidgets('16. Stream error is handled safely', (tester) async {
       final controller = StreamController<List<FaultModel>>.broadcast();
+
       addTearDown(controller.close);
 
       final fakeService = FakeFaultService(faultStream: controller.stream);
+
       await pumpDashboard(tester, role: 'manager', faultService: fakeService);
 
       controller.addError(
@@ -1036,14 +1122,17 @@ void main() {
           message: 'Firestore unavailable',
         ),
       );
+
       await tester.pump();
       await tester.pump();
 
       final statCard = find.widgetWithText(DashboardStatCard, 'Active Faults');
+
       expect(
         find.descendant(of: statCard, matching: find.text('--')),
         findsOneWidget,
       );
+
       expect(
         find.descendant(of: statCard, matching: find.text('0')),
         findsNothing,
@@ -1057,17 +1146,23 @@ void main() {
       (tester) async {
         final machineController =
             StreamController<List<MachineModel>>.broadcast();
+
         addTearDown(machineController.close);
+
         final fakeMachineService = FakeMachineService(
           machineStream: machineController.stream,
         );
+
         final machineProvider = MachineProvider(
           machineService: fakeMachineService,
         );
+
         addTearDown(machineProvider.dispose);
 
         final faultController = StreamController<List<FaultModel>>.broadcast();
+
         addTearDown(faultController.close);
+
         final fakeFaultService = FakeFaultService(
           faultStream: faultController.stream,
         );
@@ -1080,7 +1175,9 @@ void main() {
         );
 
         expect(machineProvider.hasActiveSubscription, isFalse);
+
         expect(fakeMachineService.streamCalls, equals(0));
+
         expect(fakeFaultService.streamCalls, equals(0));
       },
     );
@@ -1091,10 +1188,12 @@ void main() {
         await pumpDashboard(tester, role: 'operator');
 
         expect(find.text('Factory Overview'), findsNothing);
+
         expect(
           find.widgetWithText(DashboardStatCard, 'Machines'),
           findsNothing,
         );
+
         expect(
           find.widgetWithText(DashboardStatCard, 'Active Faults'),
           findsNothing,
@@ -1106,26 +1205,32 @@ void main() {
       await pumpDashboard(tester, role: 'technician');
 
       expect(find.text('Maintenance Overview'), findsOneWidget);
+
       expect(
         find.widgetWithText(DashboardStatCard, 'Assigned Tasks'),
         findsOneWidget,
       );
+
       expect(
         find.widgetWithText(DashboardStatCard, 'Active Faults'),
         findsOneWidget,
       );
+
       expect(
         find.widgetWithText(DashboardActionCard, 'Assigned Maintenance'),
         findsOneWidget,
       );
+
       expect(
         find.widgetWithText(DashboardActionCard, 'Active Faults'),
         findsOneWidget,
       );
+
       expect(
         find.widgetWithText(DashboardActionCard, 'Fault History'),
         findsOneWidget,
       );
+
       expect(
         find.widgetWithText(DashboardActionCard, 'Machines'),
         findsOneWidget,

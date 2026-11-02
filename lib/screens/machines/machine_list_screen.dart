@@ -4,10 +4,12 @@ import 'package:provider/provider.dart';
 import '../../models/machine_model.dart';
 import '../../providers/app_state_provider.dart';
 import '../../providers/machine_provider.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_constants.dart';
 import '../../utils/app_routes.dart';
-import '../../widgets/machine_list_tile.dart';
 import '../../widgets/app_state_view.dart';
+import '../../widgets/machine_list_tile.dart';
+import '../../widgets/main_bottom_navigation.dart';
 
 class MachineListScreen extends StatefulWidget {
   final List<MachineModel> machines;
@@ -31,10 +33,15 @@ class _MachineListScreenState extends State<MachineListScreen> {
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
+
       try {
         final provider = context.read<MachineProvider>();
+
         if (!provider.hasActiveSubscription && provider.machines.isEmpty) {
           provider.subscribeToMachines();
         }
@@ -45,13 +52,17 @@ class _MachineListScreenState extends State<MachineListScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+
     super.dispose();
   }
 
   bool _resolveCanManage(BuildContext context) {
     try {
-      final appState = Provider.of<AppStateProvider>(context, listen: false);
-      final role = appState.user?.role.trim().toLowerCase();
+      final role = Provider.of<AppStateProvider>(
+        context,
+        listen: false,
+      ).user?.role.trim().toLowerCase();
+
       return role == AppConstants.roleManager;
     } catch (_) {
       return false;
@@ -76,7 +87,7 @@ class _MachineListScreenState extends State<MachineListScreen> {
   void _showFilterMessage() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Advanced filtering will be added in a later task.'),
+        content: Text('Search by machine ID, name, line, or status.'),
       ),
     );
   }
@@ -91,7 +102,10 @@ class _MachineListScreenState extends State<MachineListScreen> {
   }
 
   void _openAddMachine(bool canManage) {
-    if (!canManage || !_resolveCanManage(context)) return;
+    if (!canManage || !_resolveCanManage(context)) {
+      return;
+    }
+
     Navigator.of(context).push<void>(AppRoutes.addMachine());
   }
 
@@ -99,38 +113,34 @@ class _MachineListScreenState extends State<MachineListScreen> {
   Widget build(BuildContext context) {
     final canManage = _resolveCanManage(context);
 
-    MachineProvider? machineProvider;
+    MachineProvider? provider;
+
     try {
-      machineProvider = context.watch<MachineProvider>();
+      provider = context.watch<MachineProvider>();
     } catch (_) {}
 
-    final bool useStaticList =
-        widget.machines.isNotEmpty || machineProvider == null;
+    final useStaticList = widget.machines.isNotEmpty || provider == null;
 
-    final List<MachineModel> machines = useStaticList
+    final machines = useStaticList
         ? _getFilteredStaticMachines()
-        : machineProvider.filteredMachines;
+        : provider.filteredMachines;
 
-    final bool isLoading =
-        !useStaticList &&
-        machineProvider.isLoading &&
-        machineProvider.machines.isEmpty;
+    final isLoading =
+        !useStaticList && provider.isLoading && provider.machines.isEmpty;
 
-    final bool hasError =
-        !useStaticList &&
-        machineProvider.hasError &&
-        machineProvider.machines.isEmpty;
+    final hasError =
+        !useStaticList && provider.hasError && provider.machines.isEmpty;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Machines',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
+      appBar: AppBar(title: const Text('Machines')),
+      bottomNavigationBar: const MainBottomNavigation(currentIndex: 1),
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
-              onPressed: () => _openAddMachine(canManage),
+              backgroundColor: AppTheme.green,
+              foregroundColor: Colors.white,
+              onPressed: () {
+                _openAddMachine(canManage);
+              },
               icon: const Icon(Icons.add),
               label: const Text('Add Machine'),
             )
@@ -149,32 +159,66 @@ class _MachineListScreenState extends State<MachineListScreen> {
                         setState(() {
                           _searchQuery = value;
                         });
+
                         if (!useStaticList) {
-                          machineProvider?.setSearchQuery(value);
+                          provider?.setSearchQuery(value);
                         }
                       },
                       decoration: InputDecoration(
                         hintText: 'Search machines...',
                         prefixIcon: const Icon(Icons.search),
-                        filled: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                onPressed: () {
+                                  _searchController.clear();
+
+                                  setState(() {
+                                    _searchQuery = '';
+                                  });
+
+                                  if (!useStaticList) {
+                                    provider?.setSearchQuery('');
+                                  }
+                                },
+                                icon: const Icon(Icons.close),
+                              )
+                            : null,
                       ),
                     ),
                   ),
 
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 9),
 
-                  IconButton.filledTonal(
-                    tooltip: 'Filter machines',
-                    onPressed: _showFilterMessage,
-                    icon: const Icon(Icons.filter_alt_outlined),
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        foregroundColor: AppTheme.navy,
+                      ),
+                      onPressed: _showFilterMessage,
+                      child: const Icon(Icons.filter_alt_outlined),
+                    ),
                   ),
                 ],
               ),
             ),
+
+            if (!isLoading && !hasError && machines.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(17, 0, 17, 9),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${machines.length} ${machines.length == 1 ? 'machine' : 'machines'}',
+                    style: const TextStyle(
+                      color: Color(0xFF8494A2),
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
 
             Expanded(
               child: isLoading
@@ -184,21 +228,21 @@ class _MachineListScreenState extends State<MachineListScreen> {
                     )
                   : hasError
                   ? _buildErrorState(
-                      machineProvider.errorMessage,
-                      machineProvider.fetchMachines,
+                      provider.errorMessage,
+                      provider.fetchMachines,
                     )
                   : machines.isEmpty
                   ? _buildEmptyState(canManage)
                   : RefreshIndicator(
                       onRefresh: () async {
-                        if (machineProvider != null) {
+                        if (provider != null) {
                           try {
-                            await machineProvider.fetchMachines();
+                            await provider.fetchMachines();
                           } catch (_) {}
                         }
                       },
                       child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 90),
                         itemCount: machines.length,
                         itemBuilder: (context, index) {
                           final machine = machines[index];
@@ -219,13 +263,10 @@ class _MachineListScreenState extends State<MachineListScreen> {
     );
   }
 
-  Widget _buildErrorState(
-    String? errorMessage,
-    Future<void> Function() onRetry,
-  ) {
+  Widget _buildErrorState(String? message, Future<void> Function() onRetry) {
     return AppStateView.error(
       title: 'Unable to load machines',
-      message: errorMessage ?? 'Machine information could not be loaded. Check your connection and try again.',
+      message: message ?? 'Machine information could not be loaded. Check your connection and try again.',
       actionLabel: 'Retry',
       onAction: () {
         onRetry();
@@ -234,14 +275,14 @@ class _MachineListScreenState extends State<MachineListScreen> {
   }
 
   Widget _buildEmptyState(bool canManage) {
-    final isSearching = _searchQuery.trim().isNotEmpty;
+    final searching = _searchQuery.trim().isNotEmpty;
 
     return AppStateView.empty(
-      icon: isSearching
+      icon: searching
           ? Icons.search_off
           : Icons.precision_manufacturing_outlined,
-      title: isSearching ? 'No machines found' : 'No machines available',
-      message: isSearching
+      title: searching ? 'No machines found' : 'No machines available',
+      message: searching
           ? 'Try another machine name, ID, production line, or status.'
           : canManage
           ? 'There are no machines yet. Use Add Machine to create the first machine.'
