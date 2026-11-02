@@ -289,6 +289,7 @@ class _MaintenanceListScreenState extends State<MaintenanceListScreen> {
                                           : 'Today',
                                       dateLabel: 'Assigned',
                                       notes: item.notes,
+                                      maintenanceService: _resolvedService,
                                     ),
                                   ),
                                 );
@@ -644,7 +645,7 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (status) {
-      'Completed' => Colors.green,
+      'Completed' || 'Resolved' => Colors.green,
       'In Progress' => Colors.blue,
       _ => Colors.orange,
     };
