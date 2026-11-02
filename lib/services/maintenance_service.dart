@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/maintenance_model.dart';
+import '../models/maintenance_update_model.dart';
 import '../utils/app_constants.dart';
 
 /// Exception thrown by [MaintenanceService] operations when Firestore operations fail
@@ -59,6 +60,12 @@ class MaintenanceServiceException implements Exception {
         return 'The specified maintenance priority is invalid.';
       case 'invalid-status':
         return 'The specified maintenance status is invalid.';
+      case 'invalid-status-transition':
+        return 'The requested maintenance status transition is not permitted.';
+      case 'task-already-resolved':
+        return 'This maintenance task has already been resolved and cannot be modified.';
+      case 'no-status-change':
+        return 'Status update must include a status change, note, or photo proof.';
       case 'invalid-argument':
         return 'Invalid maintenance data provided.';
       case 'unknown':
@@ -198,6 +205,81 @@ class MaintenanceService {
   static String? normalizeStatusFilter(String? status) {
     if (status == null || status.trim().isEmpty) return null;
     return validateStatus(status, allowCompletedAlias: true);
+  }
+
+  /// Validates a proposed maintenance status transition.
+  ///
+  /// Allowed transitions:
+  /// - Pending -> In Progress
+  /// - In Progress -> Resolved
+  ///
+  /// Terminal behavior:
+  /// - Resolved is terminal; attempts to transition away from Resolved throw
+  ///   [MaintenanceServiceException] with code 'task-already-resolved'.
+  ///
+  /// Same-status behavior:
+  /// - Allowed when non-empty [notes] or [proofImageUrl] is provided (creates a repair log).
+  /// - Rejected with code 'no-status-change' when no new note or proof is supplied.
+  ///
+  /// Invalid transitions:
+  /// - Pending -> Resolved is rejected with code 'invalid-status-transition'.
+  /// - In Progress -> Pending is rejected with code 'invalid-status-transition'.
+  static void validateStatusTransition({
+    required String currentStatus,
+    required String targetStatus,
+    String? notes,
+    String? proofImageUrl,
+  }) {
+    final normalizedCurrent = validateStatus(
+      currentStatus,
+      allowCompletedAlias: false,
+    );
+    final normalizedTarget = validateStatus(
+      targetStatus,
+      allowCompletedAlias: true,
+    );
+
+    if (normalizedCurrent == AppConstants.maintenanceStatusResolved) {
+      throw MaintenanceServiceException(
+        code: 'task-already-resolved',
+        message: MaintenanceServiceException.messageForErrorCode(
+          'task-already-resolved',
+        ),
+      );
+    }
+
+    final trimmedNotes = notes?.trim();
+    final trimmedProof = proofImageUrl?.trim();
+    final hasContent =
+        (trimmedNotes != null && trimmedNotes.isNotEmpty) ||
+        (trimmedProof != null && trimmedProof.isNotEmpty);
+
+    if (normalizedCurrent == normalizedTarget) {
+      if (!hasContent) {
+        throw MaintenanceServiceException(
+          code: 'no-status-change',
+          message: MaintenanceServiceException.messageForErrorCode(
+            'no-status-change',
+          ),
+        );
+      }
+      return;
+    }
+
+    final isAllowed =
+        (normalizedCurrent == AppConstants.maintenanceStatusPending &&
+            normalizedTarget == AppConstants.maintenanceStatusInProgress) ||
+        (normalizedCurrent == AppConstants.maintenanceStatusInProgress &&
+            normalizedTarget == AppConstants.maintenanceStatusResolved);
+
+    if (!isAllowed) {
+      throw MaintenanceServiceException(
+        code: 'invalid-status-transition',
+        message: MaintenanceServiceException.messageForErrorCode(
+          'invalid-status-transition',
+        ),
+      );
+    }
   }
 
   /// Checks whether a given priority matches a recognized severity (case-insensitive).
@@ -608,5 +690,278 @@ class MaintenanceService {
       machineId: machineId,
       priority: priority,
     );
+  }
+
+  /// Updates the maintenance status of task `maintenance/{taskId}` and appends a repair history log entry.
+  ///
+  /// Requirements:
+  /// - Requires an authenticated Firebase user.
+  /// - Validates and trims [taskId].
+  /// - Converts UI status 'Completed' into canonical 'Resolved'.
+  /// - Validates status transition using [validateStatusTransition].
+  /// - Performs atomic status update and history append inside a Firestore transaction.
+  /// - Uses [FieldValue.serverTimestamp()] for `updatedAt` on task and history entry.
+  /// - Preserves original assignment `notes` field on the parent document.
+  /// - Stores authenticated user UID in history entry's `updatedBy`.
+  /// - Appends into the `updateHistory` map field on the parent document.
+  ///
+  /// Throws [MaintenanceServiceException] if unauthenticated, not found, or validation fails.
+  Future<void> updateMaintenanceStatus({
+    required String taskId,
+    required String status,
+    String? notes,
+    String? proofImageUrl,
+  }) async {
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null || currentUser.uid.trim().isEmpty) {
+      throw MaintenanceServiceException(
+        code: 'unauthenticated',
+        message: MaintenanceServiceException.messageForErrorCode(
+          'unauthenticated',
+        ),
+      );
+    }
+    final actorUid = currentUser.uid.trim();
+
+    final trimmedTaskId = taskId.trim();
+    if (trimmedTaskId.isEmpty) {
+      throw MaintenanceServiceException(
+        code: 'invalid-id',
+        message: MaintenanceServiceException.messageForErrorCode('invalid-id'),
+      );
+    }
+
+    final trimmedNotes = (notes != null && notes.trim().isNotEmpty)
+        ? notes.trim()
+        : null;
+    final trimmedProof =
+        (proofImageUrl != null && proofImageUrl.trim().isNotEmpty)
+        ? proofImageUrl.trim()
+        : null;
+
+    // Validate target status syntax early (normalizes Completed to Resolved)
+    final normalizedTargetStatus = validateStatus(
+      status,
+      allowCompletedAlias: true,
+    );
+
+    // Pre-generate collision-resistant history entry ID before transaction
+    final historyEntryId = _maintenanceCollection.doc().id;
+    final taskDocRef = maintenanceDoc(trimmedTaskId);
+
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(taskDocRef);
+        if (!snapshot.exists || snapshot.data() == null) {
+          throw MaintenanceServiceException(
+            code: 'not-found',
+            message: MaintenanceServiceException.messageForErrorCode(
+              'not-found',
+            ),
+          );
+        }
+
+        final data = snapshot.data()!;
+        final currentRawStatus =
+            data['status'] as String? ?? AppConstants.maintenanceStatusPending;
+
+        validateStatusTransition(
+          currentStatus: currentRawStatus,
+          targetStatus: normalizedTargetStatus,
+          notes: trimmedNotes,
+          proofImageUrl: trimmedProof,
+        );
+
+        final normalizedCurrentStatus = validateStatus(
+          currentRawStatus,
+          allowCompletedAlias: false,
+        );
+
+        final rawHistory = data['updateHistory'];
+        final Map<String, dynamic> historyMap = (rawHistory is Map)
+            ? Map<String, dynamic>.from(rawHistory)
+            : <String, dynamic>{};
+
+        final historyEntryData = <String, dynamic>{
+          'id': historyEntryId,
+          'taskId': trimmedTaskId,
+          'previousStatus': normalizedCurrentStatus,
+          'newStatus': normalizedTargetStatus,
+          'notes': trimmedNotes,
+          'proofImageUrl': trimmedProof,
+          'updatedBy': actorUid,
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        historyMap[historyEntryId] = historyEntryData;
+
+        transaction.update(taskDocRef, {
+          'status': normalizedTargetStatus,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updateHistory': historyMap,
+        });
+      });
+    } on FirebaseException catch (e) {
+      throw MaintenanceServiceException.fromFirebaseException(e);
+    } catch (e) {
+      if (e is MaintenanceServiceException) rethrow;
+      throw MaintenanceServiceException(
+        code: 'unknown',
+        message: MaintenanceServiceException.messageForErrorCode('unknown'),
+      );
+    }
+  }
+
+  /// Retrieves the repair/status update history for task `maintenance/{taskId}`.
+  ///
+  /// Returns records sorted chronologically, oldest first.
+  /// Returns an empty list if the task does not exist or has no update history.
+  /// Safely ignores malformed legacy entries without crashing.
+  ///
+  /// Throws [MaintenanceServiceException] if [taskId] is invalid or on Firestore failure.
+  Future<List<MaintenanceUpdateModel>> getMaintenanceUpdateHistory(
+    String taskId,
+  ) async {
+    final trimmedTaskId = taskId.trim();
+    if (trimmedTaskId.isEmpty) {
+      throw MaintenanceServiceException(
+        code: 'invalid-id',
+        message: MaintenanceServiceException.messageForErrorCode('invalid-id'),
+      );
+    }
+
+    try {
+      final docRef = maintenanceDoc(trimmedTaskId);
+      final snapshot = await docRef.get();
+      if (!snapshot.exists || snapshot.data() == null) {
+        return <MaintenanceUpdateModel>[];
+      }
+
+      return _parseHistory(snapshot.data()!['updateHistory'], trimmedTaskId);
+    } on FirebaseException catch (e) {
+      throw MaintenanceServiceException.fromFirebaseException(e);
+    } catch (e) {
+      if (e is MaintenanceServiceException) rethrow;
+      throw MaintenanceServiceException(
+        code: 'unknown',
+        message: MaintenanceServiceException.messageForErrorCode('unknown'),
+      );
+    }
+  }
+
+  /// Streams real-time update history for task `maintenance/{taskId}`.
+  ///
+  /// Emits whenever the maintenance document changes.
+  /// Returns records sorted chronologically, oldest first.
+  /// Returns an empty list if the task does not exist or has no update history.
+  ///
+  /// Throws [MaintenanceServiceException] if [taskId] is invalid or on stream error.
+  Stream<List<MaintenanceUpdateModel>> streamMaintenanceUpdateHistory(
+    String taskId,
+  ) {
+    final trimmedTaskId = taskId.trim();
+    if (trimmedTaskId.isEmpty) {
+      throw MaintenanceServiceException(
+        code: 'invalid-id',
+        message: MaintenanceServiceException.messageForErrorCode('invalid-id'),
+      );
+    }
+
+    try {
+      final docRef = maintenanceDoc(trimmedTaskId);
+      return docRef
+          .snapshots()
+          .map((snapshot) {
+            if (!snapshot.exists || snapshot.data() == null) {
+              return <MaintenanceUpdateModel>[];
+            }
+            return _parseHistory(
+              snapshot.data()!['updateHistory'],
+              trimmedTaskId,
+            );
+          })
+          .handleError((Object error) {
+            if (error is FirebaseException) {
+              throw MaintenanceServiceException.fromFirebaseException(error);
+            }
+            if (error is MaintenanceServiceException) {
+              throw error;
+            }
+            throw MaintenanceServiceException(
+              code: 'unknown',
+              message: MaintenanceServiceException.messageForErrorCode(
+                'unknown',
+              ),
+            );
+          });
+    } on MaintenanceServiceException {
+      rethrow;
+    } catch (e) {
+      throw MaintenanceServiceException(
+        code: 'unknown',
+        message: MaintenanceServiceException.messageForErrorCode('unknown'),
+      );
+    }
+  }
+
+  /// Helper to parse `updateHistory` map or list and sort chronologically (oldest first).
+  static List<MaintenanceUpdateModel> _parseHistory(
+    dynamic rawHistory,
+    String defaultTaskId,
+  ) {
+    if (rawHistory == null) return <MaintenanceUpdateModel>[];
+
+    final entries = <MaintenanceUpdateModel>[];
+
+    if (rawHistory is Map) {
+      for (final entry in rawHistory.entries) {
+        final val = entry.value;
+        if (val is Map<String, dynamic>) {
+          try {
+            entries.add(
+              MaintenanceUpdateModel.fromMap(val, entry.key.toString()),
+            );
+          } catch (_) {
+            // Safely skip malformed entry
+          }
+        } else if (val is Map) {
+          try {
+            final casted = Map<String, dynamic>.from(val);
+            entries.add(
+              MaintenanceUpdateModel.fromMap(casted, entry.key.toString()),
+            );
+          } catch (_) {
+            // Safely skip malformed entry
+          }
+        }
+      }
+    } else if (rawHistory is List) {
+      for (final item in rawHistory) {
+        if (item is Map<String, dynamic>) {
+          try {
+            entries.add(MaintenanceUpdateModel.fromMap(item));
+          } catch (_) {
+            // Safely skip malformed entry
+          }
+        } else if (item is Map) {
+          try {
+            final casted = Map<String, dynamic>.from(item);
+            entries.add(MaintenanceUpdateModel.fromMap(casted));
+          } catch (_) {
+            // Safely skip malformed entry
+          }
+        }
+      }
+    }
+
+    // Sort chronologically (oldest first)
+    entries.sort((a, b) {
+      if (a.updatedAt == null && b.updatedAt == null) return 0;
+      if (a.updatedAt == null) return 1;
+      if (b.updatedAt == null) return -1;
+      return a.updatedAt!.compareTo(b.updatedAt!);
+    });
+
+    return entries;
   }
 }

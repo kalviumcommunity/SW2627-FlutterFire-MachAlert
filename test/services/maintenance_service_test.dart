@@ -7,6 +7,7 @@ import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mach_alert/models/maintenance_model.dart';
+import 'package:mach_alert/models/maintenance_update_model.dart';
 import 'package:mach_alert/services/maintenance_service.dart';
 import 'package:mach_alert/utils/app_constants.dart';
 
@@ -130,6 +131,26 @@ class FakeErrorFirestore extends Fake implements FirebaseFirestore {
   }
 }
 
+class FailingTransactionFirestore extends Fake implements FirebaseFirestore {
+  final FirebaseFirestore realFirestore;
+  final Object errorToThrow;
+
+  FailingTransactionFirestore(this.realFirestore, this.errorToThrow);
+
+  @override
+  CollectionReference<Map<String, dynamic>> collection(String collectionPath) =>
+      realFirestore.collection(collectionPath);
+
+  @override
+  Future<T> runTransaction<T>(
+    TransactionHandler<T> transactionHandler, {
+    Duration timeout = const Duration(seconds: 30),
+    int maxAttempts = 5,
+  }) async {
+    throw errorToThrow;
+  }
+}
+
 void main() {
   group('MaintenanceServiceException Tests', () {
     test('1. messageForErrorCode maps error codes to expected messages', () {
@@ -178,6 +199,22 @@ void main() {
       expect(
         MaintenanceServiceException.messageForErrorCode('invalid-status'),
         'The specified maintenance status is invalid.',
+      );
+      expect(
+        MaintenanceServiceException.messageForErrorCode(
+          'invalid-status-transition',
+        ),
+        'The requested maintenance status transition is not permitted.',
+      );
+      expect(
+        MaintenanceServiceException.messageForErrorCode(
+          'task-already-resolved',
+        ),
+        'This maintenance task has already been resolved and cannot be modified.',
+      );
+      expect(
+        MaintenanceServiceException.messageForErrorCode('no-status-change'),
+        'Status update must include a status change, note, or photo proof.',
       );
       expect(
         MaintenanceServiceException.messageForErrorCode('invalid-argument'),
@@ -1543,5 +1580,1019 @@ void main() {
         await iterator.cancel();
       }
     });
+  });
+
+  group('Successful Update Tests', () {
+    late FakeFirebaseFirestore fakeFirestore;
+    late FakeFirebaseAuth fakeAuth;
+    late MaintenanceService service;
+
+    setUp(() {
+      fakeFirestore = FakeFirebaseFirestore();
+      fakeAuth = FakeFirebaseAuth(
+        initialUser: FakeUser(
+          uid: 'tech_updater_01',
+          email: 'tech@machalert.com',
+          displayName: 'Tech Updater',
+        ),
+      );
+      service = MaintenanceService(
+        firestore: fakeFirestore,
+        firebaseAuth: fakeAuth,
+      );
+    });
+
+    test('1. Pending → In Progress succeeds', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-1')
+          .set({
+            'id': 'TASK-1',
+            'machineId': 'M-01',
+            'technicianId': 'tech_updater_01',
+            'priority': 'High',
+            'status': 'Pending',
+            'createdAt': Timestamp.now(),
+          });
+
+      await service.updateMaintenanceStatus(
+        taskId: 'TASK-1',
+        status: 'In Progress',
+      );
+
+      final doc = await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-1')
+          .get();
+      expect(doc.data()!['status'], 'In Progress');
+
+      final history = doc.data()!['updateHistory'] as Map;
+      expect(history.length, 1);
+      final firstEntry = history.values.first as Map;
+      expect(firstEntry['previousStatus'], 'Pending');
+      expect(firstEntry['newStatus'], 'In Progress');
+    });
+
+    test('2. In Progress → Completed persists canonical Resolved', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-2')
+          .set({
+            'id': 'TASK-2',
+            'machineId': 'M-01',
+            'technicianId': 'tech_updater_01',
+            'priority': 'Medium',
+            'status': 'In Progress',
+            'createdAt': Timestamp.now(),
+          });
+
+      await service.updateMaintenanceStatus(
+        taskId: 'TASK-2',
+        status: 'Completed',
+      );
+
+      final doc = await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-2')
+          .get();
+      expect(doc.data()!['status'], AppConstants.maintenanceStatusResolved);
+
+      final history = doc.data()!['updateHistory'] as Map;
+      final entry = history.values.first as Map;
+      expect(entry['newStatus'], AppConstants.maintenanceStatusResolved);
+      expect(entry['previousStatus'], 'In Progress');
+    });
+
+    test('3. UpdatedAt is written using server timestamp', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-3')
+          .set({
+            'id': 'TASK-3',
+            'machineId': 'M-01',
+            'technicianId': 'tech_updater_01',
+            'priority': 'Low',
+            'status': 'Pending',
+            'createdAt': Timestamp.now(),
+            'updatedAt': null,
+          });
+
+      await service.updateMaintenanceStatus(
+        taskId: 'TASK-3',
+        status: 'In Progress',
+      );
+
+      final doc = await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-3')
+          .get();
+      expect(doc.data()!['updatedAt'], isNotNull);
+    });
+
+    test('4. Update history entry is created', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-4')
+          .set({
+            'id': 'TASK-4',
+            'machineId': 'M-01',
+            'technicianId': 'tech_updater_01',
+            'priority': 'Critical',
+            'status': 'Pending',
+          });
+
+      await service.updateMaintenanceStatus(
+        taskId: 'TASK-4',
+        status: 'In Progress',
+      );
+
+      final history = await service.getMaintenanceUpdateHistory('TASK-4');
+      expect(history.length, 1);
+      expect(history.first.taskId, 'TASK-4');
+      expect(history.first.previousStatus, 'Pending');
+      expect(history.first.newStatus, 'In Progress');
+    });
+
+    test('5. History stores authenticated UID', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-5')
+          .set({
+            'id': 'TASK-5',
+            'machineId': 'M-01',
+            'technicianId': 'tech_updater_01',
+            'priority': 'High',
+            'status': 'Pending',
+          });
+
+      await service.updateMaintenanceStatus(
+        taskId: 'TASK-5',
+        status: 'In Progress',
+      );
+
+      final history = await service.getMaintenanceUpdateHistory('TASK-5');
+      expect(history.first.updatedBy, 'tech_updater_01');
+    });
+
+    test('6. Optional notes are trimmed and persisted', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-6')
+          .set({
+            'id': 'TASK-6',
+            'machineId': 'M-01',
+            'technicianId': 'tech_updater_01',
+            'priority': 'Medium',
+            'status': 'Pending',
+          });
+
+      await service.updateMaintenanceStatus(
+        taskId: 'TASK-6',
+        status: 'In Progress',
+        notes: '   Replacing worn seal ring   ',
+      );
+
+      final history = await service.getMaintenanceUpdateHistory('TASK-6');
+      expect(history.first.notes, 'Replacing worn seal ring');
+    });
+
+    test('7. Optional proofImageUrl is persisted', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-7')
+          .set({
+            'id': 'TASK-7',
+            'machineId': 'M-01',
+            'technicianId': 'tech_updater_01',
+            'priority': 'Low',
+            'status': 'Pending',
+          });
+
+      await service.updateMaintenanceStatus(
+        taskId: 'TASK-7',
+        status: 'In Progress',
+        proofImageUrl: '   https://storage.googleapis.com/proofs/seal.jpg   ',
+      );
+
+      final history = await service.getMaintenanceUpdateHistory('TASK-7');
+      expect(
+        history.first.proofImageUrl,
+        'https://storage.googleapis.com/proofs/seal.jpg',
+      );
+    });
+
+    test('8. Multiple update entries are retained', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-8')
+          .set({
+            'id': 'TASK-8',
+            'machineId': 'M-01',
+            'technicianId': 'tech_updater_01',
+            'priority': 'Critical',
+            'status': 'Pending',
+          });
+
+      // Update 1: Pending -> In Progress
+      await service.updateMaintenanceStatus(
+        taskId: 'TASK-8',
+        status: 'In Progress',
+        notes: 'Started diagnostics',
+      );
+
+      // Update 2: In Progress -> In Progress (additional note)
+      await service.updateMaintenanceStatus(
+        taskId: 'TASK-8',
+        status: 'In Progress',
+        notes: 'Parts ordered',
+      );
+
+      // Update 3: In Progress -> Resolved
+      await service.updateMaintenanceStatus(
+        taskId: 'TASK-8',
+        status: 'Resolved',
+        notes: 'Repair verified and complete',
+      );
+
+      final history = await service.getMaintenanceUpdateHistory('TASK-8');
+      expect(history.length, 3);
+      expect(history[0].newStatus, 'In Progress');
+      expect(history[0].notes, 'Started diagnostics');
+      expect(history[1].newStatus, 'In Progress');
+      expect(history[1].notes, 'Parts ordered');
+      expect(history[2].newStatus, 'Resolved');
+      expect(history[2].notes, 'Repair verified and complete');
+    });
+
+    test('9. Same-status note-only update creates a repair log', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-9')
+          .set({
+            'id': 'TASK-9',
+            'machineId': 'M-01',
+            'technicianId': 'tech_updater_01',
+            'priority': 'High',
+            'status': 'In Progress',
+          });
+
+      await service.updateMaintenanceStatus(
+        taskId: 'TASK-9',
+        status: 'In Progress',
+        notes: 'Lubricated bearing assembly',
+      );
+
+      final doc = await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-9')
+          .get();
+      expect(doc.data()!['status'], 'In Progress');
+
+      final history = await service.getMaintenanceUpdateHistory('TASK-9');
+      expect(history.length, 1);
+      expect(history.first.previousStatus, 'In Progress');
+      expect(history.first.newStatus, 'In Progress');
+      expect(history.first.notes, 'Lubricated bearing assembly');
+      expect(history.first.isStatusChange, isFalse);
+    });
+
+    test('10. Same-status proof-only update creates a repair log', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('TASK-10')
+          .set({
+            'id': 'TASK-10',
+            'machineId': 'M-01',
+            'technicianId': 'tech_updater_01',
+            'priority': 'Medium',
+            'status': 'In Progress',
+          });
+
+      await service.updateMaintenanceStatus(
+        taskId: 'TASK-10',
+        status: 'In Progress',
+        proofImageUrl: 'https://storage.googleapis.com/proofs/bearing.png',
+      );
+
+      final history = await service.getMaintenanceUpdateHistory('TASK-10');
+      expect(history.length, 1);
+      expect(history.first.previousStatus, 'In Progress');
+      expect(history.first.newStatus, 'In Progress');
+      expect(history.first.notes, isNull);
+      expect(
+        history.first.proofImageUrl,
+        'https://storage.googleapis.com/proofs/bearing.png',
+      );
+    });
+
+    test(
+      '11. Original maintenance assignment notes remain unchanged',
+      () async {
+        const originalNotes =
+            'Original assignment note from manager: Check valve.';
+        await fakeFirestore
+            .collection(AppConstants.maintenanceCollection)
+            .doc('TASK-11')
+            .set({
+              'id': 'TASK-11',
+              'machineId': 'M-01',
+              'technicianId': 'tech_updater_01',
+              'priority': 'High',
+              'status': 'Pending',
+              'notes': originalNotes,
+            });
+
+        await service.updateMaintenanceStatus(
+          taskId: 'TASK-11',
+          status: 'In Progress',
+          notes: 'Technician note: Valve disassembled.',
+        );
+
+        final doc = await fakeFirestore
+            .collection(AppConstants.maintenanceCollection)
+            .doc('TASK-11')
+            .get();
+
+        // Top-level notes field is preserved!
+        expect(doc.data()!['notes'], originalNotes);
+
+        // Only the history entry holds the technician repair notes
+        final history = await service.getMaintenanceUpdateHistory('TASK-11');
+        expect(history.first.notes, 'Technician note: Valve disassembled.');
+      },
+    );
+  });
+
+  group('Workflow Validation Tests', () {
+    late FakeFirebaseFirestore fakeFirestore;
+    late FakeFirebaseAuth fakeAuth;
+    late MaintenanceService service;
+
+    setUp(() {
+      fakeFirestore = FakeFirebaseFirestore();
+      fakeAuth = FakeFirebaseAuth(
+        initialUser: FakeUser(
+          uid: 'tech_validator_01',
+          email: 'tech@machalert.com',
+        ),
+      );
+      service = MaintenanceService(
+        firestore: fakeFirestore,
+        firebaseAuth: fakeAuth,
+      );
+    });
+
+    test('12. Pending → Resolved is rejected', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('W12')
+          .set({
+            'id': 'W12',
+            'machineId': 'M-1',
+            'technicianId': 'tech_validator_01',
+            'priority': 'High',
+            'status': 'Pending',
+          });
+
+      expect(
+        () =>
+            service.updateMaintenanceStatus(taskId: 'W12', status: 'Resolved'),
+        throwsA(
+          isA<MaintenanceServiceException>().having(
+            (e) => e.code,
+            'code',
+            'invalid-status-transition',
+          ),
+        ),
+      );
+    });
+
+    test('13. In Progress → Pending is rejected', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('W13')
+          .set({
+            'id': 'W13',
+            'machineId': 'M-1',
+            'technicianId': 'tech_validator_01',
+            'priority': 'High',
+            'status': 'In Progress',
+          });
+
+      expect(
+        () => service.updateMaintenanceStatus(taskId: 'W13', status: 'Pending'),
+        throwsA(
+          isA<MaintenanceServiceException>().having(
+            (e) => e.code,
+            'code',
+            'invalid-status-transition',
+          ),
+        ),
+      );
+    });
+
+    test('14. Resolved → In Progress is rejected', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('W14')
+          .set({
+            'id': 'W14',
+            'machineId': 'M-1',
+            'technicianId': 'tech_validator_01',
+            'priority': 'High',
+            'status': 'Resolved',
+          });
+
+      expect(
+        () => service.updateMaintenanceStatus(
+          taskId: 'W14',
+          status: 'In Progress',
+        ),
+        throwsA(
+          isA<MaintenanceServiceException>().having(
+            (e) => e.code,
+            'code',
+            'task-already-resolved',
+          ),
+        ),
+      );
+    });
+
+    test('15. Resolved → Pending is rejected', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('W15')
+          .set({
+            'id': 'W15',
+            'machineId': 'M-1',
+            'technicianId': 'tech_validator_01',
+            'priority': 'High',
+            'status': 'Resolved',
+          });
+
+      expect(
+        () => service.updateMaintenanceStatus(taskId: 'W15', status: 'Pending'),
+        throwsA(
+          isA<MaintenanceServiceException>().having(
+            (e) => e.code,
+            'code',
+            'task-already-resolved',
+          ),
+        ),
+      );
+    });
+
+    test(
+      '16. Duplicate same-status update with no notes/proof is rejected',
+      () async {
+        await fakeFirestore
+            .collection(AppConstants.maintenanceCollection)
+            .doc('W16')
+            .set({
+              'id': 'W16',
+              'machineId': 'M-1',
+              'technicianId': 'tech_validator_01',
+              'priority': 'High',
+              'status': 'In Progress',
+            });
+
+        expect(
+          () => service.updateMaintenanceStatus(
+            taskId: 'W16',
+            status: 'In Progress',
+            notes: null,
+            proofImageUrl: null,
+          ),
+          throwsA(
+            isA<MaintenanceServiceException>().having(
+              (e) => e.code,
+              'code',
+              'no-status-change',
+            ),
+          ),
+        );
+
+        // Whitespace only note also rejected
+        expect(
+          () => service.updateMaintenanceStatus(
+            taskId: 'W16',
+            status: 'In Progress',
+            notes: '     ',
+            proofImageUrl: '   ',
+          ),
+          throwsA(
+            isA<MaintenanceServiceException>().having(
+              (e) => e.code,
+              'code',
+              'no-status-change',
+            ),
+          ),
+        );
+      },
+    );
+
+    test('17. Invalid status is rejected', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('W17')
+          .set({
+            'id': 'W17',
+            'machineId': 'M-1',
+            'technicianId': 'tech_validator_01',
+            'priority': 'High',
+            'status': 'Pending',
+          });
+
+      expect(
+        () =>
+            service.updateMaintenanceStatus(taskId: 'W17', status: 'Archived'),
+        throwsA(
+          isA<MaintenanceServiceException>().having(
+            (e) => e.code,
+            'code',
+            'invalid-status',
+          ),
+        ),
+      );
+    });
+
+    test('18. Completed is normalized to Resolved', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('W18')
+          .set({
+            'id': 'W18',
+            'machineId': 'M-1',
+            'technicianId': 'tech_validator_01',
+            'priority': 'High',
+            'status': 'In Progress',
+          });
+
+      await service.updateMaintenanceStatus(taskId: 'W18', status: 'Completed');
+
+      final doc = await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('W18')
+          .get();
+      expect(doc.data()!['status'], 'Resolved');
+    });
+
+    test('19. Invalid task ID is rejected', () async {
+      expect(
+        () => service.updateMaintenanceStatus(
+          taskId: '   ',
+          status: 'In Progress',
+        ),
+        throwsA(
+          isA<MaintenanceServiceException>().having(
+            (e) => e.code,
+            'code',
+            'invalid-id',
+          ),
+        ),
+      );
+    });
+
+    test('20. Missing task is rejected', () async {
+      expect(
+        () => service.updateMaintenanceStatus(
+          taskId: 'non_existent_doc_id',
+          status: 'In Progress',
+        ),
+        throwsA(
+          isA<MaintenanceServiceException>().having(
+            (e) => e.code,
+            'code',
+            'not-found',
+          ),
+        ),
+      );
+    });
+
+    test('21. Missing authentication is rejected', () async {
+      fakeAuth.setCurrentUser(null);
+
+      expect(
+        () => service.updateMaintenanceStatus(
+          taskId: 'W21',
+          status: 'In Progress',
+        ),
+        throwsA(
+          isA<MaintenanceServiceException>().having(
+            (e) => e.code,
+            'code',
+            'unauthenticated',
+          ),
+        ),
+      );
+    });
+  });
+
+  group('History Retrieval Tests', () {
+    late FakeFirebaseFirestore fakeFirestore;
+    late FakeFirebaseAuth fakeAuth;
+    late MaintenanceService service;
+
+    setUp(() {
+      fakeFirestore = FakeFirebaseFirestore();
+      fakeAuth = FakeFirebaseAuth(
+        initialUser: FakeUser(
+          uid: 'tech_history_01',
+          email: 'tech@machalert.com',
+        ),
+      );
+      service = MaintenanceService(
+        firestore: fakeFirestore,
+        firebaseAuth: fakeAuth,
+      );
+    });
+
+    test('22. Retrieves an empty history for a task with no updates', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('H22')
+          .set({
+            'id': 'H22',
+            'machineId': 'M-1',
+            'technicianId': 'tech_history_01',
+            'priority': 'Low',
+            'status': 'Pending',
+          });
+
+      final history = await service.getMaintenanceUpdateHistory('H22');
+      expect(history, isEmpty);
+    });
+
+    test('23. Retrieves update records with correct values', () async {
+      final now = DateTime(2026, 10, 31, 14, 0);
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('H23')
+          .set({
+            'id': 'H23',
+            'machineId': 'M-1',
+            'technicianId': 'tech_history_01',
+            'priority': 'Medium',
+            'status': 'In Progress',
+            'updateHistory': {
+              'upd_1': {
+                'id': 'upd_1',
+                'taskId': 'H23',
+                'previousStatus': 'Pending',
+                'newStatus': 'In Progress',
+                'notes': 'Started task',
+                'proofImageUrl': 'https://storage/proof.jpg',
+                'updatedBy': 'tech_history_01',
+                'updatedAt': Timestamp.fromDate(now),
+              },
+            },
+          });
+
+      final history = await service.getMaintenanceUpdateHistory('H23');
+      expect(history.length, 1);
+      final entry = history.first;
+      expect(entry.id, 'upd_1');
+      expect(entry.taskId, 'H23');
+      expect(entry.previousStatus, 'Pending');
+      expect(entry.newStatus, 'In Progress');
+      expect(entry.notes, 'Started task');
+      expect(entry.proofImageUrl, 'https://storage/proof.jpg');
+      expect(entry.updatedBy, 'tech_history_01');
+      expect(entry.updatedAt, now);
+    });
+
+    test('24. Returns history chronologically', () async {
+      final t1 = DateTime(2026, 10, 31, 10, 0);
+      final t2 = DateTime(2026, 10, 31, 12, 0);
+      final t3 = DateTime(2026, 10, 31, 14, 0);
+
+      // Seed out of order in raw map: t3, t1, t2
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('H24')
+          .set({
+            'id': 'H24',
+            'machineId': 'M-1',
+            'technicianId': 'tech_history_01',
+            'priority': 'Critical',
+            'status': 'Resolved',
+            'updateHistory': {
+              'upd_c': {
+                'id': 'upd_c',
+                'taskId': 'H24',
+                'previousStatus': 'In Progress',
+                'newStatus': 'Resolved',
+                'updatedBy': 'tech_history_01',
+                'updatedAt': Timestamp.fromDate(t3),
+              },
+              'upd_a': {
+                'id': 'upd_a',
+                'taskId': 'H24',
+                'previousStatus': 'Pending',
+                'newStatus': 'In Progress',
+                'updatedBy': 'tech_history_01',
+                'updatedAt': Timestamp.fromDate(t1),
+              },
+              'upd_b': {
+                'id': 'upd_b',
+                'taskId': 'H24',
+                'previousStatus': 'In Progress',
+                'newStatus': 'In Progress',
+                'notes': 'Mid check',
+                'updatedBy': 'tech_history_01',
+                'updatedAt': Timestamp.fromDate(t2),
+              },
+            },
+          });
+
+      final history = await service.getMaintenanceUpdateHistory('H24');
+      expect(history.length, 3);
+      expect(history[0].id, 'upd_a');
+      expect(history[1].id, 'upd_b');
+      expect(history[2].id, 'upd_c');
+    });
+
+    test('25. Live stream emits after a status update', () async {
+      await fakeFirestore
+          .collection(AppConstants.maintenanceCollection)
+          .doc('H25')
+          .set({
+            'id': 'H25',
+            'machineId': 'M-1',
+            'technicianId': 'tech_history_01',
+            'priority': 'High',
+            'status': 'Pending',
+          });
+
+      final historyStream = service.streamMaintenanceUpdateHistory('H25');
+      final emissions = <List<MaintenanceUpdateModel>>[];
+      final sub = historyStream.listen(emissions.add);
+
+      await pumpEventQueue();
+      expect(emissions.length, 1);
+      expect(emissions.first, isEmpty);
+
+      await service.updateMaintenanceStatus(
+        taskId: 'H25',
+        status: 'In Progress',
+        notes: 'Stream test update',
+      );
+
+      await pumpEventQueue();
+      expect(emissions.length, greaterThanOrEqualTo(2));
+      expect(emissions.last.length, 1);
+      expect(emissions.last.first.newStatus, 'In Progress');
+      expect(emissions.last.first.notes, 'Stream test update');
+
+      await sub.cancel();
+    });
+
+    test(
+      '26. Live stream emits after an additional repair-log entry',
+      () async {
+        await fakeFirestore
+            .collection(AppConstants.maintenanceCollection)
+            .doc('H26')
+            .set({
+              'id': 'H26',
+              'machineId': 'M-1',
+              'technicianId': 'tech_history_01',
+              'priority': 'Medium',
+              'status': 'In Progress',
+            });
+
+        final emissions = <List<MaintenanceUpdateModel>>[];
+        final sub = service
+            .streamMaintenanceUpdateHistory('H26')
+            .listen(emissions.add);
+
+        await pumpEventQueue();
+
+        await service.updateMaintenanceStatus(
+          taskId: 'H26',
+          status: 'In Progress',
+          notes: 'Additional repair log entry',
+        );
+
+        await pumpEventQueue();
+        expect(emissions.last.length, 1);
+        expect(emissions.last.first.notes, 'Additional repair log entry');
+
+        await sub.cancel();
+      },
+    );
+
+    test('27. Missing task is handled safely', () async {
+      final history = await service.getMaintenanceUpdateHistory(
+        'non_existent_h27',
+      );
+      expect(history, isEmpty);
+
+      final streamHistory = await service
+          .streamMaintenanceUpdateHistory('non_existent_h27')
+          .first;
+      expect(streamHistory, isEmpty);
+    });
+
+    test(
+      '28. Malformed legacy history entries do not crash valid history entries',
+      () async {
+        final now = DateTime(2026, 10, 31, 15, 0);
+        await fakeFirestore
+            .collection(AppConstants.maintenanceCollection)
+            .doc('H28')
+            .set({
+              'id': 'H28',
+              'machineId': 'M-1',
+              'technicianId': 'tech_history_01',
+              'priority': 'High',
+              'status': 'In Progress',
+              'updateHistory': {
+                'bad_entry_1': 'not_a_map',
+                'valid_entry': {
+                  'id': 'valid_entry',
+                  'taskId': 'H28',
+                  'previousStatus': 'Pending',
+                  'newStatus': 'In Progress',
+                  'updatedBy': 'tech_01',
+                  'updatedAt': Timestamp.fromDate(now),
+                },
+                'bad_entry_2': 12345,
+              },
+            });
+
+        final history = await service.getMaintenanceUpdateHistory('H28');
+        expect(history.length, 1);
+        expect(history.first.id, 'valid_entry');
+      },
+    );
+  });
+
+  group('Error Handling Tests', () {
+    late FakeFirebaseFirestore fakeFirestore;
+    late FakeFirebaseAuth fakeAuth;
+
+    setUp(() {
+      fakeFirestore = FakeFirebaseFirestore();
+      fakeAuth = FakeFirebaseAuth(
+        initialUser: FakeUser(
+          uid: 'tech_error_01',
+          email: 'tech@machalert.com',
+        ),
+      );
+    });
+
+    test('29. Firestore permission-denied mapping', () async {
+      final fe = FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'permission-denied',
+        message: 'Missing or insufficient permissions.',
+      );
+      final failingFirestore = FailingTransactionFirestore(fakeFirestore, fe);
+      final svc = MaintenanceService(
+        firestore: failingFirestore,
+        firebaseAuth: fakeAuth,
+      );
+
+      expect(
+        () => svc.updateMaintenanceStatus(
+          taskId: 'ERR-29',
+          status: 'In Progress',
+        ),
+        throwsA(
+          isA<MaintenanceServiceException>()
+              .having((e) => e.code, 'code', 'permission-denied')
+              .having(
+                (e) => e.message,
+                'message',
+                'You do not have permission to access or modify this maintenance task.',
+              ),
+        ),
+      );
+    });
+
+    test('30. Firestore unavailable mapping', () async {
+      final fe = FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'unavailable',
+        message: 'The service is currently unavailable.',
+      );
+      final failingFirestore = FailingTransactionFirestore(fakeFirestore, fe);
+      final svc = MaintenanceService(
+        firestore: failingFirestore,
+        firebaseAuth: fakeAuth,
+      );
+
+      expect(
+        () => svc.updateMaintenanceStatus(
+          taskId: 'ERR-30',
+          status: 'In Progress',
+        ),
+        throwsA(
+          isA<MaintenanceServiceException>()
+              .having((e) => e.code, 'code', 'unavailable')
+              .having(
+                (e) => e.message,
+                'message',
+                'Firestore is currently unavailable. Please check your network connection.',
+              ),
+        ),
+      );
+    });
+
+    test('31. Generic errors mapped safely', () async {
+      final genericErr = Exception('Socket connection reset by peer');
+      final failingFirestore = FailingTransactionFirestore(
+        fakeFirestore,
+        genericErr,
+      );
+      final svc = MaintenanceService(
+        firestore: failingFirestore,
+        firebaseAuth: fakeAuth,
+      );
+
+      expect(
+        () => svc.updateMaintenanceStatus(
+          taskId: 'ERR-31',
+          status: 'In Progress',
+        ),
+        throwsA(
+          isA<MaintenanceServiceException>()
+              .having((e) => e.code, 'code', 'unknown')
+              .having(
+                (e) => e.message,
+                'message',
+                MaintenanceServiceException.defaultErrorMessage,
+              ),
+        ),
+      );
+    });
+
+    test('32. Raw internal exception messages never leak', () async {
+      const sensitiveLeak =
+          'DB_PASSWORD_LEAK: root@192.168.1.99:5432/machalert';
+      final genericErr = Exception(sensitiveLeak);
+      final failingFirestore = FailingTransactionFirestore(
+        fakeFirestore,
+        genericErr,
+      );
+      final svc = MaintenanceService(
+        firestore: failingFirestore,
+        firebaseAuth: fakeAuth,
+      );
+
+      try {
+        await svc.updateMaintenanceStatus(
+          taskId: 'ERR-32',
+          status: 'In Progress',
+        );
+        fail('Should throw MaintenanceServiceException');
+      } on MaintenanceServiceException catch (e) {
+        expect(e.message, isNot(contains(sensitiveLeak)));
+        expect(e.toString(), isNot(contains(sensitiveLeak)));
+      }
+    });
+
+    test(
+      '33. Failed transaction does not leave partially updated status/history',
+      () async {
+        await fakeFirestore
+            .collection(AppConstants.maintenanceCollection)
+            .doc('ERR-33')
+            .set({
+              'id': 'ERR-33',
+              'machineId': 'M-1',
+              'technicianId': 'tech_error_01',
+              'priority': 'High',
+              'status': 'Pending',
+            });
+
+        final fe = FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'deadline-exceeded',
+        );
+        final failingFirestore = FailingTransactionFirestore(fakeFirestore, fe);
+        final svc = MaintenanceService(
+          firestore: failingFirestore,
+          firebaseAuth: fakeAuth,
+        );
+
+        await expectLater(
+          () => svc.updateMaintenanceStatus(
+            taskId: 'ERR-33',
+            status: 'In Progress',
+          ),
+          throwsA(isA<MaintenanceServiceException>()),
+        );
+
+        // Verify task in fakeFirestore was not modified
+        final doc = await fakeFirestore
+            .collection(AppConstants.maintenanceCollection)
+            .doc('ERR-33')
+            .get();
+        expect(doc.data()!['status'], 'Pending');
+        expect(doc.data()!['updateHistory'], isNull);
+      },
+    );
   });
 }
