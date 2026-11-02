@@ -7,11 +7,14 @@ import '../../providers/app_state_provider.dart';
 import '../../providers/machine_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/fault_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_constants.dart';
 import '../../utils/app_routes.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/dashboard_action_card.dart';
 import '../../widgets/dashboard_stat_card.dart';
+import '../../widgets/mach_alert_logo.dart';
+import '../../widgets/main_bottom_navigation.dart';
 
 class HomeScreen extends StatefulWidget {
   final FaultService? faultService;
@@ -25,29 +28,36 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isSigningOut = false;
+
   Stream<List<FaultModel>>? _managerFaultStream;
 
   @override
   void initState() {
     super.initState();
+
     widget.machineProvider?.addListener(_onMachineProviderChanged);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
     _checkAndInitManagerServices();
   }
 
   @override
   void didUpdateWidget(HomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+
     if (widget.machineProvider != oldWidget.machineProvider) {
       oldWidget.machineProvider?.removeListener(_onMachineProviderChanged);
+
       widget.machineProvider?.addListener(_onMachineProviderChanged);
     }
+
     if (widget.faultService != oldWidget.faultService) {
       _managerFaultStream = null;
+
       _initFaultStream();
     }
   }
@@ -55,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     widget.machineProvider?.removeListener(_onMachineProviderChanged);
+
     super.dispose();
   }
 
@@ -68,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.faultService != null) {
       return widget.faultService;
     }
+
     try {
       return context.read<FaultService>();
     } catch (_) {
@@ -79,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (widget.machineProvider != null) {
       return widget.machineProvider;
     }
+
     try {
       return context.read<MachineProvider>();
     } catch (_) {
@@ -94,15 +107,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ?.role
           .trim()
           .toLowerCase();
+
       if (role == AppConstants.roleManager) {
         _initFaultStream();
+
         _scheduleMachineSubscription();
       }
     } catch (_) {}
   }
 
   void _initFaultStream() {
-    if (_managerFaultStream != null) return;
+    if (_managerFaultStream != null) {
+      return;
+    }
+
     try {
       final role = context
           .read<AppStateProvider>()
@@ -110,10 +128,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ?.role
           .trim()
           .toLowerCase();
+
       if (role != AppConstants.roleManager) {
         return;
       }
+
       final faultService = _resolveFaultService();
+
       if (faultService != null) {
         _managerFaultStream = faultService.streamFaults();
       }
@@ -124,7 +145,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _scheduleMachineSubscription() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
+
       try {
         final currentRole = context
             .read<AppStateProvider>()
@@ -132,11 +156,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ?.role
             .trim()
             .toLowerCase();
+
         if (currentRole == AppConstants.roleManager) {
-          final machineProvider = _resolveMachineProvider();
-          if (machineProvider != null &&
-              !machineProvider.hasActiveSubscription) {
-            machineProvider.subscribeToMachines();
+          final provider = _resolveMachineProvider();
+
+          if (provider != null && !provider.hasActiveSubscription) {
+            provider.subscribeToMachines();
           }
         }
       } catch (_) {}
@@ -149,16 +174,14 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final authService = context.read<AuthService>();
-
-      await authService.signOut();
-    } on AuthServiceException catch (error) {
+      await context.read<AuthService>().signOut();
+    } on AuthServiceException catch (e) {
       if (!mounted) {
         return;
       }
 
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(error.message)));
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) {
         return;
@@ -200,10 +223,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openFaultHistory() {
-    final faultService = _resolveFaultService();
+    Navigator.of(
+      context,
+    ).push<void>(AppRoutes.faultHistory(faultService: _resolveFaultService()));
+  }
 
-    Navigator.of(context)
-        .push<void>(AppRoutes.faultHistory(faultService: faultService));
+  void _openRealtimeFaults() {
+    Navigator.of(context).push<void>(
+      AppRoutes.realtimeFaults(faultService: _resolveFaultService()),
+    );
   }
 
   void _showComingSoon(String feature) {
@@ -212,16 +240,10 @@ class _HomeScreenState extends State<HomeScreen> {
     ).showSnackBar(SnackBar(content: Text('$feature will be available soon.')));
   }
 
-  void _openRealtimeFaults() {
-    final faultService = _resolveFaultService();
-
-    Navigator.of(context)
-        .push<void>(AppRoutes.realtimeFaults(faultService: faultService));
-  }
-
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppStateProvider>();
+
     final user = appState.user;
 
     final name = user?.name.trim().isNotEmpty == true
@@ -229,46 +251,80 @@ class _HomeScreenState extends State<HomeScreen> {
         : 'MachAlert User';
 
     final role = user?.role.trim().toLowerCase() ?? '';
+
     if (role != AppConstants.roleManager && _managerFaultStream != null) {
       _managerFaultStream = null;
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('MachAlert')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Welcome, $name',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-
-              const SizedBox(height: 6),
-
-              Text(
-                _roleLabel(role),
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-
-              const SizedBox(height: 24),
-
-              _buildDashboardForRole(role),
-
-              const SizedBox(height: 32),
-
-              AppButton(
-                text: 'Logout',
-                isLoading: _isSigningOut,
-                onPressed: _isSigningOut ? null : _handleLogout,
-              ),
-            ],
+      appBar: AppBar(
+        title: const MachAlertLogo(compact: true),
+        actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            onPressed: () {
+              _showComingSoon('Notifications');
+            },
+            icon: const Icon(Icons.notifications_none_rounded),
           ),
+          const SizedBox(width: 6),
+        ],
+      ),
+      bottomNavigationBar: const MainBottomNavigation(currentIndex: 0),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 26),
+          children: [
+            Text(
+              'Hi, ${_firstName(name)}',
+              style: const TextStyle(
+                color: AppTheme.navy,
+                fontSize: 25,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              "Here's today's overview",
+              style: TextStyle(color: Color(0xFF778896), fontSize: 13),
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              _roleLabel(role),
+              style: const TextStyle(
+                color: AppTheme.green,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            _buildDashboardForRole(role),
+
+            const SizedBox(height: 26),
+
+            _buildRecentActivity(),
+
+            const SizedBox(height: 26),
+
+            AppButton(
+              text: 'Logout',
+              isLoading: _isSigningOut,
+              onPressed: _isSigningOut ? null : _handleLogout,
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  String _firstName(String name) {
+    final pieces = name.trim().split(RegExp(r'\s+'));
+
+    return pieces.isEmpty ? name : pieces.first;
   }
 
   String _roleLabel(String role) {
@@ -307,27 +363,52 @@ class _HomeScreenState extends State<HomeScreen> {
     _initFaultStream();
     _scheduleMachineSubscription();
 
-    MachineProvider? machineProvider = widget.machineProvider;
-    if (machineProvider == null) {
+    MachineProvider? provider = widget.machineProvider;
+
+    if (provider == null) {
       try {
-        machineProvider = context.watch<MachineProvider>();
+        provider = context.watch<MachineProvider>();
       } catch (_) {}
     }
 
-    final String machineCount;
-    if (machineProvider == null ||
-        !machineProvider.hasActiveSubscription ||
-        machineProvider.isLoading ||
-        machineProvider.hasError) {
-      machineCount = '--';
-    } else {
-      machineCount = machineProvider.machines.length.toString();
-    }
+    final isReady =
+        provider != null &&
+        provider.hasActiveSubscription &&
+        !provider.isLoading &&
+        !provider.hasError;
+
+    final machines = isReady ? provider.machines : const <MachineModel>[];
+
+    final machineCount = isReady ? machines.length.toString() : '--';
+
+    final runningCount = isReady
+        ? machines.where((machine) => machine.isOperational).length.toString()
+        : '--';
+
+    final maintenanceCount = isReady
+        ? machines
+              .where(
+                (machine) => machine.isUnderMaintenance || machine.isWarning,
+              )
+              .length
+              .toString()
+        : '--';
+
+    final breakdownCount = isReady
+        ? machines.where((machine) => machine.isCritical).length.toString()
+        : '--';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Factory Overview', style: Theme.of(context).textTheme.titleLarge),
+        const Text(
+          'Factory Overview',
+          style: TextStyle(
+            color: AppTheme.navy,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
 
         const SizedBox(height: 12),
 
@@ -338,50 +419,91 @@ class _HomeScreenState extends State<HomeScreen> {
                 label: 'Machines',
                 value: machineCount,
                 icon: Icons.precision_manufacturing,
+                accentColor: AppTheme.blue,
               ),
             ),
-
-            const SizedBox(width: 12),
-
+            const SizedBox(width: 10),
             Expanded(
-              child: StreamBuilder<List<FaultModel>>(
-                stream: _managerFaultStream,
-                builder: (context, snapshot) {
-                  final String faultCount;
-
-                  if (_managerFaultStream == null ||
-                      snapshot.hasError ||
-                      snapshot.connectionState == ConnectionState.waiting) {
-                    faultCount = '--';
-                  } else if (snapshot.hasData) {
-                    final faults = snapshot.data ?? const [];
-                    final activeCount = faults.where((fault) {
-                      final s = fault.status.trim().toLowerCase();
-                      return s == AppConstants.faultStatusOpen.toLowerCase() ||
-                          s == AppConstants.faultStatusInProgress.toLowerCase();
-                    }).length;
-                    faultCount = activeCount.toString();
-                  } else {
-                    faultCount = '--';
-                  }
-
-                  return DashboardStatCard(
-                    label: 'Active Faults',
-                    value: faultCount,
-                    icon: Icons.warning_amber,
-                  );
-                },
+              child: DashboardStatCard(
+                label: 'Running',
+                value: runningCount,
+                icon: Icons.play_circle_outline,
+                accentColor: AppTheme.green,
               ),
             ),
           ],
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 10),
+
+        Row(
+          children: [
+            Expanded(
+              child: DashboardStatCard(
+                label: 'In Maintenance',
+                value: maintenanceCount,
+                icon: Icons.build_circle_outlined,
+                accentColor: AppTheme.warning,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: DashboardStatCard(
+                label: 'Breakdown',
+                value: breakdownCount,
+                icon: Icons.warning_amber_rounded,
+                accentColor: AppTheme.danger,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 10),
+
+        StreamBuilder<List<FaultModel>>(
+          stream: _managerFaultStream,
+          builder: (context, snapshot) {
+            String count = '--';
+
+            if (_managerFaultStream != null &&
+                !snapshot.hasError &&
+                snapshot.connectionState != ConnectionState.waiting &&
+                snapshot.hasData) {
+              final faults = snapshot.data ?? const [];
+
+              count = faults
+                  .where((fault) {
+                    final status = fault.status.trim().toLowerCase();
+
+                    return status ==
+                            AppConstants.faultStatusOpen.toLowerCase() ||
+                        status ==
+                            AppConstants.faultStatusInProgress.toLowerCase();
+                  })
+                  .length
+                  .toString();
+            }
+
+            return DashboardStatCard(
+              label: 'Active Faults',
+              value: count,
+              icon: Icons.report_problem_outlined,
+              accentColor: AppTheme.danger,
+            );
+          },
+        ),
+
+        const SizedBox(height: 22),
+
+        _actionsHeading(),
+
+        const SizedBox(height: 10),
 
         DashboardActionCard(
           title: 'Machines',
           subtitle: 'View production machines',
           icon: Icons.precision_manufacturing,
+          accentColor: AppTheme.blue,
           onTap: _openMachines,
         ),
 
@@ -389,6 +511,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Fault History',
           subtitle: 'View history of reported faults',
           icon: Icons.history,
+          accentColor: AppTheme.warning,
           onTap: _openFaultHistory,
         ),
 
@@ -396,6 +519,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Faults',
           subtitle: 'Monitor active machine faults',
           icon: Icons.warning,
+          accentColor: AppTheme.danger,
           onTap: _openRealtimeFaults,
         ),
 
@@ -403,6 +527,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Maintenance',
           subtitle: 'Track maintenance activity',
           icon: Icons.build,
+          accentColor: AppTheme.green,
           onTap: () {
             Navigator.of(context).push<void>(AppRoutes.maintenance());
           },
@@ -415,9 +540,13 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
+        const Text(
           'Maintenance Overview',
-          style: Theme.of(context).textTheme.titleLarge,
+          style: TextStyle(
+            color: AppTheme.navy,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+          ),
         ),
 
         const SizedBox(height: 12),
@@ -428,28 +557,33 @@ class _HomeScreenState extends State<HomeScreen> {
               child: DashboardStatCard(
                 label: 'Assigned Tasks',
                 value: '--',
-                icon: Icons.assignment,
+                icon: Icons.assignment_outlined,
+                accentColor: AppTheme.blue,
               ),
             ),
-
-            SizedBox(width: 12),
-
+            SizedBox(width: 10),
             Expanded(
               child: DashboardStatCard(
                 label: 'Active Faults',
                 value: '--',
                 icon: Icons.warning_amber,
+                accentColor: AppTheme.danger,
               ),
             ),
           ],
         ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 22),
+
+        _actionsHeading(),
+
+        const SizedBox(height: 10),
 
         DashboardActionCard(
           title: 'Assigned Maintenance',
           subtitle: 'View your maintenance tasks',
           icon: Icons.assignment_turned_in,
+          accentColor: AppTheme.green,
           onTap: () {
             Navigator.of(context)
                 .push<void>(AppRoutes.maintenance(assignedOnly: true));
@@ -460,6 +594,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Active Faults',
           subtitle: 'Inspect reported machine faults',
           icon: Icons.warning,
+          accentColor: AppTheme.danger,
           onTap: _openRealtimeFaults,
         ),
 
@@ -467,6 +602,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Fault History',
           subtitle: 'View history of reported faults',
           icon: Icons.history,
+          accentColor: AppTheme.warning,
           onTap: _openFaultHistory,
         ),
 
@@ -474,6 +610,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Machines',
           subtitle: 'View machine information',
           icon: Icons.precision_manufacturing,
+          accentColor: AppTheme.blue,
           onTap: _openMachines,
         ),
       ],
@@ -484,9 +621,13 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
+        const Text(
           'Machine Operations',
-          style: Theme.of(context).textTheme.titleLarge,
+          style: TextStyle(
+            color: AppTheme.navy,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+          ),
         ),
 
         const SizedBox(height: 12),
@@ -495,6 +636,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Machines',
           subtitle: 'View machines on your production line',
           icon: Icons.precision_manufacturing,
+          accentColor: AppTheme.blue,
           onTap: _openMachines,
         ),
 
@@ -502,6 +644,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Report Fault',
           subtitle: 'Report a machine problem immediately',
           icon: Icons.report_problem,
+          accentColor: AppTheme.danger,
           onTap: _openFaultReporting,
         ),
 
@@ -509,13 +652,15 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Fault History',
           subtitle: 'View history of reported faults',
           icon: Icons.history,
+          accentColor: AppTheme.warning,
           onTap: _openFaultHistory,
         ),
 
         DashboardActionCard(
           title: 'My Reports',
           subtitle: 'Review faults you have reported',
-          icon: Icons.history,
+          icon: Icons.bar_chart_outlined,
+          accentColor: AppTheme.green,
           onTap: () {
             _showComingSoon('My reports');
           },
@@ -540,5 +685,153 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ],
     );
+  }
+
+  Widget _actionsHeading() {
+    return const Text(
+      'Quick Actions',
+      style: TextStyle(
+        color: AppTheme.navy,
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+
+  Widget _buildRecentActivity() {
+    List<MachineModel> machines = const [];
+
+    try {
+      machines = _resolveMachineProvider()?.machines ?? const [];
+    } catch (_) {}
+
+    final recent = machines.take(3).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Recent Activity',
+                style: TextStyle(
+                  color: AppTheme.navy,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            TextButton(onPressed: _openMachines, child: const Text('See All')),
+          ],
+        ),
+
+        const SizedBox(height: 6),
+
+        Card(
+          child: recent.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.all(18),
+                  child: Row(
+                    children: [
+                      Icon(Icons.history_toggle_off, color: Color(0xFF8B9AA7)),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Machine activity will appear here as data becomes available.',
+                          style: TextStyle(
+                            color: Color(0xFF718292),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : Column(
+                  children: List.generate(recent.length, (index) {
+                    final machine = recent[index];
+
+                    final color = _machineStatusColor(machine.status);
+
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 9,
+                                height: 9,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 11),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Machine ${machine.id}',
+                                      style: const TextStyle(
+                                        color: AppTheme.navy,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      machine.name,
+                                      style: const TextStyle(
+                                        color: Color(0xFF7B8B98),
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                machine.status,
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (index != recent.length - 1)
+                          const Divider(height: 1),
+                      ],
+                    );
+                  }),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Color _machineStatusColor(String status) {
+    final normalized = status.trim().toLowerCase();
+
+    if (normalized == 'operational' || normalized == 'running') {
+      return AppTheme.green;
+    }
+
+    if (normalized.contains('maintenance') || normalized == 'warning') {
+      return AppTheme.warning;
+    }
+
+    if (normalized == 'critical' || normalized == 'breakdown') {
+      return AppTheme.danger;
+    }
+
+    return const Color(0xFF8B9AA7);
   }
 }

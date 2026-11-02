@@ -12,6 +12,8 @@ import 'package:mach_alert/screens/splash/splash_screen.dart';
 import 'package:mach_alert/services/auth_service.dart';
 import 'package:mach_alert/services/user_service.dart';
 import 'package:provider/provider.dart';
+import 'package:mach_alert/services/machine_service.dart';
+import 'package:mach_alert/providers/machine_provider.dart';
 
 class _FakeFirebaseAuth extends Fake implements FirebaseAuth {
   @override
@@ -52,6 +54,8 @@ UserService createFakeUserService() {
   return UserService(firestore: FakeFirebaseFirestore());
 }
 
+class _FakeMachineService extends Fake implements MachineService {}
+
 void main() {
   group('MachAlertApp Root Configuration Tests', () {
     testWidgets('root app builds with MultiProvider', (tester) async {
@@ -59,7 +63,11 @@ void main() {
       final userService = createFakeUserService();
 
       await tester.pumpWidget(
-        MachAlertApp(authService: authService, userService: userService),
+        MachAlertApp(
+          authService: authService,
+          userService: userService,
+          machineService: _FakeMachineService(),
+        ),
       );
 
       await tester.pump();
@@ -171,8 +179,24 @@ void main() {
 
         final userService = UserService(firestore: FakeFirebaseFirestore());
 
+        final machineProvider = MachineProvider(
+          machineService: _FakeMachineService(),
+        );
+
+        addTearDown(() async {
+          // Unmount the widget tree before manually disposing
+          // a provider supplied with .value.
+          await tester.pumpWidget(const SizedBox.shrink());
+
+          machineProvider.dispose();
+        });
+
         await tester.pumpWidget(
-          MachAlertApp(authService: authService, userService: userService),
+          MachAlertApp(
+            authService: authService,
+            userService: userService,
+            machineProvider: machineProvider,
+          ),
         );
 
         await tester.pump();

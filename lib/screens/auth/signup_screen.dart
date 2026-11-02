@@ -4,10 +4,12 @@ import 'package:provider/provider.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_constants.dart';
 import '../../utils/validators.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_text_field.dart';
+import '../../widgets/mach_alert_logo.dart';
 
 class SignupScreen extends StatefulWidget {
   final UserService? userService;
@@ -23,8 +25,11 @@ class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
+
   final _emailController = TextEditingController();
+
   final _passwordController = TextEditingController();
+
   final _confirmPasswordController = TextEditingController();
 
   bool _showPassword = false;
@@ -55,6 +60,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
     try {
       AuthService? authService = widget.authService;
+
       if (authService == null) {
         try {
           authService = context.read<AuthService>();
@@ -71,6 +77,7 @@ class _SignupScreenState extends State<SignupScreen> {
       }
 
       UserService? userService = widget.userService;
+
       if (userService == null) {
         try {
           userService = context.read<UserService>();
@@ -84,8 +91,6 @@ class _SignupScreenState extends State<SignupScreen> {
         password: _passwordController.text,
       );
 
-      // Firebase Auth currently stores email/password.
-      // Save the entered name as the Firebase display name.
       await credential.user?.updateDisplayName(_nameController.text.trim());
 
       if (userService != null && credential.user != null) {
@@ -118,9 +123,6 @@ class _SignupScreenState extends State<SignupScreen> {
           }
         }
       }
-
-      // Do not manually navigate to Home.
-      // Auth state handling + AuthGate will do that.
     } on AuthServiceException catch (error) {
       if (!mounted) {
         return;
@@ -155,6 +157,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
     try {
       AuthService? authService = widget.authService;
+
       if (authService == null) {
         try {
           authService = context.read<AuthService>();
@@ -170,9 +173,8 @@ class _SignupScreenState extends State<SignupScreen> {
         );
       }
 
-      // Capture services before async boundary so unmounting upon auth state change
-      // does not prevent user profile creation or context lookup failure.
       UserService? userService = widget.userService;
+
       if (userService == null) {
         try {
           userService = context.read<UserService>();
@@ -185,6 +187,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
       if (credential?.user != null) {
         final user = credential!.user!;
+
         if (kDebugMode) {
           debugPrint(
             '[SignupScreen] Google Sign-Up succeeded for UID: ${user.uid}, email: ${user.email ?? 'unknown'}',
@@ -198,12 +201,14 @@ class _SignupScreenState extends State<SignupScreen> {
                 '[SignupScreen] Ensuring profile exists for UID: ${user.uid}',
               );
             }
+
             final profile = await userService.createProfileIfAbsent(
               uid: user.uid,
               email: user.email ?? '',
               displayName: user.displayName,
               role: AppConstants.roleOperator,
             );
+
             if (kDebugMode) {
               debugPrint(
                 '[SignupScreen] Profile confirmed for UID: ${profile.id}, role: ${profile.role}',
@@ -215,6 +220,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 '[SignupScreen] Profile creation failed for UID: ${user.uid}: code=${profileError.code}, message=${profileError.message}',
               );
             }
+
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -230,6 +236,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 '[SignupScreen] Profile creation unexpected error for UID: ${user.uid}: $e',
               );
             }
+
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -242,15 +249,13 @@ class _SignupScreenState extends State<SignupScreen> {
           }
         }
       }
-
-      // Do not manually navigate to Home.
-      // Auth state handling + AuthGate will do that.
     } on AuthServiceException catch (error) {
       if (kDebugMode) {
         debugPrint(
           '[SignupScreen] Google Sign-In AuthServiceException: code=${error.code}, message=${error.message}',
         );
       }
+
       if (!mounted) {
         return;
       }
@@ -261,6 +266,7 @@ class _SignupScreenState extends State<SignupScreen> {
       if (kDebugMode) {
         debugPrint('[SignupScreen] Google Sign-In unexpected error: $e');
       }
+
       if (!mounted) {
         return;
       }
@@ -289,7 +295,7 @@ class _SignupScreenState extends State<SignupScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Form(
@@ -297,170 +303,184 @@ class _SignupScreenState extends State<SignupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: 260,
-                          maxHeight: 80,
-                        ),
-                        child: Image.asset(
-                          'assets/branding/machalert_logo.png',
-                          fit: BoxFit.contain,
-                          semanticLabel: 'MachAlert Logo',
-                        ),
-                      ),
-                    ),
+                    const Center(child: MachAlertLogo(compact: true)),
+
                     const SizedBox(height: 24),
 
-                    Text(
+                    const Text(
                       'Create Account',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium,
+                      style: TextStyle(
+                        color: AppTheme.navy,
+                        fontSize: 25,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+
+                    const SizedBox(height: 7),
+
+                    const Text(
+                      'Join MachAlert and keep your production line connected.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF748694),
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
                     ),
 
                     const SizedBox(height: 24),
 
-                    AppTextField(
-                      label: 'Full Name',
-                      controller: _nameController,
-                      validator: (value) =>
-                          Validators.required(value, 'Full Name'),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    AppTextField(
-                      label: 'Email',
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      validator: Validators.email,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    AppTextField(
-                      label: 'Password',
-                      controller: _passwordController,
-                      obscureText: !_showPassword,
-                      validator: Validators.password,
-                    ),
-
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: _isLoading
-                            ? null
-                            : () {
-                                setState(() {
-                                  _showPassword = !_showPassword;
-                                });
-                              },
-                        child: Text(
-                          _showPassword ? 'Hide Password' : 'Show Password',
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    AppTextField(
-                      label: 'Confirm Password',
-                      controller: _confirmPasswordController,
-                      obscureText: !_showConfirmPassword,
-                      validator: (value) => Validators.confirmPassword(
-                        value,
-                        _passwordController.text,
-                      ),
-                    ),
-
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: _isLoading
-                            ? null
-                            : () {
-                                setState(() {
-                                  _showConfirmPassword = !_showConfirmPassword;
-                                });
-                              },
-                        child: Text(
-                          _showConfirmPassword
-                              ? 'Hide Password'
-                              : 'Show Password',
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    AppButton(
-                      text: 'Sign Up',
-                      isLoading: _isLoading && !_isGoogleLoading,
-                      onPressed: _isLoading ? null : _handleSignup,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    Row(
-                      children: [
-                        Expanded(child: Divider(color: Colors.grey.shade300)),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'OR',
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w500,
-                              fontSize: 13,
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            AppTextField(
+                              label: 'Full Name',
+                              controller: _nameController,
+                              validator: (value) =>
+                                  Validators.required(value, 'Full Name'),
                             ),
-                          ),
-                        ),
-                        Expanded(child: Divider(color: Colors.grey.shade300)),
-                      ],
-                    ),
 
-                    const SizedBox(height: 16),
+                            const SizedBox(height: 14),
 
-                    OutlinedButton.icon(
-                      key: const Key('google_sign_up_button'),
-                      onPressed: _isLoading ? null : _handleGoogleSignUp,
-                      icon: _isGoogleLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Container(
-                              width: 22,
-                              height: 22,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade600,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Text(
-                                'G',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
+                            AppTextField(
+                              label: 'Email',
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              validator: Validators.email,
+                            ),
+
+                            const SizedBox(height: 14),
+
+                            AppTextField(
+                              label: 'Password',
+                              controller: _passwordController,
+                              obscureText: !_showPassword,
+                              validator: Validators.password,
+                            ),
+
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _showPassword = !_showPassword;
+                                        });
+                                      },
+                                child: Text(
+                                  _showPassword
+                                      ? 'Hide Password'
+                                      : 'Show Password',
                                 ),
                               ),
                             ),
-                      label: Text(
-                        _isGoogleLoading
-                            ? 'Signing up with Google...'
-                            : 'Sign up with Google',
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+
+                            AppTextField(
+                              label: 'Confirm Password',
+                              controller: _confirmPasswordController,
+                              obscureText: !_showConfirmPassword,
+                              validator: (value) => Validators.confirmPassword(
+                                value,
+                                _passwordController.text,
+                              ),
+                            ),
+
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _showConfirmPassword =
+                                              !_showConfirmPassword;
+                                        });
+                                      },
+                                child: Text(
+                                  _showConfirmPassword
+                                      ? 'Hide Password'
+                                      : 'Show Password',
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 6),
+
+                            AppButton(
+                              text: 'Sign Up',
+                              isLoading: _isLoading && !_isGoogleLoading,
+                              onPressed: _isLoading ? null : _handleSignup,
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            const Row(
+                              children: [
+                                Expanded(child: Divider()),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 14),
+                                  child: Text(
+                                    'OR',
+                                    style: TextStyle(
+                                      color: Color(0xFF8796A2),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Expanded(child: Divider()),
+                              ],
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            OutlinedButton.icon(
+                              key: const Key('google_sign_up_button'),
+                              onPressed: _isLoading
+                                  ? null
+                                  : _handleGoogleSignUp,
+                              icon: _isGoogleLoading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Container(
+                                      width: 22,
+                                      height: 22,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade600,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Text(
+                                        'G',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                              label: Text(
+                                _isGoogleLoading
+                                    ? 'Signing up with Google...'
+                                    : 'Sign up with Google',
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
                     TextButton(
                       onPressed: _isLoading

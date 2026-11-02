@@ -53,7 +53,7 @@ void main() {
 
     expect(find.text('M-02'), findsOneWidget);
 
-    expect(find.text('Under Maintenance'), findsOneWidget);
+    expect(find.text('Maintenance'), findsOneWidget);
   });
 
   testWidgets('MachineListScreen filters machines by search', (tester) async {
