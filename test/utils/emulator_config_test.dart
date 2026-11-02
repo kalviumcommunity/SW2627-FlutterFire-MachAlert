@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mach_alert/services/user_service.dart';
@@ -26,20 +27,50 @@ class _MockFirestoreForConfigTest extends Fake implements FirebaseFirestore {
   }
 }
 
+class _MockStorageForConfigTest extends Fake implements FirebaseStorage {
+  String? emulatorHost;
+  int? emulatorPort;
+  int useStorageEmulatorCallCount = 0;
+
+  @override
+  Future<void> useStorageEmulator(
+    String host,
+    int port, {
+    bool automaticHostMapping = true,
+  }) async {
+    useStorageEmulatorCallCount++;
+    emulatorHost = host;
+    emulatorPort = port;
+  }
+}
+
 void main() {
   setUp(() {
     EmulatorConfig.overrideUseEmulator = null;
+    EmulatorConfig.resetStorageConfiguration();
   });
 
   tearDown(() {
     EmulatorConfig.overrideUseEmulator = null;
+    EmulatorConfig.resetStorageConfiguration();
   });
 
   group('EmulatorConfig Tests', () {
     test('default constants match firebase.json emulator setup', () {
       expect(EmulatorConfig.defaultFirestorePort, equals(8080));
+      expect(EmulatorConfig.defaultStoragePort, equals(9199));
       expect(EmulatorConfig.androidHost, equals('10.0.2.2'));
       expect(EmulatorConfig.defaultHost, equals('127.0.0.1'));
+    });
+
+    test('storageHost resolves platform-specific host', () {
+      final host = EmulatorConfig.storageHost;
+
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        expect(host, equals('10.0.2.2'));
+      } else {
+        expect(host, equals('127.0.0.1'));
+      }
     });
 
     test('firestoreHost resolves platform-specific host', () {
@@ -135,6 +166,91 @@ void main() {
 
       expect(result, isFalse);
       expect(mockFirestore.useFirestoreEmulatorCalled, isFalse);
+    });
+
+    test('shouldUseStorageEmulator and isStorageCloudMode follow debug and override settings', () {
+      expect(EmulatorConfig.shouldUseStorageEmulator, isTrue);
+      expect(EmulatorConfig.isStorageCloudMode, isFalse);
+
+      EmulatorConfig.overrideUseEmulator = false;
+      expect(EmulatorConfig.shouldUseStorageEmulator, isFalse);
+      expect(EmulatorConfig.isStorageCloudMode, isTrue);
+
+      EmulatorConfig.overrideUseEmulator = true;
+      expect(EmulatorConfig.shouldUseStorageEmulator, isTrue);
+      expect(EmulatorConfig.isStorageCloudMode, isFalse);
+    });
+
+    test(
+      'configureStorage calls useStorageEmulator when in emulator mode',
+      () async {
+        final mockStorage = _MockStorageForConfigTest();
+
+        final result = await EmulatorConfig.configureStorage(
+          storage: mockStorage,
+          useEmulator: true,
+          host: '127.0.0.1',
+          port: 9199,
+        );
+
+        expect(result, isTrue);
+        expect(mockStorage.useStorageEmulatorCallCount, equals(1));
+        expect(mockStorage.emulatorHost, equals('127.0.0.1'));
+        expect(mockStorage.emulatorPort, equals(9199));
+      },
+    );
+
+    test(
+      'configureStorage does NOT call useStorageEmulator when in cloud mode',
+      () async {
+        final mockStorage = _MockStorageForConfigTest();
+
+        final result = await EmulatorConfig.configureStorage(
+          storage: mockStorage,
+          useEmulator: false,
+        );
+
+        expect(result, isFalse);
+        expect(mockStorage.useStorageEmulatorCallCount, equals(0));
+        expect(mockStorage.emulatorHost, isNull);
+      },
+    );
+
+    test(
+      'configureStorage avoids configuring the same instance twice',
+      () async {
+        final mockStorage = _MockStorageForConfigTest();
+
+        final result1 = await EmulatorConfig.configureStorage(
+          storage: mockStorage,
+          useEmulator: true,
+        );
+        expect(result1, isTrue);
+        expect(mockStorage.useStorageEmulatorCallCount, equals(1));
+
+        // Second call with same instance
+        final result2 = await EmulatorConfig.configureStorage(
+          storage: mockStorage,
+          useEmulator: true,
+        );
+        expect(result2, isTrue);
+        expect(
+          mockStorage.useStorageEmulatorCallCount,
+          equals(1),
+        ); // Still 1, not 2
+      },
+    );
+
+    test('configureStorage honors overrideUseEmulator = false', () async {
+      EmulatorConfig.overrideUseEmulator = false;
+      final mockStorage = _MockStorageForConfigTest();
+
+      final result = await EmulatorConfig.configureStorage(
+        storage: mockStorage,
+      );
+
+      expect(result, isFalse);
+      expect(mockStorage.useStorageEmulatorCallCount, equals(0));
     });
 
     test('UserService writes to selected Firestore instance without production write in tests', () async {

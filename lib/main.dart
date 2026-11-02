@@ -21,6 +21,7 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   EmulatorConfig.configureFirestore();
+  await EmulatorConfig.configureStorage();
 
   runApp(const MachAlertApp());
 }
