@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -5,6 +8,22 @@ plugins {
     // END: FlutterFire Configuration
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val isReleaseBuildRequested = gradle.startParameter.taskNames.any {
+    it.contains("Release", ignoreCase = true)
+}
+
+if (keystorePropertiesFile.exists()) {
+    FileInputStream(keystorePropertiesFile).use { stream ->
+        keystoreProperties.load(stream)
+    }
+} else if (isReleaseBuildRequested) {
+    throw GradleException(
+        "Release build requested, but signing configuration file not found at: ${keystorePropertiesFile.absolutePath}"
+    )
 }
 
 android {
@@ -32,11 +51,39 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            val keyAliasProp = keystoreProperties.getProperty("keyAlias")
+            val keyPasswordProp = keystoreProperties.getProperty("keyPassword")
+            val storeFileProp = keystoreProperties.getProperty("storeFile")
+            val storePasswordProp = keystoreProperties.getProperty("storePassword")
+
+            if (keystorePropertiesFile.exists()) {
+                if (keyAliasProp.isNullOrBlank() || keyPasswordProp.isNullOrBlank() ||
+                    storeFileProp.isNullOrBlank() || storePasswordProp.isNullOrBlank()) {
+                    throw GradleException(
+                        "Missing required signing properties in key.properties (expected: keyAlias, keyPassword, storeFile, storePassword)"
+                    )
+                }
+
+                val resolvedStoreFile = file(storeFileProp)
+                if (!resolvedStoreFile.exists()) {
+                    throw GradleException(
+                        "Keystore file not found at: ${resolvedStoreFile.absolutePath}"
+                    )
+                }
+
+                keyAlias = keyAliasProp
+                keyPassword = keyPasswordProp
+                storeFile = resolvedStoreFile
+                storePassword = storePasswordProp
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
