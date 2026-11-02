@@ -5,18 +5,26 @@ import 'package:mach_alert/screens/auth/auth_gate.dart';
 import 'package:mach_alert/screens/auth/login_screen.dart';
 import 'package:mach_alert/screens/auth/signup_screen.dart';
 import 'package:mach_alert/screens/dashboard/home_screen.dart';
+import 'package:mach_alert/widgets/mach_alert_logo.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _signupLinkText = "Don't have an account? Sign Up";
 const _loginLinkText = 'Already have an account? Login';
 
 Future<void> _pumpUnauthenticatedApp(WidgetTester tester) async {
+  SharedPreferences.setMockInitialValues({
+    AuthGate.hasCompletedOnboardingKey: true,
+  });
+
   final appState = AppStateProvider()..setUnauthenticated();
 
   await tester.pumpWidget(
     ChangeNotifierProvider<AppStateProvider>.value(
       value: appState,
-      child: const MaterialApp(home: AuthGate()),
+      child: const MaterialApp(
+        home: AuthGate(minSplashDuration: Duration.zero),
+      ),
     ),
   );
 
@@ -40,7 +48,14 @@ void main() {
     await _pumpUnauthenticatedApp(tester);
 
     expect(find.byType(LoginScreen), findsOneWidget);
-    expect(find.text('MachAlert'), findsOneWidget);
+    expect(find.byType(MachAlertLogo), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('MachAlert'),
+      ),
+      findsNothing,
+    );
     expect(find.text('Welcome Back'), findsOneWidget);
     expect(find.byType(SignupScreen), findsNothing);
     expect(find.byType(HomeScreen), findsNothing);

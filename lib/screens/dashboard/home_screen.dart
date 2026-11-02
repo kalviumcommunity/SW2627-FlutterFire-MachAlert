@@ -377,26 +377,14 @@ class _HomeScreenState extends State<HomeScreen> {
         !provider.isLoading &&
         !provider.hasError;
 
-    final machines = isReady ? provider.machines : const <MachineModel>[];
+    final stats = isReady ? provider.statistics : null;
 
-    final machineCount = isReady ? machines.length.toString() : '--';
-
-    final runningCount = isReady
-        ? machines.where((machine) => machine.isOperational).length.toString()
+    final machineCount = stats != null ? stats.total.toString() : '--';
+    final runningCount = stats != null ? stats.running.toString() : '--';
+    final maintenanceCount = stats != null
+        ? stats.maintenance.toString()
         : '--';
-
-    final maintenanceCount = isReady
-        ? machines
-              .where(
-                (machine) => machine.isUnderMaintenance || machine.isWarning,
-              )
-              .length
-              .toString()
-        : '--';
-
-    final breakdownCount = isReady
-        ? machines.where((machine) => machine.isCritical).length.toString()
-        : '--';
+    final breakdownCount = stats != null ? stats.breakdown.toString() : '--';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -457,6 +445,16 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+
+        if (stats != null && stats.other > 0) ...[
+          const SizedBox(height: 10),
+          DashboardStatCard(
+            label: 'Other / Unknown',
+            value: stats.other.toString(),
+            icon: Icons.help_outline,
+            accentColor: const Color(0xFF788896),
+          ),
+        ],
 
         const SizedBox(height: 10),
 

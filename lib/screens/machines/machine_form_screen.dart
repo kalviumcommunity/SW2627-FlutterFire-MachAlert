@@ -315,6 +315,7 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                 const SizedBox(height: 16),
 
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: _status,
                   decoration: const InputDecoration(
                     labelText: 'Status',
@@ -324,7 +325,11 @@ class _MachineFormScreenState extends State<MachineFormScreen> {
                       .map(
                         (status) => DropdownMenuItem<String>(
                           value: status,
-                          child: Text(status),
+                          child: Text(
+                            status,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       )
                       .toList(),

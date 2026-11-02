@@ -20,8 +20,9 @@ import '../services/machine_service.dart';
 import '../services/maintenance_service.dart';
 import '../services/storage_service.dart';
 import '../services/user_service.dart';
-import '../screens/reports/reports_screen.dart';
+import '../providers/machine_provider.dart';
 import '../screens/profile/profile_screen.dart';
+import '../screens/reports/reports_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -191,10 +192,10 @@ class AppRoutes {
     );
   }
 
-  static Route<void> reports() {
+  static Route<void> reports({MachineProvider? machineProvider}) {
     return _route<void>(
       name: reportsName,
-      builder: (_) => const ReportsScreen(),
+      builder: (_) => ReportsScreen(machineProvider: machineProvider),
     );
   }
 

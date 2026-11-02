@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
-import '../../widgets/mach_alert_logo.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final VoidCallback onFinished;
@@ -60,14 +59,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(22, 16, 22, 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: MachAlertLogo(compact: true),
-              ),
-            ),
-
             Expanded(
               child: PageView.builder(
                 controller: _controller,

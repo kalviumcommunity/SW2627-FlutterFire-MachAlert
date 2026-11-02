@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../providers/app_state_provider.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/mach_alert_logo.dart';
 import '../../widgets/main_bottom_navigation.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -81,10 +80,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
           children: [
-            const MachAlertLogo(compact: true),
-
-            const SizedBox(height: 30),
-
             Row(
               children: [
                 CircleAvatar(

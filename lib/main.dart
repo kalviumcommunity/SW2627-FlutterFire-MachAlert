@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
 import 'providers/app_state_provider.dart';
@@ -35,6 +36,8 @@ class MachAlertApp extends StatelessWidget {
   final MaintenanceService? maintenanceService;
   final AppStateProvider? appStateProvider;
   final MachineProvider? machineProvider;
+  final Duration? minSplashDuration;
+  final SharedPreferences? sharedPreferences;
 
   const MachAlertApp({
     super.key,
@@ -46,6 +49,8 @@ class MachAlertApp extends StatelessWidget {
     this.maintenanceService,
     this.appStateProvider,
     this.machineProvider,
+    this.minSplashDuration,
+    this.sharedPreferences,
   });
 
   @override
@@ -107,7 +112,11 @@ class MachAlertApp extends StatelessWidget {
         title: 'MachAlert',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
-        home: const AuthGate(),
+        home: AuthGate(
+          minSplashDuration:
+              minSplashDuration ?? const Duration(milliseconds: 1500),
+          sharedPreferences: sharedPreferences,
+        ),
       ),
     );
   }

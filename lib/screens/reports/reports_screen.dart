@@ -1,11 +1,16 @@
-import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/machine_provider.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/mach_alert_logo.dart';
 import '../../widgets/main_bottom_navigation.dart';
 
 class ReportsScreen extends StatefulWidget {
-  const ReportsScreen({super.key});
+  final MachineProvider? machineProvider;
+
+  const ReportsScreen({super.key, this.machineProvider});
 
   @override
   State<ReportsScreen> createState() => _ReportsScreenState();
@@ -17,7 +22,51 @@ class _ReportsScreenState extends State<ReportsScreen> {
   static const _tabs = ['Overview', 'Inspections', 'Breakdowns'];
 
   @override
+  void initState() {
+    super.initState();
+    _scheduleMachineSubscription();
+  }
+
+  void _scheduleMachineSubscription() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final provider = _resolveMachineProvider();
+      if (provider != null && !provider.hasActiveSubscription) {
+        provider.subscribeToMachines();
+      }
+    });
+  }
+
+  MachineProvider? _resolveMachineProvider() {
+    if (widget.machineProvider != null) {
+      return widget.machineProvider;
+    }
+    try {
+      return context.read<MachineProvider>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    _scheduleMachineSubscription();
+
+    MachineProvider? provider = widget.machineProvider;
+    if (provider == null) {
+      try {
+        provider = context.watch<MachineProvider>();
+      } catch (_) {}
+    }
+
+    final isReady =
+        provider != null &&
+        provider.hasActiveSubscription &&
+        !provider.isLoading &&
+        !provider.hasError;
+
+    final stats = isReady ? provider.statistics : null;
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(title: const Text('Reports')),
@@ -26,13 +75,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: MachAlertLogo(compact: true),
-            ),
-
-            const SizedBox(height: 22),
-
             Container(
               height: 42,
               padding: const EdgeInsets.all(4),
@@ -125,28 +167,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          SizedBox(
-                            width: 108,
-                            height: 108,
-                            child: CircularProgressIndicator(
-                              value: 0.67,
-                              strokeWidth: 15,
-                              backgroundColor: const Color(0xFFFFE4E4),
-                              color: AppTheme.green,
-                            ),
-                          ),
-                          const Column(
+                          MachineStatusDonutChart(stats: stats),
+                          Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                '12',
-                                style: TextStyle(
+                                stats != null ? stats.total.toString() : '--',
+                                style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
                                   color: AppTheme.navy,
                                 ),
                               ),
-                              Text(
+                              const Text(
                                 'Machines',
                                 style: TextStyle(
                                   fontSize: 11,
@@ -161,26 +194,41 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
                     const SizedBox(width: 22),
 
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         children: [
                           _LegendRow(
                             color: AppTheme.green,
                             label: 'Running',
-                            value: '8 (67%)',
+                            value: stats != null
+                                ? '${stats.running} (${stats.runningPercentage}%)'
+                                : '--',
                           ),
-                          SizedBox(height: 12),
+                          const SizedBox(height: 12),
                           _LegendRow(
                             color: AppTheme.warning,
                             label: 'Maintenance',
-                            value: '2 (17%)',
+                            value: stats != null
+                                ? '${stats.maintenance} (${stats.maintenancePercentage}%)'
+                                : '--',
                           ),
-                          SizedBox(height: 12),
+                          const SizedBox(height: 12),
                           _LegendRow(
                             color: AppTheme.danger,
                             label: 'Breakdown',
-                            value: '2 (17%)',
+                            value: stats != null
+                                ? '${stats.breakdown} (${stats.breakdownPercentage}%)'
+                                : '--',
                           ),
+                          if (stats != null && stats.other > 0) ...[
+                            const SizedBox(height: 12),
+                            _LegendRow(
+                              color: const Color(0xFF788896),
+                              label: 'Other / Unknown',
+                              value:
+                                  '${stats.other} (${stats.otherPercentage}%)',
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -341,4 +389,91 @@ class _TrendPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
     return false;
   }
+}
+
+class MachineStatusDonutChart extends StatelessWidget {
+  final MachineStatistics? stats;
+  final double size;
+  final double strokeWidth;
+
+  const MachineStatusDonutChart({
+    super.key,
+    required this.stats,
+    this.size = 108,
+    this.strokeWidth = 15,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: MachineStatusDonutPainter(
+          stats: stats,
+          strokeWidth: strokeWidth,
+        ),
+      ),
+    );
+  }
+}
+
+class MachineStatusDonutPainter extends CustomPainter {
+  final MachineStatistics? stats;
+  final double strokeWidth;
+
+  const MachineStatusDonutPainter({
+    required this.stats,
+    this.strokeWidth = 15.0,
+  });
+
+  List<({int count, Color color})> get segments {
+    final s = stats;
+    if (s == null || s.total == 0) return const [];
+    return [
+      (count: s.running, color: AppTheme.green),
+      (count: s.maintenance, color: AppTheme.warning),
+      (count: s.breakdown, color: AppTheme.danger),
+      if (s.other > 0) (count: s.other, color: const Color(0xFF788896)),
+    ];
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final bgPaint = Paint()
+      ..color = const Color(0xFFEFF4F7)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    canvas.drawCircle(center, radius, bgPaint);
+
+    final currentStats = stats;
+    if (currentStats == null || currentStats.total == 0) {
+      return;
+    }
+
+    final total = currentStats.total;
+    double startAngle = -math.pi / 2;
+
+    for (final segment in segments) {
+      if (segment.count <= 0) continue;
+      final sweepAngle = (segment.count / total) * 2 * math.pi;
+      final paint = Paint()
+        ..color = segment.color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.butt;
+
+      canvas.drawArc(rect, startAngle, sweepAngle, false, paint);
+      startAngle += sweepAngle;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant MachineStatusDonutPainter oldDelegate) =>
+      oldDelegate.stats != stats || oldDelegate.strokeWidth != strokeWidth;
 }

@@ -4,6 +4,7 @@ import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mach_alert/main.dart';
 import 'package:mach_alert/providers/app_state_provider.dart';
 import 'package:mach_alert/screens/auth/auth_gate.dart';
@@ -58,6 +59,11 @@ class _FakeMachineService extends Fake implements MachineService {}
 
 void main() {
   group('MachAlertApp Root Configuration Tests', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({
+        AuthGate.hasCompletedOnboardingKey: true,
+      });
+    });
     testWidgets('root app builds with MultiProvider', (tester) async {
       final authService = createFakeAuthService();
       final userService = createFakeUserService();
@@ -196,6 +202,7 @@ void main() {
             authService: authService,
             userService: userService,
             machineProvider: machineProvider,
+            minSplashDuration: Duration.zero,
           ),
         );
 

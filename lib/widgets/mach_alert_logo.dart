@@ -1,51 +1,59 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
-
+/// Centralized MachAlert branding widget providing the full approved logo
+/// or the compact approved ribbon emblem.
 class MachAlertLogo extends StatelessWidget {
+  /// Whether to render the compact emblem-only variant.
+  /// Defaults to `false` (renders the full approved logo).
   final bool compact;
+
+  /// Retained for backwards compatibility with existing call sites.
   final bool light;
 
-  const MachAlertLogo({super.key, this.compact = false, this.light = false});
+  /// Optional width constraint for the logo.
+  final double? width;
+
+  /// Optional height constraint for the logo.
+  final double? height;
+
+  const MachAlertLogo({
+    super.key,
+    this.compact = false,
+    this.light = false,
+    this.width,
+    this.height,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final textColor = light ? Colors.white : AppTheme.navy;
+    if (compact) {
+      return ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: width ?? 70,
+          maxHeight: height ?? 32,
+        ),
+        child: Image.asset(
+          'assets/branding/machalert_emblem.png',
+          width: width,
+          height: height ?? 32,
+          fit: BoxFit.contain,
+          semanticLabel: 'MachAlert Emblem',
+        ),
+      );
+    }
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: compact ? 32 : 44,
-          height: compact ? 32 : 44,
-          decoration: BoxDecoration(
-            color: AppTheme.green,
-            borderRadius: BorderRadius.circular(compact ? 9 : 13),
-          ),
-          child: Icon(
-            Icons.monitor_heart_outlined,
-            color: Colors.white,
-            size: compact ? 20 : 27,
-          ),
-        ),
-        SizedBox(width: compact ? 8 : 10),
-        RichText(
-          text: TextSpan(
-            style: TextStyle(
-              fontSize: compact ? 18 : 28,
-              fontWeight: FontWeight.w800,
-              color: textColor,
-            ),
-            children: const [
-              TextSpan(text: 'Mach'),
-              TextSpan(
-                text: 'Alert',
-                style: TextStyle(color: AppTheme.green),
-              ),
-            ],
-          ),
-        ),
-      ],
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: width ?? 280,
+        maxHeight: height ?? 80,
+      ),
+      child: Image.asset(
+        'assets/branding/machalert_logo.png',
+        width: width,
+        height: height,
+        fit: BoxFit.contain,
+        semanticLabel: 'MachAlert Logo',
+      ),
     );
   }
 }
