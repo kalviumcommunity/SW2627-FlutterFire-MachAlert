@@ -538,17 +538,18 @@ void main() {
         );
         await tester.pump();
 
-        // Reports must display '--' instead of fabricated 12
-        expect(find.text('--'), findsWidgets);
+        // Reports displays loading indicator instead of fabricated 12
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
         expect(find.text('12'), findsNothing);
         expect(find.text('8 (67%)'), findsNothing);
 
         // Emit error on stream
         streamController.addError(Exception('Firestore offline'));
         await tester.pump();
+        await tester.pump();
 
-        // Error state preserves safe '--' indicator
-        expect(find.text('--'), findsWidgets);
+        // Error state displays error with Retry button instead of fabricated counts
+        expect(find.text('Retry'), findsOneWidget);
         expect(find.text('12'), findsNothing);
       },
     );

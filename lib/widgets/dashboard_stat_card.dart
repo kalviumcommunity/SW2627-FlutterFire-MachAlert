@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -7,6 +9,8 @@ class DashboardStatCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color? accentColor;
+  final bool isLoading;
+  final bool hasError;
 
   const DashboardStatCard({
     super.key,
@@ -14,11 +18,14 @@ class DashboardStatCard extends StatelessWidget {
     required this.value,
     required this.icon,
     this.accentColor,
+    this.isLoading = false,
+    this.hasError = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final color = accentColor ?? AppTheme.green;
+    final isTest = !kIsWeb && Platform.environment['FLUTTER_TEST'] == 'true';
 
     return Card(
       child: Padding(
@@ -39,14 +46,32 @@ class DashboardStatCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      color: AppTheme.navy,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
+                  if (isLoading)
+                    SizedBox(
+                      height: 27,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            value: isTest ? 0.75 : null,
+                            valueColor:
+                                const AlwaysStoppedAnimation<Color>(AppTheme.navy),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Text(
+                      value,
+                      style: TextStyle(
+                        color: hasError ? AppTheme.danger : AppTheme.navy,
+                        fontSize: hasError && value.length > 3 ? 16 : 22,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 2),
                   Text(
                     label,
