@@ -1,296 +1,113 @@
-# 🏭 MachAlert — Project Completion Report
+# MachAlert — implementation and delivery report
 
-> **Project:** MachAlert — Real-Time Industrial Maintenance & Fault Tracking Platform
-> **Milestone:** Sprint 2 Final Completion (Day 20)
-> **Deliverable:** Complete End-to-End Testing, Firebase Architecture Finalization & Technical Documentation
-> **Status:** ✅ Completed & Verified
+Last updated: **3 November 2026**. Code baseline: **main at 3f0f0fe**.
 
----
+## Delivery status
 
-## 1. Executive Summary
+MachAlert is an Android assignment app for reporting machine faults, viewing machine condition, and coordinating maintenance. The latest code was built as **version 1.0.0, build 3** and installed on a physical Android 16 phone. Startup, an authenticated session, and machine data display were observed on the phone.
 
-MachAlert was engineered to address a pervasive inefficiency in industrial manufacturing: the reliance on delayed, end-of-shift review meetings to record machine malfunctions and schedule maintenance. In conventional production lines, unrecorded mechanical breakdowns lead to cumulative machine degradation, unplanned downtime, delayed technician response, and missed manufacturing quotas.
+Core application workflows are implemented, but **cloud image uploads are currently blocked by missing Firebase Storage setup**. This report does not certify complete production readiness or successful live verification of every role and backend operation.
 
-MachAlert replaces manual logs with a reactive, mobile-first cloud platform built with **Flutter** and **Firebase**. Shop-floor operators can instantly document machine breakdowns with photographic evidence; factory managers receive real-time visibility into machine fleet health and active breakdown tickets; and maintenance technicians execute structured repair workflows with photo-verified proof of completion.
+The original Sprint 2 plan and contribution goals remain in [the PRD](../PRD.md). The current operational record is [Firebase verification](firebase-verification.md).
 
-As of Day 20, all core functional and non-functional requirements have been achieved, verified through comprehensive end-to-end integration tests, hardened with production-grade security rules, and compiled cleanly into a deployable Android artifact.
+## Implemented application features
 
----
+| Area | Current behavior |
+| --- | --- |
+| Startup | Branded splash, minimum 1.5-second display, authentication timeout handling, first-launch onboarding stored in Shared Preferences. |
+| Authentication | Email/password sign-up and login, Google sign-in, persistent sessions, logout, and Firestore user profiles. New profiles default to operator. |
+| Navigation | Home, Machines, Log Event, Reports, and Profile; role-specific actions on Home. |
+| Machines | Live inventory, details, search/filtering, manager create/edit flows, status and health fields. |
+| Faults | Machine/type/severity/description form, optional image, Firestore report creation, history, live monitoring, search/filtering. An upload failure prevents that report submission. |
+| Maintenance | Manager task creation and technician assignment, assigned task view, status updates, notes, optional photo proof, transactional update history. |
+| Reports | Machine totals and status summaries shared with Home through MachineProvider and MachineStatistics. |
+| Branding | Approved MachAlert assets and Google G asset, shared Material theme, revised auth and onboarding screens. |
 
-## 2. System Architecture & Technical Stack
+MachineStatistics assigns every machine to one bucket: Operational → Running; Warning or Under Maintenance → In Maintenance; Critical → Breakdown; unrecognized status → Other / Unknown. The categories sum to Total.
 
-MachAlert follows a decoupled, service-oriented architecture leveraging Flutter's reactive widget tree and Firebase's real-time document synchronization.
+Maintenance states stored in Firestore are **Pending → In Progress → Resolved**. **Completed** is a presentation alias for Resolved. MaintenanceService updates the maintenance document and its history; it does not automatically synchronize the separate machine and fault documents.
 
-### 2.1 Core Technology Stack
+## Architecture and versions
 
-| Layer | Component | Specification / Version |
-| :--- | :--- | :--- |
-| **Mobile Client** | Flutter Framework | Flutter `3.13.5+` / Dart `3.1.3+` |
-| **Design System** | Material 3 Design | Centralized `AppTheme.light` with custom elevation and industrial color tokens |
-| **State Management** | Provider | `AppStateProvider` (session/RBAC), `MachineProvider` (fleet cache & subscriptions) |
-| **Authentication** | Firebase Auth | Email/Password with client-side credential validation and persistent session caching |
-| **Database** | Cloud Firestore | Real-time collection streams (`machines`, `faults`, `maintenance`, `users`) |
-| **Object Storage** | Firebase Storage | Image uploads for breakdown inspection and repair completion proof |
-| **Local Emulation** | Firebase Emulator Suite | EmulatorConfig host-routing for Firestore (port 8080) and Storage (port 9199) |
-| **Build Target** | Android | Gradle 8.13 / AGP 9.1.0 / Google Services 4.4.4 / Target SDK 34 |
+~~~text
+Screens and widgets
+  → AppStateProvider / MachineProvider
+  → AuthService / UserService / MachineService / FaultService
+    / MaintenanceService / StorageService
+  → Firebase Authentication / Cloud Firestore / Cloud Storage
+~~~
 
-### 2.2 System Architecture Diagram
+| Component | Current source or verified environment |
+| --- | --- |
+| Flutter / Dart | Verified locally with Flutter 3.47.6 and Dart 3.13.5; pubspec.yaml requires Dart ^3.13.5. |
+| State management | Provider; shared machine inventory and role/session state. |
+| Preferences | shared_preferences for first-launch onboarding. |
+| Android build | Gradle 9.3.1, AGP 9.1.0, Kotlin 2.4.0, Google Services plugin 4.4.4. |
+| APK compatibility | Minimum API 24; target API 36. |
+| Build Java | Verified with Android Studio's JDK 25.0.3; Java/Kotlin compile target 17. |
+| Firebase project | machalert; Android package com.example.mach_alert. |
+| Firebase platforms | Android configured in firebase_options.dart. Other targets require configuration and testing. |
+| Dependencies | pubspec.yaml declares constraints; pubspec.lock records exact resolved versions. |
 
-```mermaid
-flowchart TD
-    subgraph Client ["MachAlert Mobile Client (Flutter)"]
-        UI["UI Layer\n(Auth, Dashboards, Faults, Machines, Maintenance)"]
-        State["State Management\n(AppStateProvider, MachineProvider)"]
-        Services["Domain Services\n(AuthService, UserService, MachineService,\nFaultService, MaintenanceService)"]
-        Config["Configuration & Utilities\n(AppTheme, AppRoutes, EmulatorConfig, StorageUploader)"]
+## Data and attachment paths
 
-        UI --> State
-        State --> Services
-        Services --> Config
-    end
+| Collection / path | Purpose |
+| --- | --- |
+| users/{uid} | Auth-linked profile, email, display name, role, timestamps. |
+| machines/{machineId} | Name, production line, model, operational status, health/telemetry fields. |
+| faults/{faultId} | Machine reference, type, severity, description, reporter UID, status, optional image URL, timestamp. |
+| maintenance/{taskId} | Machine/fault context, assigned technician, priority, status, assignment notes, timestamps, updateHistory map. |
+| alerts/{alertId} | Schema and security rules exist; this does not establish automated alert generation or push delivery. |
+| fault_images/{uid}/{fileName} | Fault photo attachments. |
+| maintenance_proofs/{uid}/{fileName} | Repair proof attachments; metadata includes taskId. |
 
-    subgraph FirebaseServices ["Firebase Cloud & Local Emulator Suite"]
-        Auth["Firebase Authentication\n(User Credentials & Session Tokens)"]
-        Firestore["Cloud Firestore\n(users, machines, faults, maintenance)"]
-        Storage["Firebase Storage\n(faults/{id}/*, maintenance/{id}/*)"]
-    end
+Machine status values are Operational, Warning, Critical, and Under Maintenance. Fault status values are Open, In Progress, and Resolved.
 
-    Services -->|Sign In / Sign Out| Auth
-    Services -->|Real-Time Streams & CRUD| Firestore
-    Services -->|Binary Image Upload & URL Retrieval| Storage
-```
+## Security model in the repository
 
-### 2.3 Data Schema & Entity Relationships
+The authoritative policies are [firestore.rules](../firestore.rules) and [storage.rules](../storage.rules). Their presence in Git does not establish which version is deployed to the cloud.
 
-The platform organizes industrial entities into four primary Firestore root collections:
+- Roles are read from the canonical Firestore user profile, not inferred from the email address or a UI selection.
+- Authenticated users can read machines and faults. Managers manage machine records.
+- Fault creation requires an authenticated matching reportedBy UID and valid data; the rule is not restricted to the operator role.
+- Managers create maintenance tasks. Managers and assigned technicians have the permitted task access; operators cannot read maintenance documents.
+- The app creates operator profiles. Rules allow limited initial profile roles and prevent self-promotion to manager; privileged role setup requires trusted administration.
+- Storage creation requires authentication, an own-UID path, image MIME type, and size at most 5 MiB.
+- Fault-image reads allow the owner, technicians, and managers. Maintenance-proof reads allow the owner, managers, or the assigned technician identified through task metadata and Firestore.
+- Storage update and delete are denied. Storage creation itself is not a role-specific “operator only” or “assigned technician only” check.
+- Storage rules rely on Firestore role/task lookups, which must be configured when deploying them.
 
-```mermaid
-erDiagram
-    USERS ||--o{ FAULTS : "reports"
-    USERS ||--o{ MAINTENANCE : "assigned_to"
-    MACHINES ||--o{ FAULTS : "experiences"
-    MACHINES ||--o{ MAINTENANCE : "requires"
-    FAULTS ||--o| MAINTENANCE : "triggers"
+## Current cloud blocker
 
-    USERS {
-        string uid PK
-        string email
-        string name
-        string role "operator | technician | manager"
-        timestamp createdAt
-        timestamp updatedAt
-    }
+Read-only checks found **no buckets** in project machalert, a **404** for machalert.firebasestorage.app, a disabled/unused Firebase Storage API, and **billingEnabled: false**. The phone's report-image upload fails with HTTP 404 and object-not-found.
 
-    MACHINES {
-        string id PK
-        string name
-        string productionLine
-        string modelNumber
-        string status "Operational | Maintenance | Broken"
-        float healthScore "0.0 - 100.0"
-        timestamp createdAt
-        timestamp updatedAt
-    }
+The photo is uploaded before the report is written, so the failed image attempt does not create the report. A report without the optional photo bypasses Storage. Maintenance proof uploads are affected too.
 
-    FAULT_REPORTS {
-        string id PK
-        string machineId FK
-        string machineName
-        string faultType "Mechanical | Electrical | Hydraulic | Sensor | Other"
-        string severity "Low | Medium | High | Critical"
-        string description
-        string reportedBy FK
-        string reporterName
-        string status "Open | In Progress | Resolved"
-        string imageUrl "Optional Storage URL"
-        timestamp createdAt
-        timestamp updatedAt
-    }
+Provisioning Storage requires project-owner billing approval and the Blaze plan, then bucket setup and reviewed rule deployment. See [the verified diagnosis and setup steps](firebase-verification.md). No billing change, bucket creation, or rule deployment was performed during this documentation audit.
 
-    MAINTENANCE_TASKS {
-        string id PK
-        string machineId FK
-        string machineName
-        string faultId FK
-        string technicianId FK
-        string technicianName
-        string priority "Low | Medium | High | Critical"
-        string status "Pending | In Progress | Completed"
-        string notes
-        map updateHistory "Timestamped audit trail & proof URLs"
-        timestamp createdAt
-        timestamp updatedAt
-    }
-```
+## Verification record
 
----
+| Check | Result on 3 November 2026 |
+| --- | --- |
+| Latest code synchronized | main at 3f0f0fe; local phone-specific changes preserved. |
+| Flutter analysis | No issues found. |
+| Flutter test runner | 817 passed, 3 skipped, zero reported failures. |
+| Live emulator security evaluation | Not established by this run; emulators were not running and some tests return early when unavailable. |
+| Android release compilation | Successful, approximately 55.4 MB. |
+| Installation | Build 3 installed as an update using the existing development signing key. |
+| Device smoke check | App remained running; signed-in session and machine data were visible. |
+| Cloud report-photo upload | Failed; missing Storage provisioning confirmed. |
 
-## 3. Role-Based Access Control (RBAC) Matrix
+An initial build 2 crashed because Windows plugin setup had stopped before regenerating Android's JNI and Shared Preferences registrations. A successful dependency setup regenerated them; build 3 passed the on-device startup check. This was a local build setup correction, not a change to the latest application feature code.
 
-MachAlert strictly enforces role boundaries across three levels: UI rendering, client-side route guards, and backend Firestore/Storage security rules.
+For reproducible commands and the distinction between mocked tests, emulator tests, and physical-device checks, use [the test plan](END_TO_END_TEST_PLAN.md).
 
-| Functional Capability | Operator | Technician | Manager | Enforcement Mechanism |
-| :--- | :---: | :---: | :---: | :--- |
-| **Sign In & View Role Dashboard** | ✅ | ✅ | ✅ | `AuthGate` & `HomeScreen._buildDashboardForRole` |
-| **Browse Machine Fleet & Details** | ✅ | ✅ | ✅ | `MachineListScreen` & `MachineDetailsScreen` |
-| **Add / Edit / Remove Machines** | ❌ | ❌ | ✅ | `canManage` flag + Firestore Security Rules |
-| **Submit Machine Breakdown Fault** | ✅ | ❌ | ❌ | `FaultReportingScreen` + `faults` create rule |
-| **Attach Fault Inspection Photo** | ✅ | ❌ | ❌ | `StorageUploader` (`faults/{id}/*`) |
-| **View Fault History** | ✅ | ✅ | ✅ | `FaultHistoryScreen` + Firestore read rule |
-| **Monitor Real-Time Fault Stream** | ❌ | ✅ | ✅ | `RealtimeFaultsScreen` + Firestore stream rule |
-| **View Assigned Maintenance Tasks** | ❌ | ✅ | ❌ | `MaintenanceListScreen(assignedOnly: true)` |
-| **View Facility Maintenance Activity** | ❌ | ❌ | ✅ | `MaintenanceListScreen(assignedOnly: false)` |
-| **Transition Task: Pending ➔ In Progress** | ❌ | ✅ | ❌ | `MaintenanceDetailsScreen` + Firestore update rule |
-| **Complete Task with Photo Proof** | ❌ | ✅ | ❌ | `MaintenanceDetailsScreen` + Storage (`maintenance/{id}/*`) |
-| **Audit Maintenance Proof & Timeline** | ❌ | ✅ | ✅ | `updateHistory` audit map display |
+## Remaining work before a complete cloud demonstration
 
----
+1. Provision Storage with the project owner's approved billing setup, deploy the intended rules, and test both image workflows.
+2. Provision and verify the three retained [demo identities](DEMO_GUIDE.md). They were absent from Firebase Authentication at the last check.
+3. Exercise the operator, manager, and technician workflow against the chosen backend, including task assignment and authorization failures.
+4. Run security tests with both emulators actually available and record the result separately from mocked tests.
+5. Use a private upload signing key and appropriate release checks before any Play Store distribution.
 
-## 4. Sprint 2 Implementation & PR Genealogy
-
-The project evolved systematically across 20 sprint days, distributed across three cross-functional engineering team members:
-
-```mermaid
-gitGraph
-    commit id: "Base Project Setup"
-    commit id: "PR #53 (M1 D18: Maint UI)"
-    commit id: "PR #54 (M1 D19: Empty/Error States)"
-    commit id: "PR #55 (M1 D20: Polish & Navigation)"
-    branch feature/day-19-firestore-storage-security-rules
-    checkout feature/day-19-firestore-storage-security-rules
-    commit id: "PR #60 (M2 D19: Security Rules)"
-    branch feature/day-19-role-workflow-validation
-    checkout feature/day-19-role-workflow-validation
-    commit id: "PR #61 (M3 D19: Role Workflow Tests)"
-    checkout feature/day-19-firestore-storage-security-rules
-    branch chore/day-20-firebase-config-cleanup
-    checkout chore/day-20-firebase-config-cleanup
-    commit id: "PR #62 (M2 D20: Firebase Config & Setup)"
-    branch test/day-20-end-to-end-documentation
-    checkout test/day-20-end-to-end-documentation
-    commit id: "Day 20 Member 3: E2E Tests & Docs"
-```
-
-### Detailed Contribution History
-
-- **PR #53 (Member 1, Day 18):** Maintenance UI foundation — Implemented `MaintenanceListScreen`, `MaintenanceDetailsScreen`, and core status indicators.
-- **PR #54 (Member 1, Day 19):** UI Robustness — Centralized `AppStateView` handling loading spinners, error states, and empty placeholders across all screens.
-- **PR #55 (Member 1, Day 20):** UI Polish & Navigation — Harmonized `AppTheme`, standardized `AppRoutes`, and perfected navigation transitions.
-- **PR #58 (Member 2, Day 18):** Maintenance Data Operations — Implemented Firestore maintenance updates and history tracking.
-- **PR #59 (Member 3, Day 18):** Maintenance Integration — Integrated real-time task streams with dynamic UI state updates.
-- **PR #60 (Member 2, Day 19):** Security Hardening — Authored `firestore.rules` and `storage.rules`, along with 90 automated security tests.
-- **PR #61 (Member 3, Day 19):** Workflow Validation — Created 36 integration and regression tests validating role permissions.
-- **PR #62 (Member 2, Day 20):** Firebase Cleanup — Hardened `EmulatorConfig`, added 17 emulator tests, updated `.gitignore`, and authored the comprehensive 10-step Firebase setup guide in `README.md`.
-- **Current Branch (Member 3, Day 20):** End-to-End Testing & Deliverables — Implemented 7 genuine multi-screen E2E integration tests, authored `docs/END_TO_END_TEST_PLAN.md`, `docs/DEMO_GUIDE.md`, and this `docs/PROJECT_COMPLETION_REPORT.md`.
-
----
-
-## 5. Security & Rule Architecture
-
-### 5.1 Cloud Firestore Security Rules (`firestore.rules`)
-The Firestore security rules provide defense-in-depth authorization based on custom claims or authenticated user document roles:
-1. **Users Collection (`/users/{uid}`):**
-   - Users can read and update only their own profile document.
-   - User creation requires that `request.resource.data.role` is valid (`operator`, `technician`, or `manager`).
-2. **Machines Collection (`/machines/{machineId}`):**
-   - All authenticated users can read machine specifications and status.
-   - Only users with the `manager` role can create, update, or delete machine records.
-3. **Fault Reports Collection (`/faults/{faultId}`):**
-   - All authenticated users can read fault reports.
-   - Only `operator` roles can create fault reports; the reporter UID must match `request.auth.uid`.
-   - Managers and technicians can update fault lifecycle status (`Open` ➔ `In Progress` ➔ `Resolved`).
-4. **Maintenance Tasks Collection (`/maintenance/{taskId}`):**
-   - Read access is granted to technicians and managers.
-   - Creation is restricted to managers.
-   - Updates are restricted to the assigned technician or managers.
-   - Enforces valid status progression (`Pending` ➔ `In Progress` ➔ `Completed`).
-
-### 5.2 Firebase Storage Security Rules (`storage.rules`)
-1. **Fault Inspection Evidence (`/faults/{faultId}/{fileName}`):**
-   - Uploads permitted only for authenticated operators.
-   - Requires valid image MIME types (`image/jpeg`, `image/png`, `image/webp`).
-   - Maximum upload size constrained to 5 MB (`request.resource.size < 5 * 1024 * 1024`).
-2. **Maintenance Completion Proof (`/maintenance/{taskId}/{fileName}`):**
-   - Uploads permitted only for assigned technicians or managers.
-   - Strict image MIME validation and 5 MB size constraint.
-   - Path-isolated to prevent cross-task asset overwrites.
-
----
-
-## 6. Quality Assurance & Verification Results
-
-All deliverables were verified using automated toolchains inside the project environment:
-
-### 6.1 Test Suite Summary
-
-```text
-======================================================================
-  MachAlert Automated Verification Suite Summary
-======================================================================
-  Total Test Executions:                  709
-  Passed:                                 709
-  Failed:                                 0
-  Skipped:                                0
-  Flutter Static Analysis:                No issues found (0 warnings)
-  Android Debug APK Compilation:          SUCCESSFUL (app-debug.apk)
-  Git Whitespace / Diff Check:            CLEAN (0 errors)
-======================================================================
-```
-
-### 6.2 Test Architecture Breakdown
-
-1. **Widget-Level Multi-Screen Integration Tests (`test/integration/app_e2e_test.dart`):**
-   - Implemented using Flutter `WidgetTester`, `FakeFirebaseFirestore`, mock `StorageUploader`, and fake `FirebaseAuth` to simulate full user journeys without external network dependencies.
-   - **Scenario A:** Full Authentication, Signup, Profile Provisioning & Logout Lifecycle (2 tests).
-   - **Scenario B:** Operator Machine Fault Reporting with Photo Attachment & History (2 tests).
-   - **Scenario C:** Manager Factory Overview, Fleet Health & Real-Time Fault Monitoring (1 test).
-   - **Scenario D:** Technician Assigned Maintenance, State Progression & Proof Upload (1 test).
-   - **Scenario E:** Complete Integrated Multi-Role Factory Workflow (1 test).
-2. **Day 20 Firebase Configuration Tests (`test/utils/emulator_config_test.dart`):**
-   - 17 unit tests verifying Android loopback resolution (`10.0.2.2`), desktop host (`127.0.0.1`), explicit cloud flags, and release build safety.
-3. **Existing Repository Unit & Widget Tests:**
-   - 690 unit, widget, and service tests verifying model serialization, provider state mutations, widget rendering, and edge cases.
-4. **Live Emulator Security Rules Suite (`test/services/*_security_rules_test.dart`):**
-   - 90 tests executed against live local Firestore (port 8080) and Storage (port 9199) emulator processes via `firebase emulators:exec`, validating positive and negative security assertions against `firestore.rules` and `storage.rules`.
-
-> **Note on Test Classification:**
-> - *Widget-Level Integration Tests:* Fast, isolated, multi-screen UI and service flow verification (`app_e2e_test.dart`).
-> - *Emulator Security Tests:* Live rule evaluations against running Firebase local emulators (`*_security_rules_test.dart`).
-> - *Live Backend E2E Tests:* Real socket connections to production or running emulator daemons (deferred to release CI/CD pipelines).
-> - *Manual Device Testing:* Physical device or Android Virtual Device (AVD) testing via `flutter run`.
-
----
-
-## 7. Known Limitations & Future Roadmap
-
-While the application achieves complete end-to-end functionality for all core user journeys, the following items are identified for future enhancement:
-
-1. **Manager Maintenance Creation UI:**
-   - *Status:* Implemented in PR #57 (under peer review).
-   - *Mitigation:* In the current branch (`chore/day-20-firebase-config-cleanup` baseline), maintenance tasks are initialized via backend fault triggers or seeded using `MaintenanceService.createMaintenanceTask()`.
-2. **Push Notifications (FCM):**
-   - *Current State:* Technicians and managers rely on active real-time Firestore stream subscriptions while the app is in the foreground.
-   - *Roadmap:* Integrate Firebase Cloud Messaging (FCM) and Cloud Functions to deliver background push alerts when critical faults are reported.
-3. **Advanced Query Filtering:**
-   - *Current State:* Basic search by machine ID, name, and production line is supported.
-   - *Roadmap:* Implement multi-attribute faceted search (date range, severity, and technician assignment).
-4. **Predictive Analytics & IoT Ingestion:**
-   - *Current State:* Operators manually log vibration and temperature anomalies.
-   - *Roadmap:* Connect MQTT brokers and industrial IoT vibration sensors directly to Cloud Firestore for automated anomaly detection.
-
----
-
-## 8. Final Delivery Sign-Off
-
-The MachAlert Sprint 2 deliverables are complete, verified, and ready for deployment review.
-
-| Review Dimension | Verification Result | Sign-off Status |
-| :--- | :--- | :---: |
-| **Functional Completeness** | All 3 personas and 5 factory scenarios operational | ✅ APPROVED |
-| **Security Hardening** | Production Firestore & Storage rules enforced | ✅ APPROVED |
-| **Test Coverage** | 709 automated tests passing with zero failures | ✅ APPROVED |
-| **Code Cleanliness** | `flutter analyze` clean, zero linter warnings | ✅ APPROVED |
-| **Build Stability** | Android debug APK compiles without errors | ✅ APPROVED |
-| **Documentation** | Test Plan, Demo Guide, and Setup Guide delivered | ✅ APPROVED |
-
-*Report finalized on Day 20 Sprint Completion.*
+Push notifications, automatic backend task dispatch, predictive maintenance, and live IoT data ingestion remain future work. The PRD's goals, example rules, and acceptance scenarios should not be treated as completed features.

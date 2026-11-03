@@ -2,6 +2,14 @@
 
 > **Real-time machine fault reporting and maintenance monitoring using Flutter and Firebase.**
 
+**Current snapshot — 3 November 2026:** `main` at `3f0f0fe`; Android version
+`1.0.0`, build `3`, installed and running on a physical phone. Authentication,
+machine data, onboarding, reporting, and maintenance workflows are implemented.
+**Cloud photo uploads are currently blocked:** the configured Storage bucket does
+not exist and project billing is disabled. Reports can be submitted without the
+optional photo through the form's photo-free path. See [Firebase verification](docs/firebase-verification.md) for
+the diagnosis, setup steps, and limits of the latest checks.
+
 MachAlert is a mobile application designed to help manufacturing teams report machine faults immediately, monitor machine conditions, maintain fault history, and coordinate maintenance activities without waiting for end-of-shift review meetings.
 
 ---
@@ -107,12 +115,17 @@ They can:
 
 ---
 
-## ✨ Planned Features
+## ✨ Implemented Features
+
+These features exist in the app. Backend-dependent features still require the
+corresponding Firebase service and permissions; cloud image uploads are not yet
+operational in the current project.
 
 ### Authentication
 
 - User Sign Up
 - User Login
+- Google Sign-In
 - User Logout
 - Persistent Login
 - Authentication State Handling
@@ -146,7 +159,9 @@ They can:
 ### Application Experience
 
 - Splash Screen
+- First-launch onboarding saved with Shared Preferences
 - Bottom Navigation
+- Shared machine statistics on Home and Reports
 - Form Validation
 - Loading Indicators
 - Error Handling
@@ -157,13 +172,11 @@ They can:
 
 ## 🚀 Future Scope
 
-Once the basic Flutter + Firebase application is complete, MachAlert can be extended with:
+Future extensions beyond the current app include:
 
-- Machine Health Scores
 - Recurring Fault Detection
 - Automated Alerts
 - Push Notifications
-- Fault Analytics
 - Downtime Analytics
 - Predictive Maintenance
 - Machine Learning
@@ -207,11 +220,12 @@ Once the basic Flutter + Firebase application is complete, MachAlert can be exte
 
 ---
 
-## 🗄️ Proposed Firestore Structure
+## 🗄️ Firestore Structure
 
 ```text
 users/
     userId/
+        uid
         name
         email
         role
@@ -246,55 +260,81 @@ maintenance/
         createdAt
 ```
 
-The database structure may evolve as development progresses.
+This is an abbreviated schema. Models in `lib/models/` and `firestore.rules`
+define the full current fields, including maintenance `updateHistory`. Machine
+statuses are `Operational`, `Warning`, `Critical`, and `Under Maintenance`;
+fault statuses are `Open`, `In Progress`, and `Resolved`. Maintenance uses
+`Pending`, `In Progress`, and `Resolved` in Firestore; the UI also uses the label
+`Completed` for `Resolved`.
+
+Attachments use `fault_images/{uid}/{fileName}` and
+`maintenance_proofs/{uid}/{fileName}`. Updating a maintenance task does not
+automatically update the separate machine or fault document.
 
 ---
 
-## 📁 Planned Flutter Folder Structure
+## 📁 Flutter Folder Structure
+
+Abbreviated view of the current implementation:
 
 ```text
 lib/
 │
 ├── main.dart
+├── firebase_options.dart
+├── theme/
+│   └── app_theme.dart
 │
 ├── models/
 │   ├── user_model.dart
 │   ├── machine_model.dart
+│   ├── machine_statistics.dart
 │   ├── fault_model.dart
 │   └── maintenance_model.dart
 │
 ├── screens/
 │   ├── auth/
+│   ├── splash/
+│   ├── onboarding/
 │   ├── dashboard/
 │   ├── machines/
 │   ├── faults/
 │   ├── maintenance/
+│   ├── reports/
 │   └── profile/
 │
 ├── services/
 │   ├── auth_service.dart
-│   ├── firestore_service.dart
+│   ├── user_service.dart
+│   ├── machine_service.dart
+│   ├── fault_service.dart
+│   ├── maintenance_service.dart
 │   └── storage_service.dart
 │
 ├── widgets/
-│   ├── custom_button.dart
-│   ├── custom_text_field.dart
-│   └── machine_card.dart
+│   ├── app_button.dart
+│   ├── app_text_field.dart
+│   ├── mach_alert_logo.dart
+│   └── main_bottom_navigation.dart
 │
 ├── utils/
-│   ├── constants.dart
+│   ├── app_constants.dart
 │   ├── validators.dart
-│   └── routes.dart
+│   ├── emulator_config.dart
+│   └── app_routes.dart
 │
 └── providers/
-    └── app_state.dart
+    ├── app_state_provider.dart
+    └── machine_provider.dart
 ```
 
 ---
 
-## 🗓️ Sprint 2 Roadmap
+## 🗓️ Original Sprint 2 Plan
 
-The project is being developed by a team of **3 members over 20 days**.
+The assignment plan called for **3 members over 20 days**. The following timeline
+and contribution targets describe that plan; they are not a current delivery or
+cloud-verification claim.
 
 Each member is expected to raise **at least one Pull Request every day**.
 
@@ -399,12 +439,12 @@ docs: update README
 
 Before running the project, make sure you have the following installed and configured:
 
-- **Flutter SDK:** Version `3.13.5` or higher (`flutter doctor`).
-- **Dart SDK:** Bundled with Flutter (`sdk: ^3.13.5`).
+- **Flutter SDK:** Verified with `3.47.6`; run `flutter doctor -v` to check your environment.
+- **Dart SDK:** `pubspec.yaml` requires `^3.13.5`; the verified Flutter installation bundles Dart `3.13.5`. The Dart version is not the Flutter version.
 - **Java Development Kit (JDK):**
-  - **JDK 17:** Required by Gradle for Android APK compilation.
-  - **JDK 21+:** Required by modern Firebase CLI (`firebase-tools >= 13`) for running local Firestore and Storage emulators.
-- **Android Studio / Android SDK:** Command-line tools, platform-tools, and Android Virtual Device (AVD).
+  - Use a JDK supported by the checked-in Gradle/Android plugin versions. The verified build used Android Studio's JDK `25.0.3`; Java/Kotlin compilation targets Java 17.
+  - Use Java 21 or later for the current Firebase emulator tooling and verify the requirement for the installed CLI version.
+- **Android Studio / Android SDK:** Command-line tools, platform-tools, SDK/build tools, and either a physical Android device or an AVD. The verified APK uses min SDK 24 and target SDK 36.
 - **Firebase CLI:** Node.js package `firebase-tools` (`npm install -g firebase-tools`).
 - **FlutterFire CLI:** Activated via Dart pub (`dart pub global activate flutterfire_cli`).
 - **Firebase Project Access:** Access to the `machalert` Firebase project.
@@ -428,7 +468,9 @@ cd SW2627-FlutterFire-MachAlert
 
 ## 🔥 Firebase Setup & Installation Guide
 
-MachAlert uses **Firebase Authentication**, **Cloud Firestore**, and **Firebase Storage**, along with the **Firebase Emulator Suite** for isolated local development and testing.
+MachAlert implements **Firebase Authentication**, **Cloud Firestore**, and
+**Firebase Storage** integrations. Local Firestore and Storage emulators are
+configured; Authentication still uses the cloud project in an interactive app run.
 
 ### 1. Flutter Dependency Installation
 
@@ -437,6 +479,11 @@ Fetch all required Dart and Flutter dependencies:
 ```bash
 flutter pub get
 ```
+
+On Windows, if this reports that plugins require symlink support, enable
+**Developer Mode** in Windows Settings and rerun `flutter pub get`. Ensure it
+finishes successfully before building: a partial setup can leave Android's
+generated plugin registration outdated and cause a startup crash.
 
 ### 2. Firebase CLI Installation
 
@@ -474,14 +521,30 @@ The repository already contains the verified `lib/firebase_options.dart` generat
 flutterfire configure --project=machalert
 ```
 
-> **Platform Support Note:** Currently, Android is the active, fully-configured target platform in `lib/firebase_options.dart` and `android/app/google-services.json`. Configurations for iOS, macOS, Windows, Linux, and Web require platform-specific app registration in Firebase before enabling.
+> **Platform Support Note:** Android is the configured target in
+> `lib/firebase_options.dart`. Other platforms need matching configuration and
+> testing before use; the existence of a platform folder or Firebase registration
+> does not make that target runnable. Cloud Storage provisioning is a separate
+> requirement even for Android.
 
 ### 5. Android Firebase Configuration
 
 Ensure `android/app/google-services.json` is present and matches the `machalert` project:
 - Package Name: `com.example.mach_alert`
 - Project ID: `machalert`
-- Storage Bucket: `machalert.firebasestorage.app`
+- Configured Storage Bucket: `machalert.firebasestorage.app` — this name is in the app configuration, but the bucket was confirmed absent on 3 November 2026.
+
+For cloud photo uploads, complete Storage setup and review/deploy `storage.rules`
+after the project owner approves the required billing setup. Follow the
+[verified storage setup guide](docs/firebase-verification.md#completing-cloud-photo-setup).
+The error **“The requested storage file was not found.”** during report submission
+currently comes from this missing bucket. Remove the optional photo to submit
+through Firestore while Storage is unavailable.
+
+New sign-ups create **operator** profiles. Provision technician and manager roles
+through trusted administrative access; the app has no sign-up role selector.
+The three showcase identities and their original credentials are retained in
+[the demo guide](docs/DEMO_GUIDE.md), with their verified setup status.
 
 The Google Services Gradle plugin is registered in `android/settings.gradle.kts`:
 ```kotlin
@@ -541,11 +604,11 @@ flutter run --dart-define=USE_CLOUD_FIRESTORE=true --dart-define=USE_CLOUD_STORA
 
 ### 9. Running Automated Security & Integration Tests
 
-Execute the complete Firestore and Storage security rules test suite inside a transient Firebase emulator session:
+Execute the Firestore and Storage security rules suites inside a transient
+Firebase emulator session, and confirm both emulators are reachable:
 
 ```bash
-firebase emulators:exec --project machalert --only firestore,storage \
-  "flutter test test/services/firestore_security_rules_test.dart test/services/fault_security_rules_test.dart test/services/storage_security_rules_test.dart"
+firebase emulators:exec --project machalert --only firestore,storage "flutter test test/services/firestore_security_rules_test.dart test/services/fault_security_rules_test.dart test/services/storage_security_rules_test.dart"
 ```
 
 Or execute the complete repository test suite:
@@ -554,16 +617,49 @@ Or execute the complete repository test suite:
 flutter test
 ```
 
+The latest plain Flutter run reported **817 passed, 3 skipped**, with no emulators
+running. Some security tests return early when an emulator is unavailable, so a
+passing count alone does not prove security rules or cloud uploads were tested.
+See [the test plan](docs/END_TO_END_TEST_PLAN.md) for the verification boundaries.
+
 ### 10. Building the Android APK
 
-Compile the verified debug APK:
+For installation on a physical Android phone, build an APK that connects to
+Firebase over the internet:
 
 ```bash
-flutter build apk --debug
+flutter build apk --release --dart-define=USE_FIREBASE_EMULATOR=false
 ```
 
-The output artifact will be generated at:
-`build/app/outputs/flutter-apk/app-debug.apk`
+The APK is generated at `build/app/outputs/flutter-apk/app-release.apk`.
+Release builds require an ignored `android/key.properties` file with `storeFile`,
+`storePassword`, `keyAlias`, and `keyPassword` for the signing key. To update an
+installed app without uninstalling it, use the same signing key as that app.
+For local assignment installs, this can be the computer's existing debug key.
+Use a private upload key before publishing to Google Play.
+
+To install over USB:
+
+1. Enable **Developer options** and **USB debugging** on the phone.
+2. Connect it to your computer, unlock it, and accept **Allow USB debugging**.
+3. Run `flutter devices` and find the phone's device ID.
+4. Run `flutter install -d <device-id> --release`.
+5. Open **MachAlert** with Wi-Fi or mobile data enabled and sign in or create an account.
+
+For development with hot reload on a physical phone, use:
+
+```bash
+flutter run -d <device-id> --dart-define=USE_FIREBASE_EMULATOR=false
+```
+
+Plain `flutter run` and `flutter build apk --debug` still use the local database
+and storage emulators. Their default Android host (`10.0.2.2`) is for an Android
+Virtual Device and is not reachable from a physical phone.
+
+Google sign-in also requires the SHA-1 fingerprint of the key used to build the
+APK to be registered for `com.example.mach_alert` in Firebase project settings.
+Each development computer may have a different debug signing key. After adding
+its fingerprint, refresh `android/app/google-services.json` and rebuild.
 
 ---
 
@@ -626,18 +722,24 @@ Every team member must:
 Comprehensive project documentation, testing plans, and presentation guides are available in the `docs/` directory:
 
 - 📋 **[End-to-End Test Plan](docs/END_TO_END_TEST_PLAN.md):** Complete test matrix, scenario breakdown (Scenarios A through E), mock architecture, execution commands, and verification criteria.
-- 🎬 **[Demo Guide & Script](docs/DEMO_GUIDE.md):** Step-by-step 3-to-5 minute live demonstration walkthrough with persona credentials, realistic factory mock datasets, and presentation talking points.
-- 🏭 **[Project Completion Report](docs/PROJECT_COMPLETION_REPORT.md):** Comprehensive engineering report detailing system architecture, data models, RBAC matrix, PR contribution genealogy, security architecture, QA metrics, and future roadmap.
+- 🎬 **[Demo Guide & Script](docs/DEMO_GUIDE.md):** Showcase identities and credentials, account preparation, cloud/emulator setup, and a 4-to-5 minute demonstration.
+- 🏭 **[Implementation & Delivery Report](docs/PROJECT_COMPLETION_REPORT.md):** Current features, architecture, data paths, security model, verification results, and remaining work.
+- 🔥 **[Firebase & Android Verification](docs/firebase-verification.md):** Physical-phone installation, signing, cloud service checks, and the confirmed Storage upload blocker.
 
 ---
 
 ## ✅ Current Project Status
 
 ```text
-🟢 Status: Sprint 2 — Completed & Verified (Day 20)
+Status: Android build 3 installed; core workflows implemented; cloud photo storage setup pending.
 ```
 
-The MachAlert application is fully implemented, verified, and documented across all three user personas (**Operator**, **Technician**, and **Manager**). All functional workflows, real-time Firestore listeners, Storage uploads, and production security rules are validated by an automated test suite of 709 passing tests.
+As of **3 November 2026**, the latest source baseline is `main` at `3f0f0fe`.
+The release APK (`1.0.0`, build `3`) is installed on an Android 16 phone, with
+startup, an authenticated session, and machine data display observed. Static
+analysis passed; the Flutter runner reported **817 passed and 3 skipped**.
+Cloud image uploads remain blocked, demo identities need provisioning, and a full
+live multi-role walkthrough and current emulator-rule run are still required.
 
 ---
 
