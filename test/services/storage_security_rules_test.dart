@@ -598,15 +598,37 @@ void main() {
       expect(status, 403);
     });
 
-    test('Unauthorized image deletion is rejected (403)', () async {
+    test('Client deletion of fault images by owner is strictly rejected to preserve incident integrity (403)', () async {
       if (!emulatorAvailable) return;
 
-      final status = await client.deleteFile(
+      // Owner attempts to delete their own fault image -> rejected to protect audit integrity
+      final ownerStatus = await client.deleteFile(
         'fault_images/sec_storage_user_1/read_test.jpg',
         token: tokenUser1,
       );
+      expect(ownerStatus, 403);
+    });
 
-      expect(status, 403);
+    test('Unauthorized client deletion of fault images by foreign user is rejected (403)', () async {
+      if (!emulatorAvailable) return;
+
+      // Foreign user attempts to delete User 1's fault image -> rejected
+      final foreignStatus = await client.deleteFile(
+        'fault_images/sec_storage_user_1/read_test.jpg',
+        token: tokenUser2,
+      );
+      expect(foreignStatus, 403);
+    });
+
+    test('Unauthenticated client deletion of fault images is rejected (403)', () async {
+      if (!emulatorAvailable) return;
+
+      // Unauthenticated attempt -> rejected
+      final unauthStatus = await client.deleteFile(
+        'fault_images/sec_storage_user_1/read_test.jpg',
+        token: null,
+      );
+      expect(unauthStatus, 403);
     });
   });
 }

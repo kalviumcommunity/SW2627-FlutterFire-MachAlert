@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/user_model.dart';
@@ -197,10 +198,29 @@ class UserService {
   /// without silent escalation.
   ///
   /// Throws [UserServiceException] if a Firestore exception occurs.
-  Future<UserModel?> getUserProfile(String uid) async {
+  Future<UserModel?> getUserProfile(
+    String uid, {
+    Source source = Source.server,
+  }) async {
     try {
       final docRef = userDoc(uid);
-      final snapshot = await docRef.get();
+      DocumentSnapshot<Map<String, dynamic>> snapshot;
+      try {
+        snapshot = await docRef.get(GetOptions(source: source));
+      } on FirebaseException catch (e) {
+        if (source == Source.server &&
+            (e.code == 'unavailable' || e.code == 'deadline-exceeded')) {
+          try {
+            final cached = await docRef.get(
+              const GetOptions(source: Source.cache),
+            );
+            if (cached.exists && cached.data() != null) {
+              return UserModel.fromFirestore(cached);
+            }
+          } catch (_) {}
+        }
+        throw UserServiceException.fromFirebaseException(e);
+      }
 
       if (!snapshot.exists || snapshot.data() == null) {
         return null;
@@ -219,10 +239,27 @@ class UserService {
   }
 
   /// Checks if a user profile document exists at `users/{uid}`.
-  Future<bool> userProfileExists(String uid) async {
+  Future<bool> userProfileExists(
+    String uid, {
+    Source source = Source.server,
+  }) async {
     try {
       final docRef = userDoc(uid);
-      final snapshot = await docRef.get();
+      DocumentSnapshot<Map<String, dynamic>> snapshot;
+      try {
+        snapshot = await docRef.get(GetOptions(source: source));
+      } on FirebaseException catch (e) {
+        if (source == Source.server &&
+            (e.code == 'unavailable' || e.code == 'deadline-exceeded')) {
+          try {
+            final cached = await docRef.get(
+              const GetOptions(source: Source.cache),
+            );
+            return cached.exists;
+          } catch (_) {}
+        }
+        throw UserServiceException.fromFirebaseException(e);
+      }
       return snapshot.exists;
     } on FirebaseException catch (e) {
       throw UserServiceException.fromFirebaseException(e);
@@ -249,50 +286,133 @@ class UserService {
     required String email,
     String? displayName,
     String? role,
+    Source readSource = Source.server,
   }) async {
+    final trimmedUid = uid.trim();
+    final docRef = userDoc(trimmedUid);
+
+    String? projectId;
     try {
-      final trimmedUid = uid.trim();
-      final docRef = userDoc(trimmedUid);
+      projectId = _firestore.app.options.projectId;
+    } catch (_) {
+      projectId = 'unknown';
+    }
 
+    String? docPath;
+    try {
+      docPath = docRef.path;
+    } catch (_) {
+      docPath = 'users/$trimmedUid';
+    }
+    String? authUid;
+    try {
+      authUid = FirebaseAuth.instance.currentUser?.uid;
+    } catch (_) {
+      authUid = null;
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        '[UserService] createProfileIfAbsent: checking profile for UID: $trimmedUid '
+        '(project: $projectId, path: $docPath, authUid: $authUid)',
+      );
+    }
+
+    DocumentSnapshot<Map<String, dynamic>> snapshot;
+    try {
+      snapshot = await docRef.get(GetOptions(source: readSource));
+    } on FirebaseException catch (e) {
       if (kDebugMode) {
         debugPrint(
-          '[UserService] createProfileIfAbsent: checking profile for UID: $trimmedUid (target: users/$trimmedUid)',
+          '[UserService] Profile read failed for UID: $trimmedUid: code=${e.code}, message=${e.message}',
         );
       }
-
-      final snapshot = await docRef.get();
-
-      if (snapshot.exists && snapshot.data() != null) {
-        // Profile already exists: do not overwrite!
-        if (kDebugMode) {
-          debugPrint(
-            '[UserService] Profile already exists for UID: $trimmedUid with role: ${snapshot.data()?['role']}. Preserving existing profile.',
+      if (readSource == Source.server &&
+          (e.code == 'unavailable' || e.code == 'deadline-exceeded')) {
+        try {
+          final cached = await docRef.get(
+            const GetOptions(source: Source.cache),
           );
-        }
-        return UserModel.fromFirestore(snapshot);
+          if (cached.exists && cached.data() != null) {
+            if (kDebugMode) {
+              debugPrint(
+                '[UserService] Using cached profile for UID: $trimmedUid with role: ${cached.data()?['role']}',
+              );
+            }
+            return UserModel.fromFirestore(cached);
+          }
+        } catch (_) {}
       }
 
-      final assignedRole = validateClientAssignableRole(role);
-      final trimmedName = displayName?.trim() ?? '';
-      final trimmedEmail = email.trim();
+      // Mandatory Requirement:
+      // Profile retrieval failure:
+      // - Show a meaningful error.
+      // - Do not interpret permission-denied, unavailable, or other Firestore errors as a missing document.
+      // - Never attempt a fallback profile creation after a failed read.
+      throw UserServiceException.fromFirebaseException(e);
+    } catch (e) {
+      if (e is UserServiceException) rethrow;
+      throw UserServiceException(
+        code: 'unknown',
+        message: 'Failed to retrieve profile: $e',
+      );
+    }
 
+    if (kDebugMode) {
+      debugPrint(
+        '[UserService] Profile check result for UID: $trimmedUid: '
+        'exists=${snapshot.exists}, '
+        'isFromCache=${snapshot.metadata.isFromCache}, '
+        'role=${snapshot.data()?['role']}',
+      );
+    }
+
+    if (snapshot.exists && snapshot.data() != null) {
+      // Profile already exists: preserve all existing fields and role!
       if (kDebugMode) {
         debugPrint(
-          '[UserService] No existing profile for UID: $trimmedUid. Writing profile with role: $assignedRole to users/$trimmedUid',
+          '[UserService] Profile already exists for UID: $trimmedUid with role: ${snapshot.data()?['role']}. Preserving existing profile.',
         );
       }
+      return UserModel.fromFirestore(snapshot);
+    }
 
-      final data = <String, dynamic>{
-        'uid': trimmedUid,
-        'userId': trimmedUid,
-        'displayName': trimmedName,
-        'name': trimmedName,
-        'email': trimmedEmail,
-        'role': assignedRole,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
+    // If snapshot was from cache and reports not existing, we cannot confirm it does not exist on the server.
+    if (snapshot.metadata.isFromCache && readSource != Source.cache) {
+      if (kDebugMode) {
+        debugPrint(
+          '[UserService] Cache miss for UID: $trimmedUid without server confirmation. Rejecting blind profile creation.',
+        );
+      }
+      throw UserServiceException(
+        code: 'unavailable',
+        message: 'Cannot confirm user profile on server. Please check your connection.',
+      );
+    }
 
+    // Canonical document genuinely does not exist on the server: new user provisioning.
+    final assignedRole = validateClientAssignableRole(role);
+    final trimmedName = displayName?.trim() ?? '';
+    final trimmedEmail = email.trim();
+
+    if (kDebugMode) {
+      debugPrint(
+        '[UserService] No existing profile for UID: $trimmedUid. Writing profile with role: $assignedRole to users/$trimmedUid',
+      );
+    }
+
+    final data = <String, dynamic>{
+      'uid': trimmedUid,
+      'userId': trimmedUid,
+      'displayName': trimmedName,
+      'name': trimmedName,
+      'email': trimmedEmail,
+      'role': assignedRole,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    try {
       await docRef.set(data);
 
       if (kDebugMode) {
@@ -312,14 +432,14 @@ class UserService {
     } on FirebaseException catch (e) {
       if (kDebugMode) {
         debugPrint(
-          '[UserService] FirebaseException creating profile for UID: $uid: code=${e.code}, message=${e.message}',
+          '[UserService] FirebaseException creating profile for UID: $trimmedUid: code=${e.code}, message=${e.message}',
         );
       }
       throw UserServiceException.fromFirebaseException(e);
     } catch (e) {
       if (kDebugMode) {
         debugPrint(
-          '[UserService] Unexpected error creating profile for UID: $uid: $e',
+          '[UserService] Unexpected error creating profile for UID: $trimmedUid: $e',
         );
       }
       if (e is UserServiceException) rethrow;

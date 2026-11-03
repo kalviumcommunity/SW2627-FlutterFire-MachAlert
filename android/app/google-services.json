@@ -37,6 +37,13 @@
             {
               "client_id": "297020906537-17f2d3otmucvr1n5lcofrq92r7rion7v.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "297020906537-g67ukn44p3c8nu01ej7652sm1umk2i8t.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.machAlert"
+              }
             }
           ]
         }

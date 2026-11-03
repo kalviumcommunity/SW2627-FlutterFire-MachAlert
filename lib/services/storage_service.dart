@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -32,6 +33,9 @@ class StorageServiceException implements Exception {
   /// Maps storage error codes to safe, user-friendly messages.
   static String messageForErrorCode(String code) {
     switch (code.toLowerCase().replaceAll('_', '-')) {
+      case 'image-unreadable':
+      case 'file-not-found':
+        return 'The selected image file is missing or unreadable. Please choose another image.';
       case 'unauthenticated':
         return 'User is not authenticated. Please log in to upload images.';
       case 'empty-data':
@@ -41,6 +45,10 @@ class StorageServiceException implements Exception {
       case 'unauthorized':
       case 'permission-denied':
         return 'You do not have permission to upload or access this file.';
+      case 'network-request-failed':
+      case 'network-error':
+      case 'unavailable':
+        return 'Network connection failed during upload. Please check your internet connection.';
       case 'canceled':
       case 'cancelled':
         return 'The image upload was cancelled.';
@@ -107,13 +115,44 @@ class FirebaseStorageUploader implements StorageUploader {
 
     try {
       final task = ref.putData(bytes, metadata);
-      await task;
+      final snapshot = await task;
+      if (snapshot.state == TaskState.canceled) {
+        throw StorageServiceException(
+          code: 'canceled',
+          message: 'The image upload was cancelled.',
+        );
+      }
+      if (snapshot.state == TaskState.error) {
+        throw StorageServiceException(
+          code: 'upload-failed',
+          message: 'Failed to upload the image. Please try again.',
+        );
+      }
     } on FirebaseException {
       rethrow;
     } catch (e) {
+      if (e is StorageServiceException) rethrow;
       throw StorageServiceException(
         code: 'upload-failed',
         message: 'Failed to upload the image. Please try again.',
+      );
+    }
+
+    try {
+      final objectMetadata = await ref.getMetadata();
+      if (objectMetadata.size != null && objectMetadata.size! <= 0) {
+        throw StorageServiceException(
+          code: 'upload-failed',
+          message: 'Uploaded file is empty or corrupted. Please try again.',
+        );
+      }
+    } on FirebaseException {
+      rethrow;
+    } catch (e) {
+      if (e is StorageServiceException) rethrow;
+      throw StorageServiceException(
+        code: 'upload-failed',
+        message: 'Failed to verify uploaded image metadata. Please try again.',
       );
     }
 
@@ -209,9 +248,9 @@ class StorageService {
     return clean;
   }
 
-  /// Builds a unique, user-scoped storage path under [folder].
+  /// Builds a unique, collision-resistant, user-scoped storage path under [folder].
   ///
-  /// Format: `<folder>/<uid>/<timestamp>_<counter>_<sanitizedFileName>`
+  /// Format: `<folder>/<uid>/<timestamp>_<token>_<counter>_<sanitizedFileName>`
   static String buildStoragePath({
     required String uid,
     required String fileName,
@@ -220,7 +259,8 @@ class StorageService {
     final sanitized = sanitizeFileName(fileName);
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final counter = _uniqueCounter++;
-    return '$folder/$uid/${timestamp}_${counter}_$sanitized';
+    final token = Random().nextInt(0xFFFFFF).toRadixString(16).padLeft(6, '0');
+    return '$folder/$uid/${timestamp}_${token}_${counter}_$sanitized';
   }
 
   /// Uploads a fault report image to Firebase Storage and returns its public download URL.
@@ -319,5 +359,26 @@ class StorageService {
       fileName: fileName,
       contentType: contentType,
     );
+  }
+
+  /// Safely attempts to delete an uploaded storage file using its download URL.
+  /// Used for orphan cleanup if a Firestore fault record cannot be saved.
+  Future<void> deleteByUrl(String url) async {
+    try {
+      final ref = storage.refFromURL(url);
+      await ref.delete();
+    } catch (_) {
+      // Best-effort cleanup; ignore errors to avoid masking underlying failures
+    }
+  }
+
+  /// Safely attempts to delete a storage object using its storage path.
+  Future<void> deleteImage(String path) async {
+    try {
+      final ref = storage.ref(path);
+      await ref.delete();
+    } catch (_) {
+      // Best-effort cleanup
+    }
   }
 }

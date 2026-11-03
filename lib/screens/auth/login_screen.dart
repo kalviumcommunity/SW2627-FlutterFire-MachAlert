@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../providers/app_state_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
 import '../../theme/app_theme.dart';
@@ -143,6 +144,16 @@ class _LoginScreenState extends State<LoginScreen> {
         debugPrint(
           '[LoginScreen] Profile confirmed for UID: ${profile.id}, role: ${profile.role}',
         );
+      }
+
+      if (mounted) {
+        try {
+          final appState = context.read<AppStateProvider>();
+          if (appState.user?.role != profile.role ||
+              appState.user?.name != profile.name) {
+            appState.setAuthenticated(profile);
+          }
+        } catch (_) {}
       }
     } on UserServiceException catch (profileError) {
       if (kDebugMode) {

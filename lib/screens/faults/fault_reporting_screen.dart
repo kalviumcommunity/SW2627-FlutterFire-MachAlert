@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -180,11 +182,28 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       _isSubmitting = true;
     });
 
-    try {
-      String? imageUrl;
+    String? imageUrl;
 
+    try {
       if (_selectedImage != null) {
-        final bytes = await _selectedImage!.readAsBytes();
+        Uint8List bytes;
+        try {
+          bytes = await _selectedImage!.readAsBytes();
+        } catch (_) {
+          throw StorageServiceException(
+            code: 'image-unreadable',
+            message:
+                'The selected image file is missing or unreadable. Please choose another image.',
+          );
+        }
+
+        if (bytes.isEmpty) {
+          throw StorageServiceException(
+            code: 'empty-data',
+            message:
+                'The selected image file is empty. Please choose another image.',
+          );
+        }
 
         if (!mounted) {
           return;
@@ -250,6 +269,13 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
         ),
       );
     } on FaultServiceException catch (e) {
+      if (imageUrl != null) {
+        debugPrint(
+          '[FaultReportingScreen] Firestore submission failed ($e). '
+          'Uploaded image ($imageUrl) retained for trusted backend reconciliation.',
+        );
+      }
+
       if (!mounted) {
         return;
       }
@@ -260,7 +286,14 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
-    } catch (_) {
+    } catch (e) {
+      if (imageUrl != null) {
+        debugPrint(
+          '[FaultReportingScreen] Unexpected submission failure ($e). '
+          'Uploaded image ($imageUrl) retained for trusted backend reconciliation.',
+        );
+      }
+
       if (!mounted) {
         return;
       }
