@@ -3,7 +3,8 @@
 **Project Name:** MachAlert  
 **Document Type:** Product Requirements Document (PRD) & Architecture Specification  
 **Project Version:** 1.0.0 (Sprint 2 MVP)  
-**Target Platform:** Mobile (Android & iOS via Flutter)  
+**Current Platform:** Android; iOS remains a product target requiring Firebase configuration and testing.
+
 **Backend:** Serverless (Google Firebase — Auth, Cloud Firestore, Firebase Storage)  
 **Team Composition:** 3 Beginner Developers (Member 1: UI/UX, Member 2: Firebase, Member 3: Logic & Integration)  
 **Development Timeline:** 20 Days (Sprint 2 Academic Project)  
@@ -44,6 +45,40 @@
 30. [Executive Appendices & Master Checklists](#30-executive-appendices--master-checklists)
 
 ---
+
+## Current implementation reconciliation — 3 November 2026
+
+This PRD retains the original assignment goals, proposed architecture, sprint plan,
+and acceptance criteria. Those sections describe **requirements and future work**,
+not a certification that every proposed feature is implemented or deployed. For
+the current delivery record, use [the implementation report](docs/PROJECT_COMPLETION_REPORT.md)
+and [Firebase verification](docs/firebase-verification.md).
+
+- Latest reviewed source: `main` at `3f0f0fe`. Android `1.0.0`, build `3`, is
+  installed and running on a physical Android 16 phone.
+- Implemented: email/password and Google authentication, persistent sessions,
+  first-launch onboarding, role-specific dashboards, machine inventory/management,
+  fault reporting/history, manager task assignment, technician maintenance
+  updates, and shared Home/Reports machine statistics.
+- New app-created accounts have role `operator`; there is no sign-up role picker.
+  Technician and manager setup requires trusted administration.
+- Cloud photo storage is **not operational**: no bucket exists in `machalert`, the
+  Firebase Storage API is disabled/unused, and billing is disabled. Reports with
+  selected photos fail before the Firestore write. Photo-free submissions bypass
+  Storage. Provisioning requires approved Blaze billing and bucket/rule setup.
+- The three original demo identities and credentials are retained in
+  [the demo guide](docs/DEMO_GUIDE.md). They were not found in cloud Authentication
+  at the last check and must be provisioned before the showcase.
+- Machine health/telemetry fields and status statistics exist. Automated recurring
+  fault detection, predictive analytics, live IoT ingestion, push notifications,
+  and automatic backend task dispatch are future goals, not verified features.
+- Maintenance updates affect the task and its history; do not assume automatic
+  updates to linked faults or machine status.
+- Latest Flutter runner result: **817 passed, 3 skipped**; analysis passed.
+  Emulators were not running, and some rule tests return early when unavailable.
+  This does not establish successful cloud uploads or live rule evaluation.
+- Treat data schemas and folder trees below as original design sketches where
+  they differ from `lib/`, `pubspec.yaml`, `firestore.rules`, or `storage.rules`.
 
 ## 1. Executive Summary
 
@@ -959,101 +994,21 @@ lib/
 
 ## 18. Security & Access Control
 
-### 18.1 Firestore Security Rules (`firestore.rules`)
-MachAlert protects production data using declarative Firestore Security Rules that validate request authentication tokens and inspect user roles.
+### 18.1 Current Firestore policy
 
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
+The authoritative implementation is [firestore.rules](firestore.rules), not a copied example in this PRD. Review and test that file before deployment. Its presence in the repository does not verify the currently deployed policy.
 
-    // Helper function: Check if user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
-    }
+Roles come from users/{uid}. Authenticated users can read machines and faults; managers can manage machine records. Fault creation requires a matching authenticated reporter UID and valid fields. Managers create maintenance tasks; managers and assigned technicians have the permitted task access. Profile rules prevent client self-promotion to manager. The app's sign-up workflow creates operator profiles even though the rules permit a limited set of initial roles.
 
-    // Helper function: Fetch user document from users collection
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
+Maintenance uses Pending, In Progress, and Resolved as canonical statuses. The UI's Completed label maps to Resolved. Read the checked-in validators and update rules for the complete allowed fields and transitions.
 
-    // Helper functions for specific roles
-    function isManager() {
-      return isAuthenticated() && getUserData().role == 'manager';
-    }
+### 18.2 Current Storage policy and provisioning
 
-    function isTechnician() {
-      return isAuthenticated() && getUserData().role == 'technician';
-    }
+Use [storage.rules](storage.rules). Fault photos are stored at fault_images/{uid}/{fileName}; maintenance proofs are stored at maintenance_proofs/{uid}/{fileName}, with taskId metadata. The earlier flat fault_images/{imageName} example did not match the implemented upload paths.
 
-    function isOperator() {
-      return isAuthenticated() && getUserData().role == 'operator';
-    }
+Creation requires authentication, an own-UID path, image content type, and size at most 5 MiB. Reads depend on ownership, roles, and, for task proofs, assignment metadata. Updates and deletes are denied. These rules use Firestore lookups and need the corresponding cross-service permissions.
 
-    // --- USERS COLLECTION ---
-    // Users can read any user profile; can only write their own user doc during registration
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isAuthenticated() && (request.auth.uid == userId || isManager());
-      allow delete: if isManager();
-    }
-
-    // --- MACHINES COLLECTION ---
-    // All authenticated users can inspect machines; only managers can create or delete
-    match /machines/{machineId} {
-      allow read: if isAuthenticated();
-      allow create, delete: if isManager();
-      // Operators & Technicians can update telemetry and status via fault/repair actions
-      allow update: if isAuthenticated();
-    }
-
-    // --- FAULTS COLLECTION ---
-    // All users can view and log faults; only managers can delete
-    match /faults/{faultId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (isTechnician() || isManager() || resource.data.reportedBy == request.auth.uid);
-      allow delete: if isManager();
-    }
-
-    // --- MAINTENANCE COLLECTION ---
-    // Technicians can update their assigned tasks; Managers have full control
-    match /maintenance/{maintenanceId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (isManager() || isOperator());
-      allow update: if isAuthenticated() && (isTechnician() || isManager());
-      allow delete: if isManager();
-    }
-
-    // --- ALERTS COLLECTION ---
-    // All authenticated users can read alerts; system/managers can acknowledge
-    match /alerts/{alertId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isManager() || isTechnician();
-      allow delete: if isManager();
-    }
-  }
-}
-```
-
-### 18.2 Firebase Storage Security Rules (`storage.rules`)
-```javascript
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /fault_images/{imageName} {
-      // Any authenticated user can read images
-      allow read: if request.auth != null;
-      // Only authenticated users can upload; must be an image under 5MB
-      allow write: if request.auth != null
-                   && request.resource.size < 5 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
-    }
-  }
-}
-```
+Cloud Storage was not provisioned at the last verification. The application configuration's bucket name is not proof that the bucket exists. See [Firebase verification](docs/firebase-verification.md) for the confirmed missing bucket, required billing decision, provisioning steps, and upload acceptance checks.
 
 ---
 
@@ -1450,37 +1405,14 @@ TIMELINE & ACTOR CUES:
 
 ---
 
-### 30.3 Recommended Flutter `pubspec.yaml` Dependencies
-For full transparency, the beginner team should use the following battle-tested dependencies in `pubspec.yaml`:
+### 30.3 Current dependency source
 
-```yaml
-dependencies:
-  flutter:
-    sdk: flutter
+Use [pubspec.yaml](pubspec.yaml) for the actual dependency constraints and [pubspec.lock](pubspec.lock) for resolved versions. The original sample manifest is retired because it listed older Firebase packages and utilities that are not used by the current app.
 
-  # Firebase Core & Services
-  firebase_core: ^3.6.0
-  firebase_auth: ^5.3.1
-  cloud_firestore: ^5.4.4
-  firebase_storage: ^12.3.2
+Current direct dependencies include Firebase Core, Authentication, Firestore and Storage; Provider; Google Sign-In; Image Picker; Shared Preferences; and Cupertino Icons. Tests use flutter_test, flutter_lints, and fake_cloud_firestore.
 
-  # State Management
-  provider: ^6.1.2
-
-  # Device Hardware Integration
-  image_picker: ^1.1.2
-
-  # Utilities & Helpers
-  intl: ^0.19.0
-  cached_network_image: ^3.4.1
-  shimmer: ^3.0.0
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^5.0.0
-```
+The declared Dart SDK requirement is **^3.13.5**. The verified local toolchain is **Flutter 3.47.6 / Dart 3.13.5**. Flutter and Dart version numbers are different. Follow [the README](README.md) for dependency installation, Windows plugin setup, Android signing, and device build commands.
 
 ---
-*End of MachAlert Product Requirements Document & Technical Specification.*  
-*Authored by Senior Product Manager & Software Architect for Academic Sprint 2 Development.*
+
+*End of MachAlert Product Requirements Document & Technical Specification. Original requirements retained with the implementation reconciliation above.*
