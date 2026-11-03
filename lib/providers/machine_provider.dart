@@ -172,6 +172,21 @@ class MachineProvider extends ChangeNotifier {
         );
   }
 
+  /// Forces a refresh of the machine stream subscription from [MachineService].
+  void refresh() {
+    if (_isDisposed) return;
+    _machinesSubscription?.cancel();
+    _machinesSubscription = null;
+    _errorMessage = null;
+    _isLoading = true;
+    notifyListeners();
+
+    subscribeToMachines(
+      productionLine: _subscribedLine,
+      status: _subscribedStatus,
+    );
+  }
+
   /// Subscribes directly to a supplied stream of machine lists.
   void subscribeToMachineStream(Stream<List<MachineModel>> stream) {
     if (_isDisposed) return;

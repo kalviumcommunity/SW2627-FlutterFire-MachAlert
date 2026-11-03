@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../../models/fault_model.dart';
 import '../../models/machine_model.dart';
+import '../../models/maintenance_model.dart';
 import '../../providers/app_state_provider.dart';
 import '../../providers/machine_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/fault_service.dart';
+import '../../services/maintenance_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_constants.dart';
 import '../../utils/app_routes.dart';
@@ -19,8 +21,14 @@ import '../../widgets/main_bottom_navigation.dart';
 class HomeScreen extends StatefulWidget {
   final FaultService? faultService;
   final MachineProvider? machineProvider;
+  final MaintenanceService? maintenanceService;
 
-  const HomeScreen({super.key, this.faultService, this.machineProvider});
+  const HomeScreen({
+    super.key,
+    this.faultService,
+    this.machineProvider,
+    this.maintenanceService,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -30,6 +38,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isSigningOut = false;
 
   Stream<List<FaultModel>>? _managerFaultStream;
+  Stream<List<FaultModel>>? _technicianFaultStream;
+  Stream<List<MaintenanceModel>>? _technicianAssignedTasksStream;
 
   @override
   void initState() {
@@ -42,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    _checkAndInitManagerServices();
+    _checkAndInitRoleServices();
   }
 
   @override
@@ -57,8 +67,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (widget.faultService != oldWidget.faultService) {
       _managerFaultStream = null;
+      _technicianFaultStream = null;
 
-      _initFaultStream();
+      _initManagerFaultStream();
+      _initTechnicianStreams();
+    }
+
+    if (widget.maintenanceService != oldWidget.maintenanceService) {
+      _technicianAssignedTasksStream = null;
+
+      _initTechnicianStreams();
     }
   }
 
@@ -99,7 +117,19 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _checkAndInitManagerServices() {
+  MaintenanceService? _resolveMaintenanceService() {
+    if (widget.maintenanceService != null) {
+      return widget.maintenanceService;
+    }
+
+    try {
+      return context.read<MaintenanceService>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _checkAndInitRoleServices() {
     try {
       final role = context
           .read<AppStateProvider>()
@@ -109,14 +139,18 @@ class _HomeScreenState extends State<HomeScreen> {
           .toLowerCase();
 
       if (role == AppConstants.roleManager) {
-        _initFaultStream();
+        _initManagerFaultStream();
+
+        _scheduleMachineSubscription();
+      } else if (role == AppConstants.roleTechnician) {
+        _initTechnicianStreams();
 
         _scheduleMachineSubscription();
       }
     } catch (_) {}
   }
 
-  void _initFaultStream() {
+  void _initManagerFaultStream() {
     if (_managerFaultStream != null) {
       return;
     }
@@ -143,6 +177,42 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _initTechnicianStreams() {
+    try {
+      final role = context
+          .read<AppStateProvider>()
+          .user
+          ?.role
+          .trim()
+          .toLowerCase();
+
+      if (role != null &&
+          role.isNotEmpty &&
+          role != AppConstants.roleTechnician) {
+        return;
+      }
+    } catch (_) {}
+
+    if (_technicianFaultStream == null) {
+      final faultService = _resolveFaultService();
+      if (faultService != null) {
+        _technicianFaultStream = faultService.streamFaults();
+      }
+    }
+
+    if (_technicianAssignedTasksStream == null) {
+      final maintenanceService = _resolveMaintenanceService();
+      if (maintenanceService != null) {
+        try {
+          _technicianAssignedTasksStream =
+              maintenanceService.streamAssignedMaintenanceTasks();
+        } catch (_) {
+          _technicianAssignedTasksStream = null;
+        }
+      }
+    }
+  }
+
   void _scheduleMachineSubscription() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -157,7 +227,8 @@ class _HomeScreenState extends State<HomeScreen> {
             .trim()
             .toLowerCase();
 
-        if (currentRole == AppConstants.roleManager) {
+        if (currentRole == AppConstants.roleManager ||
+            currentRole == AppConstants.roleTechnician) {
           final provider = _resolveMachineProvider();
 
           if (provider != null && !provider.hasActiveSubscription) {
@@ -360,7 +431,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildManagerDashboard() {
-    _initFaultStream();
+    _initManagerFaultStream();
     _scheduleMachineSubscription();
 
     MachineProvider? provider = widget.machineProvider;
@@ -535,6 +606,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildTechnicianDashboard() {
+    _initTechnicianStreams();
+    _scheduleMachineSubscription();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -549,23 +623,95 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 12),
 
-        const Row(
+        Row(
           children: [
             Expanded(
-              child: DashboardStatCard(
-                label: 'Assigned Tasks',
-                value: '--',
-                icon: Icons.assignment_outlined,
-                accentColor: AppTheme.blue,
+              child: StreamBuilder<List<MaintenanceModel>>(
+                stream: _technicianAssignedTasksStream,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const DashboardStatCard(
+                      label: 'Assigned Tasks',
+                      value: 'Error',
+                      hasError: true,
+                      icon: Icons.assignment_outlined,
+                      accentColor: AppTheme.blue,
+                    );
+                  }
+
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData) {
+                    return const DashboardStatCard(
+                      label: 'Assigned Tasks',
+                      value: '',
+                      isLoading: true,
+                      icon: Icons.assignment_outlined,
+                      accentColor: AppTheme.blue,
+                    );
+                  }
+
+                  final tasks = snapshot.data ?? const [];
+                  final activeTasksCount = tasks.where((task) {
+                    final status = task.status.trim().toLowerCase();
+                    return status ==
+                            AppConstants.maintenanceStatusPending
+                                .toLowerCase() ||
+                        status ==
+                            AppConstants.maintenanceStatusInProgress
+                                .toLowerCase();
+                  }).length;
+
+                  return DashboardStatCard(
+                    label: 'Assigned Tasks',
+                    value: activeTasksCount.toString(),
+                    icon: Icons.assignment_outlined,
+                    accentColor: AppTheme.blue,
+                  );
+                },
               ),
             ),
-            SizedBox(width: 10),
+            const SizedBox(width: 10),
             Expanded(
-              child: DashboardStatCard(
-                label: 'Active Faults',
-                value: '--',
-                icon: Icons.warning_amber,
-                accentColor: AppTheme.danger,
+              child: StreamBuilder<List<FaultModel>>(
+                stream: _technicianFaultStream,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return const DashboardStatCard(
+                      label: 'Active Faults',
+                      value: 'Error',
+                      hasError: true,
+                      icon: Icons.warning_amber,
+                      accentColor: AppTheme.danger,
+                    );
+                  }
+
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData) {
+                    return const DashboardStatCard(
+                      label: 'Active Faults',
+                      value: '',
+                      isLoading: true,
+                      icon: Icons.warning_amber,
+                      accentColor: AppTheme.danger,
+                    );
+                  }
+
+                  final faults = snapshot.data ?? const [];
+                  final activeFaultsCount = faults.where((fault) {
+                    final status = fault.status.trim().toLowerCase();
+                    return status ==
+                            AppConstants.faultStatusOpen.toLowerCase() ||
+                        status ==
+                            AppConstants.faultStatusInProgress.toLowerCase();
+                  }).length;
+
+                  return DashboardStatCard(
+                    label: 'Active Faults',
+                    value: activeFaultsCount.toString(),
+                    icon: Icons.warning_amber,
+                    accentColor: AppTheme.danger,
+                  );
+                },
               ),
             ),
           ],

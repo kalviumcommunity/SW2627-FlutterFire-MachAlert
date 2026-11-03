@@ -1,5 +1,7 @@
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -24,7 +26,30 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   void initState() {
     super.initState();
+    widget.machineProvider?.addListener(_onMachineProviderChanged);
     _scheduleMachineSubscription();
+  }
+
+  @override
+  void didUpdateWidget(ReportsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.machineProvider != oldWidget.machineProvider) {
+      oldWidget.machineProvider?.removeListener(_onMachineProviderChanged);
+      widget.machineProvider?.addListener(_onMachineProviderChanged);
+      _scheduleMachineSubscription();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.machineProvider?.removeListener(_onMachineProviderChanged);
+    super.dispose();
+  }
+
+  void _onMachineProviderChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _scheduleMachineSubscription() {
@@ -59,13 +84,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
       } catch (_) {}
     }
 
-    final isReady =
-        provider != null &&
-        provider.hasActiveSubscription &&
-        !provider.isLoading &&
-        !provider.hasError;
+    final isLoading = provider == null ||
+        provider.isLoading ||
+        (!provider.hasActiveSubscription &&
+            !provider.hasError &&
+            provider.machines.isEmpty);
 
-    final stats = isReady ? provider.statistics : null;
+    final hasError = provider != null && provider.hasError;
+
+    final stats = (provider != null && !hasError && !isLoading)
+        ? provider.statistics
+        : null;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -159,80 +188,158 @@ class _ReportsScreenState extends State<ReportsScreen> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(18),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 120,
-                      height: 120,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          MachineStatusDonutChart(stats: stats),
-                          Column(
+                child: Builder(
+                  builder: (context) {
+                    if (hasError) {
+                      final errorMessage = provider?.errorMessage ??
+                          'Failed to load machine statistics';
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Center(
+                          child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              const Icon(
+                                Icons.error_outline,
+                                color: AppTheme.danger,
+                                size: 36,
+                              ),
+                              const SizedBox(height: 10),
                               Text(
-                                stats != null ? stats.total.toString() : '--',
+                                errorMessage,
+                                textAlign: TextAlign.center,
                                 style: const TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.navy,
+                                  fontSize: 13,
+                                  color: AppTheme.danger,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
+                              const SizedBox(height: 14),
+                              FilledButton.icon(
+                                onPressed: () {
+                                  if (provider != null) {
+                                    provider.refresh();
+                                  } else {
+                                    _scheduleMachineSubscription();
+                                  }
+                                },
+                                icon: const Icon(Icons.refresh, size: 16),
+                                label: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (isLoading) {
+                      final isTest = !kIsWeb &&
+                          Platform.environment['FLUTTER_TEST'] == 'true';
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 28),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  value: isTest ? 0.75 : null,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
                               const Text(
-                                'Machines',
+                                'Loading machine statistics...',
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   color: Color(0xFF788896),
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    }
 
-                    const SizedBox(width: 22),
+                    final displayStats =
+                        stats ?? MachineStatistics.fromMachines(const []);
 
-                    Expanded(
-                      child: Column(
-                        children: [
-                          _LegendRow(
-                            color: AppTheme.green,
-                            label: 'Running',
-                            value: stats != null
-                                ? '${stats.running} (${stats.runningPercentage}%)'
-                                : '--',
+                    return Row(
+                      children: [
+                        SizedBox(
+                          width: 120,
+                          height: 120,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              MachineStatusDonutChart(stats: displayStats),
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    displayStats.total.toString(),
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.navy,
+                                    ),
+                                  ),
+                                  const Text(
+                                    'Machines',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFF788896),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 12),
-                          _LegendRow(
-                            color: AppTheme.warning,
-                            label: 'Maintenance',
-                            value: stats != null
-                                ? '${stats.maintenance} (${stats.maintenancePercentage}%)'
-                                : '--',
+                        ),
+
+                        const SizedBox(width: 22),
+
+                        Expanded(
+                          child: Column(
+                            children: [
+                              _LegendRow(
+                                color: AppTheme.green,
+                                label: 'Running',
+                                value:
+                                    '${displayStats.running} (${displayStats.runningPercentage}%)',
+                              ),
+                              const SizedBox(height: 12),
+                              _LegendRow(
+                                color: AppTheme.warning,
+                                label: 'Maintenance',
+                                value:
+                                    '${displayStats.maintenance} (${displayStats.maintenancePercentage}%)',
+                              ),
+                              const SizedBox(height: 12),
+                              _LegendRow(
+                                color: AppTheme.danger,
+                                label: 'Breakdown',
+                                value:
+                                    '${displayStats.breakdown} (${displayStats.breakdownPercentage}%)',
+                              ),
+                              if (displayStats.other > 0) ...[
+                                const SizedBox(height: 12),
+                                _LegendRow(
+                                  color: const Color(0xFF788896),
+                                  label: 'Other / Unknown',
+                                  value:
+                                      '${displayStats.other} (${displayStats.otherPercentage}%)',
+                                ),
+                              ],
+                            ],
                           ),
-                          const SizedBox(height: 12),
-                          _LegendRow(
-                            color: AppTheme.danger,
-                            label: 'Breakdown',
-                            value: stats != null
-                                ? '${stats.breakdown} (${stats.breakdownPercentage}%)'
-                                : '--',
-                          ),
-                          if (stats != null && stats.other > 0) ...[
-                            const SizedBox(height: 12),
-                            _LegendRow(
-                              color: const Color(0xFF788896),
-                              label: 'Other / Unknown',
-                              value:
-                                  '${stats.other} (${stats.otherPercentage}%)',
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
