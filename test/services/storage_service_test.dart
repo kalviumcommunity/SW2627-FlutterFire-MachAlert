@@ -53,7 +53,23 @@ class FakeStorageUploader implements StorageUploader {
   }
 }
 
-class FakeTaskSnapshot extends Fake implements TaskSnapshot {}
+class FakeTaskSnapshot extends Fake implements TaskSnapshot {
+  final TaskState _state;
+
+  FakeTaskSnapshot([this._state = TaskState.success]);
+
+  @override
+  TaskState get state => _state;
+}
+
+class FakeFullMetadata extends Fake implements FullMetadata {
+  final int _size;
+
+  FakeFullMetadata([this._size = 1024]);
+
+  @override
+  int get size => _size;
+}
 
 class FakeUploadTask extends Fake implements UploadTask {
   final Future<TaskSnapshot> _future;
@@ -75,6 +91,9 @@ class FakeReference extends Fake implements Reference {
   Uint8List? putDataBytes;
   SettableMetadata? putDataMetadata;
   Exception? putDataError;
+  TaskState taskState = TaskState.success;
+  Exception? getMetadataError;
+  FullMetadata? metadataToReturn;
   Exception? getDownloadUrlError;
   String downloadUrlToReturn =
       'https://firebasestorage.googleapis.com/test-url';
@@ -88,7 +107,22 @@ class FakeReference extends Fake implements Reference {
     if (putDataError != null) {
       return FakeUploadTask(Future.error(putDataError!));
     }
-    return FakeUploadTask(Future.value(FakeTaskSnapshot()));
+    return FakeUploadTask(Future.value(FakeTaskSnapshot(taskState)));
+  }
+
+  @override
+  Future<FullMetadata> getMetadata() async {
+    if (getMetadataError != null) {
+      throw getMetadataError!;
+    }
+    return metadataToReturn ?? FakeFullMetadata();
+  }
+
+  int deleteCallCount = 0;
+
+  @override
+  Future<void> delete() async {
+    deleteCallCount++;
   }
 
   @override
@@ -104,14 +138,25 @@ class FakeFirebaseStorage extends Fake implements FirebaseStorage {
   final Map<String, FakeReference> references = {};
   FakeReference? lastReference;
   Exception? nextPutDataError;
+  TaskState nextTaskState = TaskState.success;
+  Exception? nextGetMetadataError;
+  FullMetadata? nextMetadataToReturn;
   Exception? nextGetDownloadUrlError;
   String defaultDownloadUrl = 'https://firebasestorage.googleapis.com/test-url';
+
+  @override
+  Reference refFromURL(String url) {
+    return ref(url);
+  }
 
   @override
   Reference ref([String? path]) {
     final refPath = path ?? '';
     final reference = references[refPath] ?? FakeReference(refPath)
       ..putDataError = nextPutDataError
+      ..taskState = nextTaskState
+      ..getMetadataError = nextGetMetadataError
+      ..metadataToReturn = nextMetadataToReturn
       ..getDownloadUrlError = nextGetDownloadUrlError
       ..downloadUrlToReturn = defaultDownloadUrl;
     references[refPath] = reference;
@@ -589,5 +634,122 @@ void main() {
         );
       },
     );
+
+    test('FirebaseStorageUploader uses exact same reference for upload, metadata check, and download URL', () async {
+      final fakeStorage = FakeFirebaseStorage();
+      final uploader = FirebaseStorageUploader(fakeStorage);
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+
+      final url = await uploader.upload(
+        path: 'fault_images/user-42/photo.jpg',
+        bytes: sampleBytes,
+        metadata: metadata,
+      );
+
+      expect(url, equals('https://firebasestorage.googleapis.com/test-url'));
+      expect(fakeStorage.references.length, equals(1));
+      final ref = fakeStorage.references['fault_images/user-42/photo.jpg']!;
+      expect(ref.putDataBytes, equals(sampleBytes));
+    });
+
+    test('Upload task cancellation throws StorageServiceException with code canceled', () async {
+      final fakeStorage = FakeFirebaseStorage()..nextTaskState = TaskState.canceled;
+      final uploader = FirebaseStorageUploader(fakeStorage);
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+
+      expect(
+        () => uploader.upload(
+          path: 'fault_images/user-42/cancelled.jpg',
+          bytes: sampleBytes,
+          metadata: metadata,
+        ),
+        throwsA(
+          isA<StorageServiceException>().having(
+            (e) => e.code,
+            'code',
+            'canceled',
+          ),
+        ),
+      );
+    });
+
+    test('Metadata object-not-found throws StorageServiceException with object-not-found code', () async {
+      final fakeStorage = FakeFirebaseStorage()
+        ..nextGetMetadataError = FirebaseException(
+          plugin: 'firebase_storage',
+          code: 'object-not-found',
+        );
+
+      final service = StorageService(auth: fakeAuth, storage: fakeStorage);
+
+      try {
+        await service.uploadFaultImage(
+          bytes: sampleBytes,
+          fileName: 'missing_after_put.png',
+        );
+        fail('Expected uploadFaultImage to throw StorageServiceException');
+      } on StorageServiceException catch (e) {
+        expect(e.code, equals('object-not-found'));
+        expect(e.message, equals('The requested storage file was not found.'));
+      }
+    });
+
+    test('Download URL object-not-found throws StorageServiceException with object-not-found code', () async {
+      final fakeStorage = FakeFirebaseStorage()
+        ..nextGetDownloadUrlError = FirebaseException(
+          plugin: 'firebase_storage',
+          code: 'object-not-found',
+        );
+
+      final service = StorageService(auth: fakeAuth, storage: fakeStorage);
+
+      try {
+        await service.uploadFaultImage(
+          bytes: sampleBytes,
+          fileName: 'missing_url.png',
+        );
+        fail('Expected uploadFaultImage to throw StorageServiceException');
+      } on StorageServiceException catch (e) {
+        expect(e.code, equals('object-not-found'));
+        expect(e.message, equals('The requested storage file was not found.'));
+      }
+    });
+
+    test('Network failure during upload is mapped to network connection error message', () async {
+      final fakeStorage = FakeFirebaseStorage()
+        ..nextPutDataError = FirebaseException(
+          plugin: 'firebase_storage',
+          code: 'network-request-failed',
+        );
+
+      final service = StorageService(auth: fakeAuth, storage: fakeStorage);
+
+      try {
+        await service.uploadFaultImage(
+          bytes: sampleBytes,
+          fileName: 'network_fail.png',
+        );
+        fail('Expected uploadFaultImage to throw StorageServiceException');
+      } on StorageServiceException catch (e) {
+        expect(e.code, equals('network-request-failed'));
+        expect(
+          e.message,
+          equals('Network connection failed during upload. Please check your internet connection.'),
+        );
+      }
+    });
+
+    test('deleteByUrl and deleteImage safely delete storage objects', () async {
+      final fakeStorage = FakeFirebaseStorage();
+      final service = StorageService(auth: fakeAuth, storage: fakeStorage);
+
+      await service.deleteByUrl('https://firebasestorage.googleapis.com/v0/b/bucket/o/fault_images%2Fphoto.jpg');
+      await service.deleteImage('fault_images/user-42/photo.jpg');
+
+      expect(fakeStorage.references.length, equals(2));
+      for (final ref in fakeStorage.references.values) {
+        expect(ref.deleteCallCount, equals(1));
+      }
+    });
   });
 }

@@ -108,7 +108,20 @@ class AppStateProvider extends ChangeNotifier {
     // reflected automatically in the dashboard.
     if (userService != null) {
       _listenToUserProfile(firebaseUser.uid);
+      _fetchInitialUserProfile(firebaseUser.uid);
     }
+  }
+
+  /// Proactively fetches the user's initial Firestore profile.
+  Future<void> _fetchInitialUserProfile(String uid) async {
+    final service = userService;
+    if (service == null) return;
+    try {
+      final profile = await service.getUserProfile(uid);
+      if (!_isDisposed && _activeUserUid == uid && profile != null) {
+        setAuthenticated(profile);
+      }
+    } catch (_) {}
   }
 
   /// Listens to the current user's Firestore profile.

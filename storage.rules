@@ -49,6 +49,8 @@ service firebase.storage {
     // - Technicians (to inspect and diagnose machine faults)
     // - Managers (to oversee plant incidents)
     // - Foreign operators and unauthenticated users are denied
+    // Deletion: Strictly disabled for clients to preserve incident-history integrity and non-repudiation.
+    // Orphan cleanup for confirmed client failures is handled by idempotent backend reconciliation.
     match /fault_images/{uid}/{fileName} {
       allow read: if isAuthenticated() && (request.auth.uid == uid || isTechnician() || isManager());
       allow create: if isValidImageUpload(uid);

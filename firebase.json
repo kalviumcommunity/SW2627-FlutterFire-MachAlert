@@ -1,43 +1,51 @@
-
 {
-  "firestore": {
-    "rules": "firestore.rules"
-  },
-  "storage": {
-    "rules": "storage.rules"
-  },
-  "emulators": {
     "firestore": {
-      "host": "127.0.0.1",
-      "port": 8080
+        "rules": "firestore.rules"
     },
     "storage": {
-      "host": "127.0.0.1",
-      "port": 9199
+        "rules": "storage.rules"
     },
-    "ui": {
-      "enabled": true,
-      "host": "127.0.0.1",
-      "port": 4000
-    }
-  },
-  "flutter": {
-    "platforms": {
-      "android": {
-        "default": {
-          "projectId": "machalert",
-          "appId": "1:297020906537:android:bc501b2b4ed4eec948d038",
-          "fileOutput": "android/app/google-services.json"
+    "emulators": {
+        "firestore": {
+            "host": "127.0.0.1",
+            "port": 8080
+        },
+        "storage": {
+            "host": "127.0.0.1",
+            "port": 9199
+        },
+        "ui": {
+            "enabled": true,
+            "host": "127.0.0.1",
+            "port": 4000
         }
-      },
-      "dart": {
-        "lib/firebase_options.dart": {
-          "projectId": "machalert",
-          "configurations": {
-            "android": "1:297020906537:android:bc501b2b4ed4eec948d038"
-          }
+    },
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "machalert",
+                    "appId": "1:297020906537:android:bc501b2b4ed4eec948d038",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "machalert",
+                    "configurations": {
+                        "android": "1:297020906537:android:bc501b2b4ed4eec948d038",
+                        "ios": "1:297020906537:ios:a23d10fe895dfea048d038"
+                    }
+                }
+            },
+            "ios": {
+                "default": {
+                    "projectId": "machalert",
+                    "appId": "1:297020906537:ios:a23d10fe895dfea048d038",
+                    "uploadDebugSymbols": false,
+                    "fileOutput": "ios/Runner/GoogleService-Info.plist"
+                }
+            }
         }
-      }
     }
-  }
 }

@@ -26,10 +26,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for macos - '
@@ -58,5 +55,15 @@ class DefaultFirebaseOptions {
     messagingSenderId: '297020906537',
     projectId: 'machalert',
     storageBucket: 'machalert.firebasestorage.app',
+  );
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyDm4ErQQyOfvWlt7gT9uIvN_W5JpTxwkSQ',
+    appId: '1:297020906537:ios:a23d10fe895dfea048d038',
+    messagingSenderId: '297020906537',
+    projectId: 'machalert',
+    storageBucket: 'machalert.firebasestorage.app',
+    androidClientId: '297020906537-ks1g2pku84d2vuk5iqcvg3llvmvmg901.apps.googleusercontent.com',
+    iosClientId: '297020906537-g67ukn44p3c8nu01ej7652sm1umk2i8t.apps.googleusercontent.com',
+    iosBundleId: 'com.example.machAlert',
   );
 }

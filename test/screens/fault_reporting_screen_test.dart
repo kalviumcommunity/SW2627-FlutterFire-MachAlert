@@ -28,6 +28,13 @@ class FakeStorageService extends Fake implements StorageService {
   Exception? exceptionToThrow;
   Completer<String>? uploadCompleter;
 
+  final List<String> deletedUrls = [];
+
+  @override
+  Future<void> deleteByUrl(String url) async {
+    deletedUrls.add(url);
+  }
+
   @override
   Future<String> uploadFaultImage({
     required Uint8List bytes,
@@ -79,6 +86,22 @@ Uint8List createSampleImageBytes() {
     'CAQAAAC1HAwCAAAAC0lEQVR42mP8/x8A'
     'AusB9Y9ZcNAAAAAASUVORK5CYII=',
   );
+}
+
+class FailingReadXFile extends XFile {
+  final Uint8List previewBytes;
+  int readCount = 0;
+
+  FailingReadXFile(this.previewBytes) : super('failing.png', name: 'failing.png');
+
+  @override
+  Future<Uint8List> readAsBytes() async {
+    readCount++;
+    if (readCount == 1) {
+      return previewBytes;
+    }
+    throw Exception('File missing or unreadable');
+  }
 }
 
 class ControllableReadXFile extends XFile {
@@ -1205,6 +1228,149 @@ void main() {
         // No upload was attempted after unmounting, and context was not looked up on deactivated element
         expect(fakeStorageService.uploadCallCount, equals(0));
         expect(fakeFaultService.addFaultCallCount, equals(0));
+      },
+    );
+
+    testWidgets(
+      '11. Missing or unreadable image file displays clear error message and prevents fault submission',
+      (tester) async {
+        final fakeFaultService = FakeFaultService();
+        final fakeStorageService = FakeStorageService();
+        final machine = createMachine();
+
+        // XFile that succeeds on first read (preview) but fails when submitted
+        final unreadableImage = FailingReadXFile(createSampleImageBytes());
+
+        await pumpFaultScreen(
+          tester,
+          machines: [machine],
+          initialMachine: machine,
+          faultService: fakeFaultService,
+          storageService: fakeStorageService,
+          pickImage: (_) async => unreadableImage,
+        );
+
+        await selectFaultType(tester, 'Mechanical');
+        await selectSeverity(tester, 'High');
+        await enterDescription(
+          tester,
+          'Abnormal vibration observed during milling operation.',
+        );
+        await pickTestImageFromGallery(tester);
+
+        await tapSubmit(tester);
+        await tester.pumpAndSettle();
+
+        expect(fakeStorageService.uploadCallCount, equals(0));
+        expect(fakeFaultService.addFaultCallCount, equals(0));
+        expect(
+          find.text('The selected image file is missing or unreadable. Please choose another image.'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      '12. Firestore submission failure after successful upload safely retains image for backend reconciliation and does not attempt client deletion',
+      (tester) async {
+        final fakeFaultService = FakeFaultService();
+        final fakeStorageService = FakeStorageService();
+        fakeStorageService.downloadUrlToReturn = 'https://firebasestorage.googleapis.com/v0/b/bucket/o/fault_images%2Forphan.jpg';
+
+        fakeFaultService.exceptionToThrow = FaultServiceException(
+          code: 'permission-denied',
+          message: 'You do not have permission to access or report this fault.',
+        );
+
+        final machine = createMachine();
+
+        await pumpFaultScreen(
+          tester,
+          machines: [machine],
+          initialMachine: machine,
+          faultService: fakeFaultService,
+          storageService: fakeStorageService,
+          pickImage: (_) async => XFile.fromData(
+            createSampleImageBytes(),
+            path: 'test_orphan.png',
+            name: 'test_orphan.png',
+          ),
+        );
+
+        await selectFaultType(tester, 'Mechanical');
+        await selectSeverity(tester, 'High');
+        await enterDescription(
+          tester,
+          'Hydraulic pressure loss leading to arm stall.',
+        );
+        await pickTestImageFromGallery(tester);
+
+        await tapSubmit(tester);
+        await tester.pumpAndSettle();
+
+        expect(fakeStorageService.uploadCallCount, equals(1));
+        expect(fakeFaultService.addFaultCallCount, equals(1));
+
+        // Verifies no client-side deletion is attempted; image is retained for trusted backend reconciliation
+        expect(fakeStorageService.deletedUrls, isEmpty);
+
+        // Verifies the user was notified of the Firestore failure
+        expect(
+          find.text('You do not have permission to access or report this fault.'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      '13. Ambiguous network timeout failure preserves uploaded image and does not trigger deleteByUrl',
+      (tester) async {
+        final fakeFaultService = FakeFaultService();
+        final fakeStorageService = FakeStorageService();
+        fakeStorageService.downloadUrlToReturn = 'https://firebasestorage.googleapis.com/v0/b/bucket/o/fault_images%2Ftimeout_photo.jpg';
+
+        fakeFaultService.exceptionToThrow = FaultServiceException(
+          code: 'unavailable',
+          message: 'Firestore is currently unavailable. Please check your network connection.',
+        );
+
+        final machine = createMachine();
+
+        await pumpFaultScreen(
+          tester,
+          machines: [machine],
+          initialMachine: machine,
+          faultService: fakeFaultService,
+          storageService: fakeStorageService,
+          pickImage: (_) async => XFile.fromData(
+            createSampleImageBytes(),
+            path: 'test_timeout.png',
+            name: 'test_timeout.png',
+          ),
+        );
+
+        await selectFaultType(tester, 'Mechanical');
+        await selectSeverity(tester, 'High');
+        await enterDescription(
+          tester,
+          'Hydraulic pressure loss leading to arm stall.',
+        );
+        await pickTestImageFromGallery(tester);
+
+        await tapSubmit(tester);
+        await tester.pumpAndSettle();
+
+        expect(fakeStorageService.uploadCallCount, equals(1));
+        expect(fakeFaultService.addFaultCallCount, equals(1));
+
+        // Verifies image was NOT deleted on ambiguous timeout/unavailable failure
+        expect(fakeStorageService.deletedUrls, isEmpty);
+
+        // Verifies user is notified cleanly
+        expect(
+          find.text('Firestore is currently unavailable. Please check your network connection.'),
+          findsOneWidget,
+        );
       },
     );
   });

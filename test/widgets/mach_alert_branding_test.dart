@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -310,5 +313,74 @@ void main() {
         expect(find.text('Sign up with Google'), findsOneWidget);
       },
     );
+
+    test('Requirement 14: iOS native launcher icon does not use default Flutter placeholder', () {
+      final iosIcon1024 = File('ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png');
+      expect(iosIcon1024.existsSync(), isTrue);
+
+      final bytes = iosIcon1024.readAsBytesSync();
+      // PNG header check
+      expect(bytes.sublist(0, 8), equals([137, 80, 78, 71, 13, 10, 26, 10]));
+
+      final width = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+      final height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+      expect(width, equals(1024));
+      expect(height, equals(1024));
+
+      // Color type 2 is RGB without alpha (Apple App Store specification)
+      expect(bytes[25], equals(2));
+
+      // Must not match old 10,932 byte Flutter placeholder icon
+      expect(bytes.length, isNot(equals(10932)));
+    });
+
+    test('Requirement 15: iOS AppIcon set contains all required resolution assets', () {
+      final contentsFile = File('ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json');
+      expect(contentsFile.existsSync(), isTrue);
+
+      final contents = jsonDecode(contentsFile.readAsStringSync()) as Map<String, dynamic>;
+      final images = contents['images'] as List<dynamic>;
+
+      for (final img in images) {
+        final filename = img['filename'] as String;
+        final iconFile = File('ios/Runner/Assets.xcassets/AppIcon.appiconset/$filename');
+        expect(iconFile.existsSync(), isTrue, reason: 'Missing iOS icon asset: $filename');
+        expect(iconFile.lengthSync(), greaterThan(0));
+      }
+    });
+
+    test('Requirement 16: Android launcher icons exist and match approved MachAlert branding', () {
+      final xxxhdpiLauncher = File('android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png');
+      final xxxhdpiRound = File('android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png');
+      final xxxhdpiForeground = File('android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png');
+
+      expect(xxxhdpiLauncher.existsSync(), isTrue);
+      expect(xxxhdpiRound.existsSync(), isTrue);
+      expect(xxxhdpiForeground.existsSync(), isTrue);
+
+      expect(xxxhdpiLauncher.lengthSync(), greaterThan(0));
+      expect(xxxhdpiRound.lengthSync(), greaterThan(0));
+      expect(xxxhdpiForeground.lengthSync(), greaterThan(0));
+    });
+
+    test('Requirement 17: MachAlert full logo and emblem aspect ratios are preserved', () {
+      final fullLogoFile = File('assets/branding/machalert_logo.png');
+      final emblemFile = File('assets/branding/machalert_emblem.png');
+
+      expect(fullLogoFile.existsSync(), isTrue);
+      expect(emblemFile.existsSync(), isTrue);
+
+      final fullBytes = fullLogoFile.readAsBytesSync();
+      final fullW = (fullBytes[16] << 24) | (fullBytes[17] << 16) | (fullBytes[18] << 8) | fullBytes[19];
+      final fullH = (fullBytes[20] << 24) | (fullBytes[21] << 16) | (fullBytes[22] << 8) | fullBytes[23];
+      final fullRatio = fullW / fullH;
+      expect(fullRatio, closeTo(3.0, 0.05));
+
+      final emblemBytes = emblemFile.readAsBytesSync();
+      final emblemW = (emblemBytes[16] << 24) | (emblemBytes[17] << 16) | (emblemBytes[18] << 8) | emblemBytes[19];
+      final emblemH = (emblemBytes[20] << 24) | (emblemBytes[21] << 16) | (emblemBytes[22] << 8) | emblemBytes[23];
+      final emblemRatio = emblemW / emblemH;
+      expect(emblemRatio, closeTo(2.02, 0.05));
+    });
   });
 }
