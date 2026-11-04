@@ -4,6 +4,7 @@ import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mach_alert/models/fault_model.dart';
 import 'package:mach_alert/models/machine_model.dart';
 import 'package:mach_alert/models/user_model.dart';
 import 'package:mach_alert/screens/maintenance/maintenance_task_form_screen.dart';
@@ -108,6 +109,7 @@ void main() {
   Widget buildFormScreen({
     List<MachineModel>? initialMachines,
     List<UserModel>? initialTechnicians,
+    List<FaultModel>? initialFaults,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -122,6 +124,7 @@ void main() {
                     machineService: machineService,
                     initialMachines: initialMachines,
                     initialTechnicians: initialTechnicians,
+                    initialFaults: initialFaults,
                   ),
                 ),
               );
@@ -189,8 +192,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Alex Technician (tech_01)'), findsWidgets);
-      expect(find.text('Bob Technician (tech_02)'), findsWidgets);
+      expect(find.text('Alex Technician'), findsWidgets);
+      expect(find.text('Bob Technician'), findsWidgets);
     },
   );
 
@@ -213,7 +216,21 @@ void main() {
   testWidgets(
     '14. Successful task submission creates a Pending MaintenanceModel with correct values',
     (tester) async {
-      await tester.pumpWidget(buildFormScreen());
+      final sampleFault = FaultModel(
+        id: 'FLT-999',
+        machineId: 'MCH-01',
+        machineName: 'CNC Milling Center',
+        type: 'Mechanical',
+        severity: 'Critical',
+        status: 'Open',
+        description: 'Inspect spindle vibration and gearbox lubricant',
+        reportedBy: 'user_1',
+        createdAt: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        buildFormScreen(initialFaults: [sampleFault]),
+      );
       await openForm(tester);
 
       // 1. Select Machine
@@ -229,7 +246,7 @@ void main() {
         find.byKey(const ValueKey('maintenance-technician-dropdown')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Alex Technician (tech_01)').last);
+      await tester.tap(find.text('Alex Technician').last);
       await tester.pumpAndSettle();
 
       // 3. Select Priority Critical
@@ -240,11 +257,16 @@ void main() {
       await tester.tap(find.text('Critical').last);
       await tester.pumpAndSettle();
 
-      // 4. Enter Fault ID and Notes
-      await tester.enterText(
+      // 4. Select Linked Fault from Dropdown and Enter Notes
+      await tester.tap(
         find.byKey(const ValueKey('maintenance-fault-id-field')),
-        'FLT-999',
       );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.textContaining('Inspect spindle vibration and gearbox lubricant').last,
+      );
+      await tester.pumpAndSettle();
+
       await tester.enterText(
         find.byKey(const ValueKey('maintenance-notes-field')),
         'Inspect spindle vibration and gearbox lubricant',
@@ -302,7 +324,7 @@ void main() {
         find.byKey(const ValueKey('maintenance-technician-dropdown')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Alex Technician (tech_01)').last);
+      await tester.tap(find.text('Alex Technician').last);
       await tester.pumpAndSettle();
 
       // Enter Notes

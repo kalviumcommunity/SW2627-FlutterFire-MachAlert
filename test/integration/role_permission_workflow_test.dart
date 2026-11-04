@@ -393,7 +393,7 @@ void main() async {
           faultData['reportedBy'],
           equals('op_user_42'),
         ); // Derived from authenticated user
-        expect(faultData['reportedByName'], isNull);
+        expect(faultData['reportedByName'], equals('Sam Operator'));
       },
     );
 

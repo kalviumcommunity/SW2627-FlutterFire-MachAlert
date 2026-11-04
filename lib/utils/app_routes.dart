@@ -9,6 +9,7 @@ import '../screens/auth/signup_screen.dart';
 import '../screens/dashboard/home_screen.dart';
 import '../screens/faults/fault_history_screen.dart';
 import '../screens/faults/fault_reporting_screen.dart';
+import '../screens/faults/my_reports_screen.dart';
 import '../screens/faults/realtime_faults_screen.dart';
 import '../screens/machines/machine_details_screen.dart';
 import '../screens/machines/machine_form_screen.dart';
@@ -16,6 +17,7 @@ import '../screens/machines/machine_list_screen.dart';
 import '../screens/maintenance/maintenance_list_screen.dart';
 import '../screens/maintenance/maintenance_task_form_screen.dart';
 import '../services/fault_service.dart';
+import '../services/machine_activity_service.dart';
 import '../services/machine_service.dart';
 import '../services/maintenance_service.dart';
 import '../services/storage_service.dart';
@@ -35,6 +37,7 @@ class AppRoutes {
   static const String editMachineName = '/machines/edit';
   static const String reportFaultName = '/faults/report';
   static const String faultHistoryName = '/faults/history';
+  static const String myReportsName = '/faults/my_reports';
   static const String realtimeFaultsName = '/faults/live';
   static const String maintenanceName = '/maintenance';
   static const String createMaintenanceTaskName = '/maintenance/create';
@@ -94,11 +97,21 @@ class AppRoutes {
   static Route<void> machineDetails(
     MachineModel machine, {
     bool canManage = false,
+    MachineActivityService? activityService,
+    FaultService? faultService,
+    MaintenanceService? maintenanceService,
+    UserService? userService,
   }) {
     return _route<void>(
       name: machineDetailsName,
-      builder: (_) =>
-          MachineDetailsScreen(machine: machine, canManage: canManage),
+      builder: (_) => MachineDetailsScreen(
+        machine: machine,
+        canManage: canManage,
+        activityService: activityService,
+        faultService: faultService,
+        maintenanceService: maintenanceService,
+        userService: userService,
+      ),
     );
   }
 
@@ -124,6 +137,7 @@ class AppRoutes {
     MachineModel? initialMachine,
     FaultService? faultService,
     StorageService? storageService,
+    UserService? userService,
   }) {
     return _route<void>(
       name: reportFaultName,
@@ -132,18 +146,40 @@ class AppRoutes {
         initialMachine: initialMachine,
         faultService: faultService,
         storageService: storageService,
+        userService: userService,
       ),
     );
   }
 
   static Route<void> faultHistory({
     FaultService? faultService,
+    StorageService? storageService,
+    UserService? userService,
     String? machineId,
   }) {
     return _route<void>(
       name: faultHistoryName,
-      builder: (_) =>
-          FaultHistoryScreen(faultService: faultService, machineId: machineId),
+      builder: (_) => FaultHistoryScreen(
+        faultService: faultService,
+        storageService: storageService,
+        userService: userService,
+        machineId: machineId,
+      ),
+    );
+  }
+
+  static Route<void> myReports({
+    FaultService? faultService,
+    StorageService? storageService,
+    UserService? userService,
+  }) {
+    return _route<void>(
+      name: myReportsName,
+      builder: (_) => MyReportsScreen(
+        faultService: faultService,
+        storageService: storageService,
+        userService: userService,
+      ),
     );
   }
 

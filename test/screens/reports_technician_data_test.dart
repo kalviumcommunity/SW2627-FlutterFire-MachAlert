@@ -346,8 +346,10 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // The date range widget is present in the screen
-        expect(find.text('Oct 1, 2026 - Oct 10, 2026'), findsOneWidget);
+        // The date range widget is present in the screen with data-driven text
+        expect(find.byIcon(Icons.calendar_today_outlined), findsOneWidget);
+        expect(find.text('Live Operational Data (All Time)'), findsOneWidget);
+        expect(find.text('Oct 1, 2026 - Oct 10, 2026'), findsNothing);
 
         // Machine statistics card still accurately reflects current inventory fleet (total 2)
         expect(find.text('2'), findsOneWidget);

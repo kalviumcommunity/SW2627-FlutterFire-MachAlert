@@ -1,16 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/fault_model.dart';
+import '../../providers/app_state_provider.dart';
 import '../../services/fault_service.dart';
+import '../../services/storage_service.dart';
+import '../../services/user_service.dart';
 import '../../utils/app_constants.dart';
 import '../../widgets/app_state_view.dart';
 
 /// Screen displaying the history of reported faults.
 class FaultHistoryScreen extends StatefulWidget {
   final FaultService? faultService;
+  final StorageService? storageService;
+  final UserService? userService;
   final String? machineId;
 
-  const FaultHistoryScreen({super.key, this.faultService, this.machineId});
+  const FaultHistoryScreen({
+    super.key,
+    this.faultService,
+    this.storageService,
+    this.userService,
+    this.machineId,
+  });
 
   @override
   State<FaultHistoryScreen> createState() => _FaultHistoryScreenState();
@@ -23,8 +35,22 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
 
   String? _errorMessage;
 
+  final Map<String, String> _reporterNameCache = {};
+  final Set<String> _pendingUidLookups = {};
+
   FaultService get _effectiveFaultService =>
       widget.faultService ?? FaultService();
+
+  UserService get _effectiveUserService {
+    if (widget.userService != null) {
+      return widget.userService!;
+    }
+    try {
+      return Provider.of<UserService>(context, listen: false);
+    } catch (_) {
+      return UserService();
+    }
+  }
 
   @override
   void initState() {
@@ -55,6 +81,8 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
         _isLoading = false;
         _errorMessage = null;
       });
+
+      _resolveMissingReporterNames(results);
     } catch (e) {
       if (!mounted) {
         return;
@@ -250,40 +278,43 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
 
                 const SizedBox(width: 4),
 
+                Text(
+                  _formatDate(fault.createdAt),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
                 Expanded(
-                  child: Text(
-                    _formatDate(fault.createdAt),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'By ${_getReporterDisplayName(fault)}',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
                     ),
                   ),
                 ),
 
-                if (fault.reportedByName != null &&
-                    fault.reportedByName!.trim().isNotEmpty) ...[
-                  Text(
-                    'By ${fault.reportedByName!.trim()}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                  ),
-                ] else if (fault.reportedBy.trim().isNotEmpty) ...[
-                  Text(
-                    'By ${fault.reportedBy.trim()}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                  ),
-                ],
-
-                if (fault.imageUrl != null &&
-                    fault.imageUrl!.trim().isNotEmpty) ...[
+                if (fault.hasImage && _canViewFaultImage(fault)) ...[
                   const SizedBox(width: 8),
 
-                  Icon(
-                    Icons.image_outlined,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.primary,
+                  GestureDetector(
+                    key: ValueKey('fault-image-btn-${fault.id}'),
+                    onTap: () => _showFaultImageDialog(context, fault),
+                    child: Tooltip(
+                      message: 'View attached photo',
+                      child: Icon(
+                        Icons.image_outlined,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -291,6 +322,190 @@ class _FaultHistoryScreenState extends State<FaultHistoryScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Asynchronously resolves reporter names for historical faults missing [reportedByName].
+  /// Caches resolved names to eliminate duplicate Firestore requests across rebuilds.
+  Future<void> _resolveMissingReporterNames(List<FaultModel> faults) async {
+    final uidsToFetch = <String>{};
+    for (final fault in faults) {
+      if (_needsNameResolution(fault)) {
+        final uid = fault.reportedBy.trim();
+        if (uid.isNotEmpty &&
+            !_reporterNameCache.containsKey(uid) &&
+            !_pendingUidLookups.contains(uid)) {
+          uidsToFetch.add(uid);
+        }
+      }
+    }
+
+    if (uidsToFetch.isEmpty) return;
+
+    _pendingUidLookups.addAll(uidsToFetch);
+
+    await Future.wait(
+      uidsToFetch.map((uid) async {
+        try {
+          final profile = await _effectiveUserService.getUserProfile(uid);
+          if (profile != null) {
+            final displayName = profile.displayName.trim();
+            final name = profile.name.trim();
+            final email = profile.email.trim();
+            if (displayName.isNotEmpty) {
+              _reporterNameCache[uid] = displayName;
+            } else if (name.isNotEmpty) {
+              _reporterNameCache[uid] = name;
+            } else if (email.isNotEmpty) {
+              _reporterNameCache[uid] = email;
+            } else {
+              _reporterNameCache[uid] = 'Unknown Reporter';
+            }
+          } else {
+            _reporterNameCache[uid] = 'Unknown Reporter';
+          }
+        } catch (_) {
+          _reporterNameCache[uid] = 'Unknown Reporter';
+        } finally {
+          _pendingUidLookups.remove(uid);
+        }
+      }),
+    );
+
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  /// Checks whether a fault report needs asynchronous name resolution.
+  bool _needsNameResolution(FaultModel fault) {
+    final name = fault.reportedByName?.trim();
+    if (name == null || name.isEmpty) return true;
+    final uid = fault.reportedBy.trim();
+    if (uid.isNotEmpty && name == uid) return true;
+    // Check if the saved name matches a raw Firebase UID pattern
+    if (name.length >= 20 &&
+        !name.contains(' ') &&
+        !name.contains('@') &&
+        RegExp(r'^[a-zA-Z0-9_-]{20,}$').hasMatch(name)) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Resolves the human-readable display name for the fault reporter.
+  /// Never displays a raw Firebase UID in the UI; returns 'Unknown Reporter' if unresolved.
+  String _getReporterDisplayName(FaultModel fault) {
+    if (!_needsNameResolution(fault)) {
+      return fault.reportedByName!.trim();
+    }
+    final uid = fault.reportedBy.trim();
+    if (uid.isEmpty) {
+      return 'Unknown Reporter';
+    }
+    if (_reporterNameCache.containsKey(uid)) {
+      return _reporterNameCache[uid]!;
+    }
+    return 'Unknown Reporter';
+  }
+
+  /// Whether the current user is authorized to view the attached fault photo.
+  /// - Managers and technicians retain plant-wide photo access.
+  /// - Operators are restricted strictly to photos on faults they personally reported.
+  bool _canViewFaultImage(FaultModel fault) {
+    if (!fault.hasImage) return false;
+    try {
+      final appState = Provider.of<AppStateProvider>(context, listen: false);
+      final role = appState.user?.role.trim().toLowerCase();
+      final currentUid = appState.user?.id.trim() ?? appState.user?.uid.trim();
+
+      if (role == AppConstants.roleManager || role == AppConstants.roleTechnician) {
+        return true;
+      }
+
+      if (role == AppConstants.roleOperator) {
+        return currentUid != null &&
+            currentUid.isNotEmpty &&
+            fault.reportedBy.trim() == currentUid;
+      }
+    } catch (_) {}
+
+    return true;
+  }
+
+  void _showFaultImageDialog(BuildContext context, FaultModel fault) {
+    String? callerRole;
+    String? callerUid;
+    try {
+      final appState = Provider.of<AppStateProvider>(context, listen: false);
+      callerRole = appState.user?.role.trim().toLowerCase();
+      callerUid = appState.user?.id.trim() ?? appState.user?.uid.trim();
+    } catch (_) {}
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            fault.machineName?.trim().isNotEmpty == true
+                ? fault.machineName!.trim()
+                : (fault.machineId.trim().isNotEmpty
+                    ? fault.machineId.trim()
+                    : 'Fault Photo'),
+          ),
+          content: FutureBuilder<String?>(
+            future: _effectiveFaultService.getFaultImageUrl(
+              fault,
+              storageService: widget.storageService,
+              callerRole: callerRole,
+              callerUid: callerUid,
+            ),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox(
+                  height: 180,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              final resolvedUrl = snapshot.data;
+              if (resolvedUrl == null || resolvedUrl.trim().isEmpty) {
+                return const SizedBox(
+                  height: 120,
+                  child: Center(child: Text('No image available.')),
+                );
+              }
+
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  resolvedUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const SizedBox(
+                      height: 180,
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return const SizedBox(
+                      height: 120,
+                      child: Center(child: Text('Failed to load image.')),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
     );
   }
 

@@ -905,63 +905,17 @@ class MaintenanceService {
   }
 
   /// Helper to parse `updateHistory` map or list and sort chronologically (oldest first).
+  static List<MaintenanceUpdateModel> parseHistory(
+    dynamic rawHistory,
+    String defaultTaskId,
+  ) {
+    return MaintenanceUpdateModel.parseHistoryList(rawHistory, defaultTaskId);
+  }
+
   static List<MaintenanceUpdateModel> _parseHistory(
     dynamic rawHistory,
     String defaultTaskId,
   ) {
-    if (rawHistory == null) return <MaintenanceUpdateModel>[];
-
-    final entries = <MaintenanceUpdateModel>[];
-
-    if (rawHistory is Map) {
-      for (final entry in rawHistory.entries) {
-        final val = entry.value;
-        if (val is Map<String, dynamic>) {
-          try {
-            entries.add(
-              MaintenanceUpdateModel.fromMap(val, entry.key.toString()),
-            );
-          } catch (_) {
-            // Safely skip malformed entry
-          }
-        } else if (val is Map) {
-          try {
-            final casted = Map<String, dynamic>.from(val);
-            entries.add(
-              MaintenanceUpdateModel.fromMap(casted, entry.key.toString()),
-            );
-          } catch (_) {
-            // Safely skip malformed entry
-          }
-        }
-      }
-    } else if (rawHistory is List) {
-      for (final item in rawHistory) {
-        if (item is Map<String, dynamic>) {
-          try {
-            entries.add(MaintenanceUpdateModel.fromMap(item));
-          } catch (_) {
-            // Safely skip malformed entry
-          }
-        } else if (item is Map) {
-          try {
-            final casted = Map<String, dynamic>.from(item);
-            entries.add(MaintenanceUpdateModel.fromMap(casted));
-          } catch (_) {
-            // Safely skip malformed entry
-          }
-        }
-      }
-    }
-
-    // Sort chronologically (oldest first)
-    entries.sort((a, b) {
-      if (a.updatedAt == null && b.updatedAt == null) return 0;
-      if (a.updatedAt == null) return 1;
-      if (b.updatedAt == null) return -1;
-      return a.updatedAt!.compareTo(b.updatedAt!);
-    });
-
-    return entries;
+    return parseHistory(rawHistory, defaultTaskId);
   }
 }

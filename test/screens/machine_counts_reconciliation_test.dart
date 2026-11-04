@@ -34,6 +34,7 @@ class _FakeFaultService extends Fake implements FaultService {
     String? machineId,
     String? status,
     String? severity,
+    String? reportedBy,
   }) {
     return const Stream<List<FaultModel>>.empty();
   }
@@ -43,6 +44,7 @@ class _FakeFaultService extends Fake implements FaultService {
     String? machineId,
     String? status,
     String? severity,
+    String? reportedBy,
   }) async {
     return [];
   }
@@ -148,7 +150,7 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        // Verify Dashboard Counts (5 Total, 2 Running, 2 Maintenance, 1 Breakdown)
+        // Verify Dashboard Counts (5 Total: 2 Running, 1 Maintenance, 1 Breakdown, 1 Other/Warning)
         final totalStat = find.widgetWithText(DashboardStatCard, 'Machines');
         final runningStat = find.widgetWithText(DashboardStatCard, 'Running');
         final maintenanceStat = find.widgetWithText(
@@ -158,6 +160,10 @@ void main() {
         final breakdownStat = find.widgetWithText(
           DashboardStatCard,
           'Breakdown',
+        );
+        final otherStat = find.widgetWithText(
+          DashboardStatCard,
+          'Other / Unknown',
         );
 
         expect(
@@ -169,11 +175,15 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.descendant(of: maintenanceStat, matching: find.text('2')),
+          find.descendant(of: maintenanceStat, matching: find.text('1')),
           findsOneWidget,
         );
         expect(
           find.descendant(of: breakdownStat, matching: find.text('1')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: otherStat, matching: find.text('1')),
           findsOneWidget,
         );
 
@@ -194,10 +204,11 @@ void main() {
 
         // Verify Reports Screen Legend Breakdown matches Dashboard exactly:
         // Running: 2 (40%)
-        // Maintenance: 2 (40%)
+        // Maintenance: 1 (20%)
         // Breakdown: 1 (20%)
-        expect(find.text('2 (40%)'), findsNWidgets(2)); // Running & Maintenance
-        expect(find.text('1 (20%)'), findsOneWidget); // Breakdown
+        // Other / Unknown: 1 (20%)
+        expect(find.text('2 (40%)'), findsOneWidget); // Running
+        expect(find.text('1 (20%)'), findsNWidgets(3)); // Maintenance, Breakdown, Other / Unknown
         expect(
           find.text('8 (67%)'),
           findsNothing,
@@ -207,26 +218,26 @@ void main() {
           findsNothing,
         ); // Hardcoded mock value removed!
 
-        // Verify Donut chart contains segments for Running, Maintenance, Breakdown, but NOT Other
+        // Verify Donut chart contains segments for Running, Maintenance, Breakdown, and Other / Warning
         final donutFinder = find.byType(MachineStatusDonutChart);
         expect(donutFinder, findsOneWidget);
         final customPaint = tester.widget<CustomPaint>(
           find.descendant(of: donutFinder, matching: find.byType(CustomPaint)),
         );
         final painter = customPaint.painter as MachineStatusDonutPainter;
-        expect(painter.segments.length, equals(3));
+        expect(painter.segments.length, equals(4));
         expect(
-          painter.segments.any((s) => s.color == const Color(0xFF788896)),
-          isFalse,
+          painter.segments.any((s) => s.color == const Color(0xFF788896) && s.count == 1),
+          isTrue,
         );
 
-        // 5. Invariant: 2 running + 2 maintenance + 1 breakdown == 5 total
+        // 5. Invariant: 2 running + 1 maintenance + 1 breakdown + 1 other == 5 total
         final stats = machineProvider.statistics;
         expect(stats.total, equals(5));
         expect(stats.running, equals(2));
-        expect(stats.maintenance, equals(2));
+        expect(stats.maintenance, equals(1));
         expect(stats.breakdown, equals(1));
-        expect(stats.other, equals(0));
+        expect(stats.other, equals(1));
         expect(
           stats.running + stats.maintenance + stats.breakdown + stats.other,
           equals(stats.total),
@@ -282,7 +293,7 @@ void main() {
           findsOneWidget,
         );
 
-        // Running: 2, Maintenance: 2 (NOT inflated to 3!), Breakdown: 1, Other/Unknown: 1
+        // Running: 2, Maintenance: 1 (NOT inflated!), Breakdown: 1, Other/Unknown: 2 (Warning + Decommissioned)
         final runningStat = find.widgetWithText(DashboardStatCard, 'Running');
         final maintenanceStat = find.widgetWithText(
           DashboardStatCard,
@@ -302,7 +313,7 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.descendant(of: maintenanceStat, matching: find.text('2')),
+          find.descendant(of: maintenanceStat, matching: find.text('1')),
           findsOneWidget,
         );
         expect(
@@ -310,7 +321,7 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.descendant(of: otherStat, matching: find.text('1')),
+          find.descendant(of: otherStat, matching: find.text('2')),
           findsOneWidget,
         );
 
@@ -328,9 +339,11 @@ void main() {
         // Total 6 machines in Donut center
         expect(find.text('6'), findsOneWidget);
 
-        // Reports shows Other / Unknown legend with count and percentage: 1 of 6 = 17%
+        // Reports shows Other / Unknown legend with count and percentage: 2 of 6 = 33%
         expect(find.text('Other / Unknown'), findsOneWidget);
-        // Both Breakdown (1 of 6 = 17%) and Other / Unknown (1 of 6 = 17%) display '1 (17%)'
+        // Both Running (2 of 6 = 33%) and Other / Unknown (2 of 6 = 33%) display '2 (33%)'
+        expect(find.text('2 (33%)'), findsNWidgets(2));
+        // Both Breakdown (1 of 6 = 17%) and Maintenance (1 of 6 = 17%) display '1 (17%)'
         expect(find.text('1 (17%)'), findsNWidgets(2));
 
         // Verify Donut chart itself includes the Other category in its painted segments
@@ -342,18 +355,18 @@ void main() {
         final painter = customPaint.painter as MachineStatusDonutPainter;
         expect(
           painter.segments.any(
-            (s) => s.color == const Color(0xFF788896) && s.count == 1,
+            (s) => s.color == const Color(0xFF788896) && s.count == 2,
           ),
           isTrue,
         );
 
-        // Reconciles: 2 Running + 2 Maintenance + 1 Breakdown + 1 Other == 6 Total
+        // Reconciles: 2 Running + 1 Maintenance + 1 Breakdown + 2 Other == 6 Total
         final stats = machineProvider.statistics;
         expect(stats.total, equals(6));
         expect(stats.running, equals(2));
-        expect(stats.maintenance, equals(2));
+        expect(stats.maintenance, equals(1));
         expect(stats.breakdown, equals(1));
-        expect(stats.other, equals(1));
+        expect(stats.other, equals(2));
         expect(
           stats.running + stats.maintenance + stats.breakdown + stats.other,
           equals(stats.total),

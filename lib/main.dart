@@ -9,11 +9,14 @@ import 'providers/machine_provider.dart';
 import 'screens/auth/auth_gate.dart';
 import 'services/auth_service.dart';
 import 'services/fault_service.dart';
+import 'services/machine_activity_service.dart';
 import 'services/machine_service.dart';
 import 'services/maintenance_service.dart';
 import 'services/storage_service.dart';
+import 'services/supabase_storage_uploader.dart';
 import 'services/user_service.dart';
 import 'utils/emulator_config.dart';
+import 'utils/supabase_config.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -23,6 +26,10 @@ void main() async {
 
   EmulatorConfig.configureFirestore();
   await EmulatorConfig.configureStorage();
+
+  if (SupabaseConfig.isConfigured) {
+    await SupabaseConfig.initialize();
+  }
 
   runApp(const MachAlertApp());
 }
@@ -34,6 +41,7 @@ class MachAlertApp extends StatelessWidget {
   final FaultService? faultService;
   final StorageService? storageService;
   final MaintenanceService? maintenanceService;
+  final MachineActivityService? machineActivityService;
   final AppStateProvider? appStateProvider;
   final MachineProvider? machineProvider;
   final Duration? minSplashDuration;
@@ -47,6 +55,7 @@ class MachAlertApp extends StatelessWidget {
     this.faultService,
     this.storageService,
     this.maintenanceService,
+    this.machineActivityService,
     this.appStateProvider,
     this.machineProvider,
     this.minSplashDuration,
@@ -76,11 +85,37 @@ class MachAlertApp extends StatelessWidget {
         if (storageService != null)
           Provider<StorageService>.value(value: storageService!)
         else
-          Provider<StorageService>(create: (_) => StorageService()),
+          Provider<StorageService>(
+            create: (_) {
+              if (SupabaseConfig.isConfigured) {
+                return StorageService(uploader: SupabaseStorageUploader());
+              }
+              // Do not silently fall back to Firebase Storage for new uploads.
+              // Firebase Storage is unavailable on the Spark plan.
+              return StorageService(
+                uploader: const UnconfiguredStorageUploader(),
+              );
+            },
+          ),
         if (maintenanceService != null)
           Provider<MaintenanceService>.value(value: maintenanceService!)
         else
           Provider<MaintenanceService>(create: (_) => MaintenanceService()),
+        if (machineActivityService != null)
+          Provider<MachineActivityService>.value(value: machineActivityService!)
+        else
+          Provider<MachineActivityService>(
+            create: (context) {
+              final faultService = context.read<FaultService>();
+              final maintenanceService = context.read<MaintenanceService>();
+              final userService = context.read<UserService>();
+              return MachineActivityService(
+                faultService: faultService,
+                maintenanceService: maintenanceService,
+                userService: userService,
+              );
+            },
+          ),
         if (appStateProvider != null)
           ChangeNotifierProvider<AppStateProvider>.value(
             value: appStateProvider!,

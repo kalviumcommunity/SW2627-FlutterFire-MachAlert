@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/fault_model.dart';
 import '../../models/machine_model.dart';
 import '../../models/maintenance_model.dart';
 import '../../models/user_model.dart';
 import '../../providers/machine_provider.dart';
+import '../../services/fault_service.dart';
 import '../../services/machine_service.dart';
 import '../../services/maintenance_service.dart';
 import '../../services/user_service.dart';
@@ -15,16 +17,20 @@ class MaintenanceTaskFormScreen extends StatefulWidget {
   final MaintenanceService? maintenanceService;
   final UserService? userService;
   final MachineService? machineService;
+  final FaultService? faultService;
   final List<MachineModel>? initialMachines;
   final List<UserModel>? initialTechnicians;
+  final List<FaultModel>? initialFaults;
 
   const MaintenanceTaskFormScreen({
     super.key,
     this.maintenanceService,
     this.userService,
     this.machineService,
+    this.faultService,
     this.initialMachines,
     this.initialTechnicians,
+    this.initialFaults,
   });
 
   @override
@@ -35,19 +41,22 @@ class MaintenanceTaskFormScreen extends StatefulWidget {
 class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  final _faultIdController = TextEditingController();
   final _notesController = TextEditingController();
 
   List<MachineModel> _machines = [];
   List<UserModel> _technicians = [];
+  List<FaultModel> _machineFaults = [];
 
   MachineModel? _selectedMachine;
   UserModel? _selectedTechnician;
+  FaultModel? _selectedFault;
   String _selectedPriority = AppConstants.severityMedium;
 
   bool _isLoading = true;
   bool _isSubmitting = false;
+  bool _isLoadingFaults = false;
   String? _loadError;
+  String? _faultLoadError;
 
   @override
   void initState() {
@@ -57,7 +66,6 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
 
   @override
   void dispose() {
-    _faultIdController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -86,6 +94,17 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
     }
     try {
       return context.read<MachineService>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  FaultService? _resolveFaultService() {
+    if (widget.faultService != null) {
+      return widget.faultService!;
+    }
+    try {
+      return context.read<FaultService>();
     } catch (_) {
       return null;
     }
@@ -144,6 +163,53 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
     }
   }
 
+  Future<void> _fetchFaultsForMachine(String machineId) async {
+    setState(() {
+      _isLoadingFaults = true;
+      _faultLoadError = null;
+      _machineFaults = [];
+      _selectedFault = null;
+    });
+
+    try {
+      List<FaultModel> faults;
+      if (widget.initialFaults != null) {
+        faults = widget.initialFaults!
+            .where((f) => f.machineId == machineId)
+            .toList();
+      } else {
+        final faultService = _resolveFaultService();
+        if (faultService != null) {
+          faults = await faultService.getFaults(machineId: machineId);
+        } else {
+          faults = [];
+        }
+      }
+
+      final eligibleFaults = faults.where((f) {
+        final s = f.status.trim().toLowerCase();
+        return s == AppConstants.faultStatusOpen.toLowerCase() ||
+            s == AppConstants.faultStatusInProgress.toLowerCase() ||
+            s == 'open' ||
+            s == 'in progress';
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _machineFaults = eligibleFaults;
+          _isLoadingFaults = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingFaults = false;
+          _faultLoadError = 'Failed to load faults for selected machine.';
+        });
+      }
+    }
+  }
+
   Future<void> _submitTask() async {
     if (_isSubmitting) return;
 
@@ -165,6 +231,20 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
       return;
     }
 
+    // Validate linked fault belongs to the selected machine
+    if (_selectedFault != null &&
+        _selectedFault!.machineId.trim() != _selectedMachine!.id.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'The selected fault does not belong to the selected machine.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isSubmitting = true;
     });
@@ -172,14 +252,17 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
     try {
       final maintenanceService = _resolveMaintenanceService();
 
-      final faultId = _faultIdController.text.trim();
+      final faultId =
+          _selectedFault != null && _selectedFault!.id.trim().isNotEmpty
+              ? _selectedFault!.id.trim()
+              : null;
       final notes = _notesController.text.trim();
 
       final task = MaintenanceModel(
         id: '',
         machineId: _selectedMachine!.id,
         machineName: _selectedMachine!.name,
-        faultId: faultId.isNotEmpty ? faultId : null,
+        faultId: faultId,
         technicianId: _selectedTechnician!.id,
         technicianName: _selectedTechnician!.name,
         priority: _selectedPriority,
@@ -281,10 +364,13 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
                         ),
                         initialValue: _selectedMachine,
                         items: _machines.map((machine) {
+                          final label = machine.name.trim().isNotEmpty
+                              ? '${machine.name} (${machine.id})'
+                              : machine.id;
                           return DropdownMenuItem<MachineModel>(
                             value: machine,
                             child: Text(
-                              '${machine.name} (${machine.id})',
+                              label,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -295,7 +381,13 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
                             : (value) {
                                 setState(() {
                                   _selectedMachine = value;
+                                  _selectedFault = null;
+                                  _machineFaults = [];
+                                  _faultLoadError = null;
                                 });
+                                if (value != null) {
+                                  _fetchFaultsForMachine(value.id);
+                                }
                               },
                         validator: (value) {
                           if (value == null) {
@@ -307,7 +399,7 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
 
                       const SizedBox(height: 16),
 
-                      // 2. Technician Dropdown
+                      // 2. Technician Dropdown (Readable names, never expose raw UIDs)
                       DropdownButtonFormField<UserModel>(
                         key: const ValueKey('maintenance-technician-dropdown'),
                         isExpanded: true,
@@ -319,8 +411,10 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
                         initialValue: _selectedTechnician,
                         items: _technicians.map((tech) {
                           final label = tech.name.trim().isNotEmpty
-                              ? '${tech.name} (${tech.id})'
-                              : tech.id;
+                              ? tech.name.trim()
+                              : (tech.email.trim().isNotEmpty
+                                  ? tech.email.trim()
+                                  : 'Technician');
                           return DropdownMenuItem<UserModel>(
                             value: tech,
                             child: Text(
@@ -388,17 +482,96 @@ class _MaintenanceTaskFormScreenState extends State<MaintenanceTaskFormScreen> {
 
                       const SizedBox(height: 16),
 
-                      // 4. Optional Fault ID Field
-                      TextFormField(
+                      // 4. Optional Fault Selector Dropdown
+                      DropdownButtonFormField<FaultModel?>(
                         key: const ValueKey('maintenance-fault-id-field'),
-                        controller: _faultIdController,
-                        decoration: const InputDecoration(
-                          labelText: 'Linked Fault ID (Optional)',
-                          prefixIcon: Icon(Icons.link_outlined),
-                          border: OutlineInputBorder(),
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: 'Linked Fault (Optional)',
+                          hintText: _selectedMachine == null
+                              ? 'Select a machine first'
+                              : (_isLoadingFaults
+                                  ? 'Loading active faults...'
+                                  : (_machineFaults.isEmpty
+                                      ? 'No active faults (Preventive only)'
+                                      : 'Select active fault or None')),
+                          prefixIcon: const Icon(Icons.link_outlined),
+                          suffixIcon: _isLoadingFaults
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                )
+                              : null,
+                          border: const OutlineInputBorder(),
                         ),
-                        enabled: !_isSubmitting,
+                        initialValue: _selectedFault,
+                        items: [
+                          const DropdownMenuItem<FaultModel?>(
+                            value: null,
+                            child: Text(
+                              'None (Preventive Maintenance)',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (_selectedMachine != null)
+                            ..._machineFaults.map((fault) {
+                              final mName =
+                                  fault.machineName?.trim().isNotEmpty == true
+                                      ? fault.machineName!.trim()
+                                      : (_selectedMachine?.name ?? '');
+                              final display =
+                                  '$mName - ${fault.faultType} (${fault.severity}, ${fault.status}): ${fault.description}';
+                              return DropdownMenuItem<FaultModel?>(
+                                value: fault,
+                                child: Text(
+                                  display,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }),
+                        ],
+                        onChanged: (_isSubmitting || _selectedMachine == null)
+                            ? null
+                            : (value) {
+                                setState(() {
+                                  _selectedFault = value;
+                                });
+                              },
                       ),
+
+                      if (_faultLoadError != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _faultLoadError!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            if (_selectedMachine != null)
+                              TextButton(
+                                onPressed: () => _fetchFaultsForMachine(
+                                  _selectedMachine!.id,
+                                ),
+                                child: const Text(
+                                  'Retry',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
 
                       const SizedBox(height: 16),
 

@@ -56,5 +56,16 @@ android/key.properties
 *.jks
 *.keystore
 
+# Service accounts, API credentials, and environment files
+*serviceAccount*.json
+*service-account*.json
+*.credentials.json
+.env
+.env.*
+
+# Node / Administrative script dependencies
+scripts/admin/node_modules/
+node_modules/
+
 # Widget Preview related
 .widget_preview/

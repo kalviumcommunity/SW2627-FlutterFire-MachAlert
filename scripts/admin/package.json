@@ -1,0 +1,15 @@
+{
+  "name": "machalert-admin-scripts",
+  "version": "1.0.0",
+  "description": "MachAlert Administrative Provisioning Scripts",
+  "private": true,
+  "main": "provision_supabase_claims.js",
+  "scripts": {
+    "provision:dry-run": "node provision_supabase_claims.js --dry-run",
+    "provision:apply": "node provision_supabase_claims.js --apply",
+    "test": "node test/provision_supabase_claims.test.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

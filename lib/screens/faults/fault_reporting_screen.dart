@@ -8,6 +8,7 @@ import '../../models/fault_model.dart';
 import '../../models/machine_model.dart';
 import '../../services/fault_service.dart';
 import '../../services/storage_service.dart';
+import '../../services/user_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_constants.dart';
 import '../../widgets/fault_image_attachment_picker.dart';
@@ -18,6 +19,7 @@ class FaultReportingScreen extends StatefulWidget {
   final MachineModel? initialMachine;
   final FaultService? faultService;
   final StorageService? storageService;
+  final UserService? userService;
   final FaultImagePickCallback? pickImage;
 
   const FaultReportingScreen({
@@ -26,6 +28,7 @@ class FaultReportingScreen extends StatefulWidget {
     this.initialMachine,
     this.faultService,
     this.storageService,
+    this.userService,
     this.pickImage,
   });
 
@@ -118,6 +121,18 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
     }
   }
 
+  UserService get _effectiveUserService {
+    if (widget.userService != null) {
+      return widget.userService!;
+    }
+
+    try {
+      return Provider.of<UserService>(context, listen: false);
+    } catch (_) {
+      return UserService();
+    }
+  }
+
   String _determineContentType(String fileName) {
     final lower = fileName.toLowerCase();
 
@@ -182,7 +197,10 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
       _isSubmitting = true;
     });
 
-    String? imageUrl;
+    String? uploadedImageRef;
+    String? finalImageUrl;
+    String? finalStoragePath;
+    String? finalStorageProvider;
 
     try {
       if (_selectedImage != null) {
@@ -221,7 +239,7 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
 
         final fileName = candidate.isNotEmpty ? candidate : 'fault_image.jpg';
 
-        imageUrl = await _effectiveStorageService.uploadFaultImage(
+        uploadedImageRef = await _effectiveStorageService.uploadFaultImage(
           bytes: bytes,
           fileName: fileName,
           contentType: _determineContentType(fileName),
@@ -230,7 +248,54 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
         if (!mounted) {
           return;
         }
+
+        final isHttpUrl = uploadedImageRef.startsWith('http://') ||
+            uploadedImageRef.startsWith('https://');
+
+        final isExpiringSupabase = isHttpUrl &&
+            uploadedImageRef.contains('supabase.co') &&
+            (uploadedImageRef.contains('/object/sign/') ||
+                uploadedImageRef.contains('token='));
+
+        String provider = AppConstants.storageProviderFirebase;
+        try {
+          provider = _effectiveStorageService.storageProvider;
+        } catch (_) {}
+
+        if (provider == AppConstants.storageProviderSupabase ||
+            isExpiringSupabase ||
+            !isHttpUrl) {
+          finalStorageProvider = AppConstants.storageProviderSupabase;
+          finalStoragePath = isExpiringSupabase
+              ? FaultService.extractStoragePath(uploadedImageRef)
+              : uploadedImageRef;
+          finalImageUrl = null;
+        } else {
+          finalStorageProvider = AppConstants.storageProviderFirebase;
+          finalImageUrl = uploadedImageRef;
+          finalStoragePath = null;
+        }
       }
+
+      String? resolvedReporterName;
+      try {
+        final currentUser = _effectiveFaultService.auth.currentUser;
+        if (currentUser != null) {
+          final profile =
+              await _effectiveUserService.getUserProfile(currentUser.uid);
+          if (profile != null && profile.displayName.trim().isNotEmpty) {
+            resolvedReporterName = profile.displayName.trim();
+          } else if (profile != null && profile.name.trim().isNotEmpty) {
+            resolvedReporterName = profile.name.trim();
+          } else if (currentUser.displayName != null &&
+              currentUser.displayName!.trim().isNotEmpty) {
+            resolvedReporterName = currentUser.displayName!.trim();
+          } else if (currentUser.email != null &&
+              currentUser.email!.trim().isNotEmpty) {
+            resolvedReporterName = currentUser.email!.trim();
+          }
+        }
+      } catch (_) {}
 
       final fault = FaultModel(
         id: '',
@@ -240,8 +305,11 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
         severity: _selectedSeverity!.trim(),
         description: description,
         reportedBy: '',
+        reportedByName: resolvedReporterName,
         status: AppConstants.faultStatusOpen,
-        imageUrl: imageUrl,
+        imageUrl: finalImageUrl,
+        storagePath: finalStoragePath,
+        storageProvider: finalStorageProvider,
       );
 
       final docId = await _effectiveFaultService.addFault(fault);
@@ -269,10 +337,10 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
         ),
       );
     } on FaultServiceException catch (e) {
-      if (imageUrl != null) {
+      if (uploadedImageRef != null) {
         debugPrint(
           '[FaultReportingScreen] Firestore submission failed ($e). '
-          'Uploaded image ($imageUrl) retained for trusted backend reconciliation.',
+          'Uploaded image ($uploadedImageRef) retained for trusted backend reconciliation.',
         );
       }
 
@@ -287,10 +355,10 @@ class _FaultReportingScreenState extends State<FaultReportingScreen> {
         ),
       );
     } catch (e) {
-      if (imageUrl != null) {
+      if (uploadedImageRef != null) {
         debugPrint(
           '[FaultReportingScreen] Unexpected submission failure ($e). '
-          'Uploaded image ($imageUrl) retained for trusted backend reconciliation.',
+          'Uploaded image ($uploadedImageRef) retained for trusted backend reconciliation.',
         );
       }
 

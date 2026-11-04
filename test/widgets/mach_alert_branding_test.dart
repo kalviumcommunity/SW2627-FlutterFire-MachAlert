@@ -34,6 +34,7 @@ class _FakeFaultService extends Fake implements FaultService {
     String? machineId,
     String? status,
     String? severity,
+    String? reportedBy,
   }) async => [];
 
   @override
@@ -41,6 +42,7 @@ class _FakeFaultService extends Fake implements FaultService {
     String? machineId,
     String? status,
     String? severity,
+    String? reportedBy,
   }) => const Stream<List<FaultModel>>.empty();
 }
 
@@ -381,6 +383,21 @@ void main() {
       final emblemH = (emblemBytes[20] << 24) | (emblemBytes[21] << 16) | (emblemBytes[22] << 8) | emblemBytes[23];
       final emblemRatio = emblemW / emblemH;
       expect(emblemRatio, closeTo(2.02, 0.05));
+    });
+
+    test('Requirement 18: Android home screen application label and launcher activity use MachAlert', () {
+      final stringsFile = File('android/app/src/main/res/values/strings.xml');
+      expect(stringsFile.existsSync(), isTrue, reason: 'strings.xml must exist');
+
+      final stringsContent = stringsFile.readAsStringSync();
+      expect(stringsContent.contains('<string name="app_name">MachAlert</string>'), isTrue);
+
+      final manifestFile = File('android/app/src/main/AndroidManifest.xml');
+      expect(manifestFile.existsSync(), isTrue);
+
+      final manifestContent = manifestFile.readAsStringSync();
+      expect(manifestContent.contains('android:label="@string/app_name"'), isTrue);
+      expect(manifestContent.contains('android:label="mach_alert"'), isFalse, reason: 'Old mach_alert label must be replaced');
     });
   });
 }

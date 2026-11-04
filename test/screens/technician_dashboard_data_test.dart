@@ -63,6 +63,7 @@ class FakeFaultService extends Fake implements FaultService {
     String? machineId,
     String? status,
     String? severity,
+    String? reportedBy,
   }) {
     streamCalls++;
     return faultStream ?? const Stream<List<FaultModel>>.empty();
