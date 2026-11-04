@@ -129,6 +129,16 @@ class AuthService {
   /// session exists.
   Stream<User?> authStateChanges() => _firebaseAuth.authStateChanges();
 
+  /// Retrieves the current user's Firebase ID token, optionally forcing a refresh.
+  ///
+  /// Used by Supabase Storage and other third-party integrations to supply fresh
+  /// JWTs containing provisioned custom claims (`role`, `machalert_role`).
+  Future<String?> getIdToken([bool forceRefresh = false]) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return null;
+    return await user.getIdToken(forceRefresh);
+  }
+
   /// Registers a new user with [email] and [password].
   ///
   /// Surrounding whitespace in [email] is trimmed before submission.

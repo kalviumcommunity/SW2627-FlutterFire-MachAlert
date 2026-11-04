@@ -471,6 +471,35 @@ class _HomeScreenState extends State<HomeScreen> {
 
         const SizedBox(height: 12),
 
+        if (provider != null && provider.hasError) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.danger.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.danger.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, color: AppTheme.danger),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    provider.errorMessage ?? 'Failed to load machine statistics',
+                    style: const TextStyle(color: AppTheme.danger, fontSize: 13),
+                  ),
+                ),
+                TextButton(
+                  key: const ValueKey('manager-stats-retry-button'),
+                  onPressed: () => provider?.refresh(),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         Row(
           children: [
             Expanded(
@@ -806,7 +835,7 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: Icons.bar_chart_outlined,
           accentColor: AppTheme.green,
           onTap: () {
-            _showComingSoon('My reports');
+            Navigator.of(context).push<void>(AppRoutes.myReports());
           },
         ),
       ],

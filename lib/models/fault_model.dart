@@ -13,6 +13,8 @@ class FaultModel {
   final String? reportedByName;
   final String status;
   final String? imageUrl;
+  final String? storagePath;
+  final String? storageProvider;
   final DateTime? createdAt;
 
   FaultModel({
@@ -26,11 +28,22 @@ class FaultModel {
     this.reportedByName,
     this.status = AppConstants.faultStatusOpen,
     this.imageUrl,
+    this.storagePath,
+    this.storageProvider,
     this.createdAt,
   });
 
   /// Canonical fault identifier alias for [id], matching PRD Section 15.3 schema.
   String get faultId => id;
+
+  /// Alias for [type] to support faultType terminology.
+  String get faultType => type;
+
+  /// Returns whether an image is attached to this fault report
+  /// via either [imageUrl] or permanent [storagePath].
+  bool get hasImage =>
+      (imageUrl != null && imageUrl!.trim().isNotEmpty) ||
+      (storagePath != null && storagePath!.trim().isNotEmpty);
 
   /// Returns whether this fault has a recognized type according to [AppConstants.faultTypes].
   bool get hasRecognizedType => AppConstants.faultTypes.any(
@@ -127,6 +140,8 @@ class FaultModel {
     String? reportedByName,
     String? status,
     String? imageUrl,
+    String? storagePath,
+    String? storageProvider,
     DateTime? createdAt,
   }) {
     return FaultModel(
@@ -140,6 +155,8 @@ class FaultModel {
       reportedByName: reportedByName ?? this.reportedByName,
       status: status ?? this.status,
       imageUrl: imageUrl ?? this.imageUrl,
+      storagePath: storagePath ?? this.storagePath,
+      storageProvider: storageProvider ?? this.storageProvider,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -157,6 +174,8 @@ class FaultModel {
       'reportedByName': reportedByName,
       'status': status,
       'imageUrl': imageUrl,
+      'storagePath': storagePath,
+      'storageProvider': storageProvider,
       'createdAt': createdAt?.toIso8601String(),
     };
   }
@@ -178,6 +197,8 @@ class FaultModel {
       'reportedByName': reportedByName,
       'status': status,
       'imageUrl': imageUrl,
+      if (storagePath != null) 'storagePath': storagePath,
+      if (storageProvider != null) 'storageProvider': storageProvider,
     };
 
     if (!isUpdate) {
@@ -192,6 +213,23 @@ class FaultModel {
   factory FaultModel.fromMap(Map<String, dynamic> map, [String? docId]) {
     final resolvedId = _resolveId(map, docId);
 
+    final rawImageUrl = map['imageUrl']?.toString();
+    var storagePath = map['storagePath']?.toString();
+    var storageProvider = map['storageProvider']?.toString();
+
+    // Backward-compatibility: if legacy imageUrl contains a Supabase signed URL, recover permanent storagePath
+    if ((storagePath == null || storagePath.isEmpty) &&
+        rawImageUrl != null &&
+        rawImageUrl.contains('supabase.co') &&
+        (rawImageUrl.contains('/object/sign/') || rawImageUrl.contains('token='))) {
+      final bucketIdx = rawImageUrl.indexOf('/fault-images/');
+      if (bucketIdx != -1) {
+        final pathWithQuery = rawImageUrl.substring(bucketIdx + '/fault-images/'.length);
+        storagePath = pathWithQuery.split('?').first;
+        storageProvider ??= AppConstants.storageProviderSupabase;
+      }
+    }
+
     return FaultModel(
       id: resolvedId,
       machineId: map['machineId']?.toString() ?? '',
@@ -202,7 +240,9 @@ class FaultModel {
       reportedBy: map['reportedBy']?.toString() ?? '',
       reportedByName: map['reportedByName']?.toString(),
       status: map['status']?.toString() ?? AppConstants.faultStatusOpen,
-      imageUrl: map['imageUrl']?.toString(),
+      imageUrl: rawImageUrl,
+      storagePath: storagePath,
+      storageProvider: storageProvider,
       createdAt: _parseDateTime(map['createdAt']),
     );
   }
@@ -242,7 +282,7 @@ class FaultModel {
 
   @override
   String toString() {
-    return 'FaultModel(id: $id, machineId: $machineId, machineName: $machineName, type: $type, severity: $severity, description: $description, reportedBy: $reportedBy, reportedByName: $reportedByName, status: $status, imageUrl: $imageUrl, createdAt: $createdAt)';
+    return 'FaultModel(id: $id, machineId: $machineId, machineName: $machineName, type: $type, severity: $severity, description: $description, reportedBy: $reportedBy, reportedByName: $reportedByName, status: $status, imageUrl: $imageUrl, storagePath: $storagePath, storageProvider: $storageProvider, createdAt: $createdAt)';
   }
 
   @override
@@ -259,6 +299,8 @@ class FaultModel {
         other.reportedByName == reportedByName &&
         other.status == status &&
         other.imageUrl == imageUrl &&
+        other.storagePath == storagePath &&
+        other.storageProvider == storageProvider &&
         (other.createdAt == createdAt ||
             (other.createdAt != null &&
                 createdAt != null &&
@@ -278,6 +320,8 @@ class FaultModel {
       reportedByName,
       status,
       imageUrl,
+      storagePath,
+      storageProvider,
       createdAt?.millisecondsSinceEpoch,
     );
   }

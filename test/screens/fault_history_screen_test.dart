@@ -1,12 +1,29 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mach_alert/models/fault_model.dart';
+import 'package:mach_alert/models/user_model.dart';
 import 'package:mach_alert/screens/faults/fault_history_screen.dart';
 import 'package:mach_alert/services/fault_service.dart';
+import 'package:mach_alert/services/user_service.dart';
 import 'package:mach_alert/utils/app_constants.dart';
+
+class FakeUserService extends Fake implements UserService {
+  final Map<String, UserModel> users = {};
+  int getUserProfileCallCount = 0;
+
+  @override
+  Future<UserModel?> getUserProfile(
+    String uid, {
+    Source source = Source.server,
+  }) async {
+    getUserProfileCallCount++;
+    return users[uid];
+  }
+}
 
 class FakeFaultService extends Fake implements FaultService {
   int getFaultsCallCount = 0;
@@ -26,6 +43,7 @@ class FakeFaultService extends Fake implements FaultService {
     String? machineId,
     String? status,
     String? severity,
+    String? reportedBy,
   }) async {
     getFaultsCallCount++;
 
@@ -76,12 +94,14 @@ FaultModel createFault({
 Future<void> pumpFaultHistoryScreen(
   WidgetTester tester, {
   FaultService? faultService,
+  UserService? userService,
   String? machineId,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
       home: FaultHistoryScreen(
         faultService: faultService,
+        userService: userService,
         machineId: machineId,
       ),
     ),
@@ -315,7 +335,9 @@ void main() {
 
       expect(find.text('Date unavailable'), findsOneWidget);
 
-      expect(find.text('By UID-99'), findsOneWidget);
+      // Raw UID must NEVER be displayed; unresolved profiles display 'Unknown Reporter'
+      expect(find.text('By Unknown Reporter'), findsOneWidget);
+      expect(find.textContaining('UID-99'), findsNothing);
 
       expect(find.byIcon(Icons.image_outlined), findsNothing);
     });
@@ -336,6 +358,221 @@ void main() {
       expect(fakeFaultService.lastMachineIdFilter, 'M-TARGET');
 
       expect(fakeFaultService.getFaultsCallCount, 1);
+    });
+
+    group('Reporter Name Resolution & Safety Tests', () {
+      late FakeUserService fakeUserService;
+
+      setUp(() {
+        fakeUserService = FakeUserService();
+      });
+
+      testWidgets(
+        '2. Existing fault with reportedByName displays saved name',
+        (tester) async {
+          fakeFaultService.faultsToReturn = [
+            createFault(
+              id: 'F-NAME-1',
+              reportedBy: 'user-xyz-uid',
+              reportedByName: 'Jatin Kashyap',
+            ),
+          ];
+
+          await pumpFaultHistoryScreen(
+            tester,
+            faultService: fakeFaultService,
+            userService: fakeUserService,
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.text('By Jatin Kashyap'), findsOneWidget);
+          expect(find.textContaining('user-xyz-uid'), findsNothing);
+          expect(fakeUserService.getUserProfileCallCount, equals(0));
+        },
+      );
+
+      testWidgets(
+        '3. Historical fault with null reportedByName resolves from users collection',
+        (tester) async {
+          const reporterUid = 'JO5v92NOnFQC1gvKPigwBfAnSut2';
+          fakeUserService.users[reporterUid] = UserModel(
+            id: reporterUid,
+            name: 'Jatin Kashyap',
+            email: 'jatin@machalert.com',
+            role: 'operator',
+          );
+
+          fakeFaultService.faultsToReturn = [
+            createFault(
+              id: 'F-HIST-1',
+              reportedBy: reporterUid,
+              reportedByName: null,
+            ),
+          ];
+
+          await pumpFaultHistoryScreen(
+            tester,
+            faultService: fakeFaultService,
+            userService: fakeUserService,
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.text('By Jatin Kashyap'), findsOneWidget);
+          expect(find.textContaining(reporterUid), findsNothing);
+          expect(fakeUserService.getUserProfileCallCount, equals(1));
+        },
+      );
+
+      testWidgets(
+        '4. Missing user profile displays Unknown Reporter rather than raw UID',
+        (tester) async {
+          const missingUid = 'NON_EXISTENT_UID_99999';
+          fakeFaultService.faultsToReturn = [
+            createFault(
+              id: 'F-HIST-2',
+              reportedBy: missingUid,
+              reportedByName: null,
+            ),
+          ];
+
+          await pumpFaultHistoryScreen(
+            tester,
+            faultService: fakeFaultService,
+            userService: fakeUserService,
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.text('By Unknown Reporter'), findsOneWidget);
+          expect(find.textContaining(missingUid), findsNothing);
+        },
+      );
+
+      testWidgets(
+        '5. Missing displayName falls back to name field from users collection',
+        (tester) async {
+          const userUid = 'operator-user-77';
+          // Simulate user profile with displayName empty/missing and name populated
+          fakeUserService.users[userUid] = UserModel(
+            id: userUid,
+            name: 'Rahul Sharma',
+            email: 'rahul@factory.com',
+            role: 'operator',
+          );
+
+          fakeFaultService.faultsToReturn = [
+            createFault(
+              id: 'F-HIST-3',
+              reportedBy: userUid,
+              reportedByName: null,
+            ),
+          ];
+
+          await pumpFaultHistoryScreen(
+            tester,
+            faultService: fakeFaultService,
+            userService: fakeUserService,
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.text('By Rahul Sharma'), findsOneWidget);
+          expect(find.textContaining(userUid), findsNothing);
+        },
+      );
+
+      testWidgets(
+        '6. Long reporter names do not overflow the card',
+        (tester) async {
+          // Set a compact mobile viewport (320x568 - iPhone SE size)
+          tester.view.physicalSize = const Size(320, 568);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+
+          fakeFaultService.faultsToReturn = [
+            createFault(
+              id: 'F-LONG-1',
+              reportedBy: 'uid-long-1',
+              reportedByName:
+                  'MachAlert Test Senior Operations Plant Quality and Safety Compliance Director John Alexander Doe III',
+              createdAt: DateTime(2026, 11, 3, 14, 45),
+            ),
+          ];
+
+          await pumpFaultHistoryScreen(
+            tester,
+            faultService: fakeFaultService,
+            userService: fakeUserService,
+          );
+          await tester.pumpAndSettle();
+
+          // Assert no flutter overflow error was thrown
+          expect(tester.takeException(), isNull);
+          // Verify name widget exists
+          expect(find.textContaining('MachAlert Test Senior'), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        '7. Firebase UID is never displayed in Fault History',
+        (tester) async {
+          const rawUid = 'JO5v92NOnFQC1gvKPigwBfAnSut2';
+          fakeFaultService.faultsToReturn = [
+            createFault(
+              id: 'F-UID-CHECK',
+              reportedBy: rawUid,
+              reportedByName: rawUid, // Even if legacy DB had UID in reportedByName
+            ),
+          ];
+
+          fakeUserService.users[rawUid] = UserModel(
+            id: rawUid,
+            name: 'Jatin Kashyap',
+            email: 'jatin@machalert.com',
+            role: 'manager',
+          );
+
+          await pumpFaultHistoryScreen(
+            tester,
+            faultService: fakeFaultService,
+            userService: fakeUserService,
+          );
+          await tester.pumpAndSettle();
+
+          // Raw UID must NEVER be present anywhere in the card
+          expect(find.textContaining(rawUid), findsNothing);
+          expect(find.text('By Jatin Kashyap'), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'Multiple cards with the same reporter reuse cached profile without duplicate lookups',
+        (tester) async {
+          const sharedUid = 'SHARED_TECH_UID_100';
+          fakeUserService.users[sharedUid] = UserModel(
+            id: sharedUid,
+            name: 'Technician Alex',
+            email: 'alex@factory.com',
+            role: 'technician',
+          );
+
+          fakeFaultService.faultsToReturn = [
+            createFault(id: 'F-1', reportedBy: sharedUid, reportedByName: null),
+            createFault(id: 'F-2', reportedBy: sharedUid, reportedByName: null),
+            createFault(id: 'F-3', reportedBy: sharedUid, reportedByName: null),
+          ];
+
+          await pumpFaultHistoryScreen(
+            tester,
+            faultService: fakeFaultService,
+            userService: fakeUserService,
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.text('By Technician Alex'), findsNWidgets(3));
+          // Exactly 1 lookup was made despite 3 cards needing resolution
+          expect(fakeUserService.getUserProfileCallCount, equals(1));
+        },
+      );
     });
   });
 }

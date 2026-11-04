@@ -80,6 +80,15 @@ class UserModel {
   }
 
   factory UserModel.fromMap(Map<String, dynamic> map, [String? docId]) {
+    final rawDisplayName = map['displayName'] as String?;
+    final rawName = map['name'] as String?;
+    final resolvedName =
+        (rawDisplayName != null && rawDisplayName.trim().isNotEmpty)
+            ? rawDisplayName.trim()
+            : (rawName != null && rawName.trim().isNotEmpty)
+            ? rawName.trim()
+            : '';
+
     return UserModel(
       id:
           docId ??
@@ -87,7 +96,7 @@ class UserModel {
           map['userId'] as String? ??
           map['uid'] as String? ??
           '',
-      name: map['name'] as String? ?? map['displayName'] as String? ?? '',
+      name: resolvedName,
       email: map['email'] as String? ?? '',
       role: map['role'] as String? ?? '',
       createdAt: _parseDateTime(map['createdAt']),

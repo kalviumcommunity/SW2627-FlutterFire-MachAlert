@@ -45,6 +45,7 @@ class RecordingFaultService extends Fake implements FaultService {
     String? machineId,
     String? status,
     String? severity,
+    String? reportedBy,
   }) {
     streamCalls.add((machineId: machineId, status: status, severity: severity));
     late final StreamController<List<FaultModel>> controller;

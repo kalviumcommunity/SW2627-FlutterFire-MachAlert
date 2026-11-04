@@ -44,6 +44,7 @@ class FakeFaultService extends Fake implements FaultService {
     String? machineId,
     String? status,
     String? severity,
+    String? reportedBy,
   }) async {
     return [];
   }
@@ -53,6 +54,7 @@ class FakeFaultService extends Fake implements FaultService {
     String? machineId,
     String? status,
     String? severity,
+    String? reportedBy,
   }) {
     streamCalls++;
 

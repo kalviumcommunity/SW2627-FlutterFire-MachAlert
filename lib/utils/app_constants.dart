@@ -87,4 +87,8 @@ class AppConstants {
     faultTypePneumatic,
     faultTypeOther,
   ];
+
+  // Storage Providers
+  static const String storageProviderFirebase = 'firebase';
+  static const String storageProviderSupabase = 'supabase';
 }

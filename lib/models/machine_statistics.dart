@@ -30,18 +30,22 @@ class MachineStatistics {
   /// Alias for unrecognized or unclassified machine statuses.
   int get unknown => other;
 
+  /// Alias for warning or other unclassified machine statuses.
+  int get warning => other;
+
   /// Fraction of total machines that are currently running (0.0 to 1.0).
   double get runningRatio => total > 0 ? running / total : 0.0;
 
-  /// Fraction of total machines currently under maintenance or warning (0.0 to 1.0).
+  /// Fraction of total machines currently under maintenance (0.0 to 1.0).
   double get maintenanceRatio => total > 0 ? maintenance / total : 0.0;
 
   /// Fraction of total machines currently broken down / critical (0.0 to 1.0).
   double get breakdownRatio => total > 0 ? breakdown / total : 0.0;
 
-  /// Fraction of total machines with unrecognized or invalid status (0.0 to 1.0).
+  /// Fraction of total machines with warning, other, or unrecognized status (0.0 to 1.0).
   double get otherRatio => total > 0 ? other / total : 0.0;
   double get unknownRatio => otherRatio;
+  double get warningRatio => otherRatio;
 
   /// Percentage of total machines running (0 to 100).
   int get runningPercentage =>
@@ -62,12 +66,14 @@ class MachineStatistics {
   /// Calculates reconciled machine statistics from an authoritative machine inventory.
   ///
   /// Every machine in the inventory is mapped to exactly one operational category:
-  /// - [MachineModel.isOperational] -> running
-  /// - [MachineModel.isCritical] -> breakdown
-  /// - [MachineModel.isUnderMaintenance] or [MachineModel.isWarning] -> maintenance
-  /// - Any unrecognized, invalid, or empty status is explicitly classified as [other] (unknown),
-  ///   guaranteeing the reconciliation invariant:
-  ///   [Running + Maintenance + Breakdown + Other == Total].
+  /// - Operational / Running -> [running]
+  /// - Under Maintenance / In Maintenance -> [maintenance]
+  /// - Critical / Breakdown / Broken -> [breakdown]
+  /// - Warning -> [other] (Other / Warning)
+  /// - Unknown or unclassified statuses -> [other] (Other / Unknown)
+  ///
+  /// Guarantees the factory reconciliation invariant:
+  /// `Running + In Maintenance + Breakdown + Other == Total Machines`.
   factory MachineStatistics.fromMachines(List<MachineModel> machines) {
     int running = 0;
     int maintenance = 0;
@@ -77,10 +83,10 @@ class MachineStatistics {
     for (final machine in machines) {
       if (machine.isOperational) {
         running++;
+      } else if (machine.isUnderMaintenance) {
+        maintenance++;
       } else if (machine.isCritical) {
         breakdown++;
-      } else if (machine.isUnderMaintenance || machine.isWarning) {
-        maintenance++;
       } else {
         other++;
       }

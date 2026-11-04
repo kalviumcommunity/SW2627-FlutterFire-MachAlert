@@ -1,23 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/machine_activity_log_model.dart';
 import '../../models/machine_model.dart';
 import '../../providers/app_state_provider.dart';
 import '../../providers/machine_provider.dart';
+import '../../services/fault_service.dart';
+import '../../services/machine_activity_service.dart';
 import '../../services/machine_service.dart';
+import '../../services/maintenance_service.dart';
+import '../../services/user_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_constants.dart';
 import '../../utils/app_routes.dart';
+import '../../widgets/app_state_view.dart';
 import '../../widgets/main_bottom_navigation.dart';
 
 class MachineDetailsScreen extends StatefulWidget {
   final MachineModel machine;
   final bool canManage;
+  final MachineActivityService? activityService;
+  final FaultService? faultService;
+  final MaintenanceService? maintenanceService;
+  final UserService? userService;
 
   const MachineDetailsScreen({
     super.key,
     required this.machine,
     this.canManage = false,
+    this.activityService,
+    this.faultService,
+    this.maintenanceService,
+    this.userService,
   });
 
   @override
@@ -27,6 +41,30 @@ class MachineDetailsScreen extends StatefulWidget {
 class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   int _selectedTab = 0;
   MachineModel? _localMachine;
+  Key _logsStreamKey = UniqueKey();
+
+  MachineActivityService get _activityService {
+    if (widget.activityService != null) return widget.activityService!;
+    try {
+      return Provider.of<MachineActivityService>(context, listen: false);
+    } catch (_) {
+      return MachineActivityService(
+        faultService: widget.faultService,
+        maintenanceService: widget.maintenanceService,
+        userService: widget.userService,
+      );
+    }
+  }
+
+  Future<void> _onRefresh() async {
+    setState(() {
+      _logsStreamKey = UniqueKey();
+    });
+    try {
+      final provider = Provider.of<MachineProvider>(context, listen: false);
+      await provider.fetchMachines();
+    } catch (_) {}
+  }
 
   MachineModel get machine {
     try {
@@ -215,21 +253,25 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
       ),
       bottomNavigationBar: const MainBottomNavigation(currentIndex: 1),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildMachineHeader(),
+        child: RefreshIndicator(
+          onRefresh: _onRefresh,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildMachineHeader(),
 
-              const SizedBox(height: 18),
+                const SizedBox(height: 18),
 
-              _buildTabs(),
+                _buildTabs(),
 
-              const SizedBox(height: 18),
+                const SizedBox(height: 18),
 
-              _buildSelectedTab(),
-            ],
+                _buildSelectedTab(),
+              ],
+            ),
           ),
         ),
       ),
@@ -569,20 +611,466 @@ class _MachineDetailsScreenState extends State<MachineDetailsScreen> {
   }
 
   Widget _buildLogsTab() {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SectionHeading(title: 'Machine Logs'),
+        const _SectionHeading(title: 'Machine Logs'),
+        const SizedBox(height: 12),
 
-        SizedBox(height: 12),
+        StreamBuilder<List<MachineActivityLogModel>>(
+          key: _logsStreamKey,
+          stream: _activityService.streamMachineActivity(machine.id),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: AppStateView.loading(
+                  title: 'Loading Activity Logs...',
+                  message: 'Streaming real-time machine history from Firestore.',
+                ),
+              );
+            }
 
-        _EmptyPanel(
-          icon: Icons.receipt_long_outlined,
-          title: 'No logs yet',
-          description: 'Inspection and breakdown logs will appear here once connected to Firestore.',
+            if (snapshot.hasError) {
+              final message = snapshot.error is MachineServiceException
+                  ? (snapshot.error as MachineServiceException).message
+                  : 'Failed to retrieve machine activity events. Please try again.';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: AppStateView.error(
+                  title: 'Unable to Load Logs',
+                  message: message,
+                  actionLabel: 'Retry',
+                  onAction: () {
+                    setState(() {
+                      _logsStreamKey = UniqueKey();
+                    });
+                  },
+                ),
+              );
+            }
+
+            final events = snapshot.data ?? const [];
+            if (events.isEmpty) {
+              return const _EmptyPanel(
+                icon: Icons.receipt_long_outlined,
+                title: 'No logs yet',
+                description:
+                    'Inspection and breakdown logs will appear here once connected to Firestore.',
+              );
+            }
+
+            return _buildActivityTimeline(events);
+          },
         ),
       ],
     );
+  }
+
+  Widget _buildActivityTimeline(List<MachineActivityLogModel> events) {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: events.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 0),
+      itemBuilder: (context, index) {
+        final event = events[index];
+        final isFirst = index == 0;
+        final isLast = index == events.length - 1;
+        return _buildTimelineItem(event, isFirst: isFirst, isLast: isLast);
+      },
+    );
+  }
+
+  Widget _buildTimelineItem(
+    MachineActivityLogModel event, {
+    required bool isFirst,
+    required bool isLast,
+  }) {
+    final themeData = _resolveEventTheme(event);
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Left: Vertical timeline line & icon node
+          SizedBox(
+            width: 36,
+            child: Column(
+              children: [
+                Container(
+                  width: 2,
+                  height: 12,
+                  color: isFirst ? Colors.transparent : const Color(0xFFDCE5EC),
+                ),
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: themeData.nodeBgColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: themeData.nodeBorderColor,
+                      width: 2,
+                    ),
+                  ),
+                  child: Icon(
+                    themeData.icon,
+                    size: 15,
+                    color: themeData.nodeIconColor,
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: isLast ? Colors.transparent : const Color(0xFFDCE5EC),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Right: Event Details Card
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE5ECF1)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x06000000),
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top row: Event Title + Status Badge
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            event.title,
+                            style: const TextStyle(
+                              color: AppTheme.navy,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildStatusBadge(event.status),
+                      ],
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    // Timestamp
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.schedule,
+                          size: 12,
+                          color: Color(0xFF718292),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            event.formattedDateTime,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF718292),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 3),
+
+                    // Actor (Reporter / Technician)
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.person_outline,
+                          size: 12,
+                          color: Color(0xFF718292),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            '${event.actorRole}: ${event.actorName}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF718292),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Severity & Type Chips (if applicable)
+                    if (event.severity != null || event.faultType != null) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          if (event.faultType != null)
+                            _buildInfoChip(
+                              label: event.faultType!,
+                              icon: Icons.category_outlined,
+                              color: const Color(0xFF526575),
+                            ),
+                          if (event.severity != null)
+                            _buildSeverityChip(event.severity!),
+                        ],
+                      ),
+                    ],
+
+                    // Description / Notes
+                    if (event.description != null &&
+                        event.description!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        event.description!,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF334155),
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+
+                    // Proof Image Attachment Indicator
+                    if (event.hasProofImage) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.image_outlined,
+                              size: 14,
+                              color: AppTheme.navy,
+                            ),
+                            SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                'Photo proof attached',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.navy,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(String status) {
+    final s = status.trim().toLowerCase();
+    final Color bg;
+    final Color text;
+    final Color border;
+
+    if (s == 'resolved' || s == 'completed' || s == 'operational') {
+      bg = const Color(0xFFE8F6F3);
+      text = const Color(0xFF2E7D6F);
+      border = const Color(0xFFBBE5DD);
+    } else if (s == 'in progress') {
+      bg = const Color(0xFFFFF7ED);
+      text = const Color(0xFFC2410C);
+      border = const Color(0xFFFED7AA);
+    } else if (s == 'pending' || s == 'assigned') {
+      bg = const Color(0xFFEFF6FF);
+      text = const Color(0xFF1D4ED8);
+      border = const Color(0xFFBFDBFE);
+    } else {
+      bg = const Color(0xFFFEF2F2);
+      text = const Color(0xFFDC2626);
+      border = const Color(0xFFFECACA);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          color: text,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSeverityChip(String severity) {
+    final s = severity.trim().toLowerCase();
+    final Color color;
+    if (s == 'critical' || s == 'high') {
+      color = AppTheme.danger;
+    } else if (s == 'medium') {
+      color = AppTheme.warning;
+    } else {
+      color = AppTheme.green;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              severity,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip({
+    required String label,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  _TimelineEventTheme _resolveEventTheme(MachineActivityLogModel event) {
+    switch (event.type) {
+      case MachineActivityType.faultReported:
+        return const _TimelineEventTheme(
+          icon: Icons.warning_amber_rounded,
+          nodeBgColor: Color(0xFFFEF2F2),
+          nodeBorderColor: Color(0xFFFECACA),
+          nodeIconColor: AppTheme.danger,
+        );
+      case MachineActivityType.faultStatusChanged:
+        return const _TimelineEventTheme(
+          icon: Icons.update_rounded,
+          nodeBgColor: Color(0xFFEFF6FF),
+          nodeBorderColor: Color(0xFFBFDBFE),
+          nodeIconColor: AppTheme.blue,
+        );
+      case MachineActivityType.maintenanceAssigned:
+        return const _TimelineEventTheme(
+          icon: Icons.assignment_ind_outlined,
+          nodeBgColor: Color(0xFFF0F5F7),
+          nodeBorderColor: Color(0xFFDCE5EC),
+          nodeIconColor: AppTheme.navy,
+        );
+      case MachineActivityType.maintenanceInProgress:
+        return const _TimelineEventTheme(
+          icon: Icons.engineering_outlined,
+          nodeBgColor: Color(0xFFFFF7ED),
+          nodeBorderColor: Color(0xFFFED7AA),
+          nodeIconColor: Color(0xFFEA580C),
+        );
+      case MachineActivityType.maintenanceResolved:
+        return const _TimelineEventTheme(
+          icon: Icons.check_circle_outline_rounded,
+          nodeBgColor: Color(0xFFE8F6F3),
+          nodeBorderColor: Color(0xFFBBE5DD),
+          nodeIconColor: AppTheme.green,
+        );
+      case MachineActivityType.maintenanceNote:
+        return const _TimelineEventTheme(
+          icon: Icons.note_alt_outlined,
+          nodeBgColor: Color(0xFFF1F5F9),
+          nodeBorderColor: Color(0xFFCBD5E1),
+          nodeIconColor: AppTheme.navy,
+        );
+    }
   }
 
   Widget _buildTrendTab() {
@@ -963,4 +1451,18 @@ class _MachineStatusStyle {
   final Color color;
 
   const _MachineStatusStyle({required this.label, required this.color});
+}
+
+class _TimelineEventTheme {
+  final IconData icon;
+  final Color nodeBgColor;
+  final Color nodeBorderColor;
+  final Color nodeIconColor;
+
+  const _TimelineEventTheme({
+    required this.icon,
+    required this.nodeBgColor,
+    required this.nodeBorderColor,
+    required this.nodeIconColor,
+  });
 }

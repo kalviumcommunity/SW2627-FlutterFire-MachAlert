@@ -302,6 +302,36 @@ void main() {
       expect(data['reportedBy'], isNot('attacker_or_spoofed_uid'));
     });
 
+    test('1. New fault saves the reporter name automatically from Firestore profile', () async {
+      await fakeFirestore.collection('users').doc(testUid).set({
+        'uid': testUid,
+        'displayName': 'Jatin Kashyap',
+        'email': 'operator@machalert.com',
+        'role': 'operator',
+      });
+
+      final fault = FaultModel(
+        id: '',
+        machineId: 'mock-cnc-01',
+        type: AppConstants.faultTypeThermal,
+        severity: AppConstants.severityHigh,
+        description: 'Overheating spindle bearing during peak operation.',
+        reportedBy: '',
+        reportedByName: null,
+      );
+
+      final docId = await faultService.addFault(fault);
+
+      final docSnapshot = await fakeFirestore
+          .collection(AppConstants.faultsCollection)
+          .doc(docId)
+          .get();
+
+      final data = docSnapshot.data()!;
+      expect(data['reportedBy'], equals(testUid));
+      expect(data['reportedByName'], equals('Jatin Kashyap'));
+    });
+
     test(
       'sets default fault status to Open when status is omitted or empty',
       () async {

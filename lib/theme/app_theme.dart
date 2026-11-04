@@ -39,6 +39,7 @@ class AppTheme {
         centerTitle: false,
         surfaceTintColor: Colors.transparent,
         titleTextStyle: TextStyle(
+          fontFamily: 'Roboto',
           color: navy,
           fontSize: 20,
           fontWeight: FontWeight.w700,

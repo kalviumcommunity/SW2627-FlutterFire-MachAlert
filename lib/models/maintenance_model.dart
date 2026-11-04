@@ -1,3 +1,5 @@
+import 'maintenance_update_model.dart';
+
 class MaintenanceModel {
   final String id;
   final String machineId;
@@ -10,6 +12,7 @@ class MaintenanceModel {
   final String? notes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final List<MaintenanceUpdateModel> updateHistory;
 
   MaintenanceModel({
     required this.id,
@@ -23,6 +26,7 @@ class MaintenanceModel {
     this.notes,
     this.createdAt,
     this.updatedAt,
+    this.updateHistory = const [],
   });
 
   MaintenanceModel copyWith({
@@ -37,6 +41,7 @@ class MaintenanceModel {
     String? notes,
     DateTime? createdAt,
     DateTime? updatedAt,
+    List<MaintenanceUpdateModel>? updateHistory,
   }) {
     return MaintenanceModel(
       id: id ?? this.id,
@@ -50,6 +55,7 @@ class MaintenanceModel {
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      updateHistory: updateHistory ?? this.updateHistory,
     );
   }
 
@@ -86,6 +92,10 @@ class MaintenanceModel {
       notes: map['notes'] as String?,
       createdAt: _parseDateTime(map['createdAt'] ?? map['assignedAt']),
       updatedAt: _parseDateTime(map['updatedAt'] ?? map['resolvedAt']),
+      updateHistory: MaintenanceUpdateModel.parseHistoryList(
+        map['updateHistory'],
+        docId ?? map['id'] as String? ?? '',
+      ),
     );
   }
 

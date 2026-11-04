@@ -4,6 +4,10 @@ import 'dart:typed_data';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
+import '../utils/app_constants.dart';
+import '../utils/supabase_config.dart';
+import 'supabase_storage_uploader.dart';
+
 /// Exception thrown by [StorageService] operations when uploads fail,
 /// input data is invalid, or the user is not authenticated.
 class StorageServiceException implements Exception {
@@ -66,6 +70,8 @@ class StorageServiceException implements Exception {
         return 'Firebase project configuration error.';
       case 'download-url-failed':
         return 'Failed to retrieve the image download URL after upload.';
+      case 'storage-unconfigured':
+        return 'Image storage is not configured. Supabase credentials are required and Firebase Storage is disabled on this plan.';
       case 'upload-failed':
         return 'Failed to upload the image. Please try again.';
       default:
@@ -91,7 +97,7 @@ class StorageServiceException implements Exception {
 
 /// Abstract contract for uploading data to storage and resolving download URLs.
 abstract class StorageUploader {
-  /// Uploads [bytes] to the specified storage [path] with [metadata] and returns the download URL.
+  /// Uploads [bytes] to the specified storage [path] with [metadata] and returns the download URL or permanent storage path.
   Future<String> upload({
     required String path,
     required Uint8List bytes,
@@ -104,6 +110,8 @@ class FirebaseStorageUploader implements StorageUploader {
   final FirebaseStorage _storage;
 
   FirebaseStorageUploader(this._storage);
+
+  String get provider => AppConstants.storageProviderFirebase;
 
   @override
   Future<String> upload({
@@ -179,6 +187,31 @@ class FirebaseStorageUploader implements StorageUploader {
   }
 }
 
+/// Fallback [StorageUploader] used when Supabase is unconfigured,
+/// preventing accidental uploads to the unavailable Firebase Storage service on Spark plan.
+class UnconfiguredStorageUploader implements StorageUploader {
+  final String message;
+
+  const UnconfiguredStorageUploader({
+    this.message =
+        'Image upload is currently unavailable: Supabase Storage configuration is missing and Firebase Storage uploads are disabled on the Spark plan.',
+  });
+
+  String get provider => 'unconfigured';
+
+  @override
+  Future<String> upload({
+    required String path,
+    required Uint8List bytes,
+    required SettableMetadata metadata,
+  }) async {
+    throw StorageServiceException(
+      code: 'storage-unconfigured',
+      message: message,
+    );
+  }
+}
+
 /// Service managing image uploads to Firebase Storage for fault reports and other media.
 class StorageService {
   /// Default folder for storing fault report image attachments.
@@ -209,6 +242,50 @@ class StorageService {
 
   /// Access to the underlying [FirebaseAuth] instance.
   FirebaseAuth get auth => _auth;
+
+  /// The active storage provider ('supabase', 'firebase', or 'unconfigured').
+  String get storageProvider {
+    final uploader = _uploader;
+    if (uploader is SupabaseStorageUploader) {
+      return AppConstants.storageProviderSupabase;
+    }
+    if (uploader is UnconfiguredStorageUploader) {
+      return 'unconfigured';
+    }
+    return AppConstants.storageProviderFirebase;
+  }
+
+  /// Resolves a displayable image URL.
+  ///
+  /// Returns HTTP(S) URLs directly (preserving existing Firebase Storage records).
+  /// For Supabase private storage paths, generates a fresh signed URL for secure viewing.
+  Future<String> getSignedUrl(
+    String pathOrUrl, {
+    int expiresInSeconds = 3600,
+  }) async {
+    final trimmed = pathOrUrl.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+
+    final uploader = _uploader;
+    if (uploader is SupabaseStorageUploader) {
+      return await uploader.getSignedUrl(
+        trimmed,
+        expiresInSeconds: expiresInSeconds,
+      );
+    }
+
+    if (SupabaseConfig.isConfigured && SupabaseConfig.client != null) {
+      try {
+        return await SupabaseConfig.client!.storage
+            .from(SupabaseConfig.faultImagesBucket)
+            .createSignedUrl(trimmed, expiresInSeconds);
+      } catch (_) {}
+    }
+
+    return trimmed;
+  }
 
   /// Sanitizes [fileName] by extracting the basename, removing path traversal segments,
   /// and replacing invalid or unsafe characters.

@@ -71,7 +71,7 @@ void main() {
 
     await tester.tap(find.text('Logs'));
 
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Machine Logs'), findsOneWidget);
 

@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/fault_model.dart';
 import '../utils/app_constants.dart';
+import '../utils/supabase_config.dart';
+import 'storage_service.dart';
 
 /// Exception thrown by [FaultService] operations when Firestore operations fail
 /// or business validation rules are violated.
@@ -101,6 +104,23 @@ class FaultService {
   /// Internal access to the underlying [FirebaseAuth] instance.
   FirebaseAuth get auth => _firebaseAuth;
 
+  /// Extracts the permanent storage path from a Supabase storage URL (signed or public).
+  static String extractStoragePath(String url, {String bucket = 'fault-images'}) {
+    final uri = Uri.tryParse(url);
+    if (uri != null) {
+      final segments = uri.pathSegments;
+      final bucketIdx = segments.indexOf(bucket);
+      if (bucketIdx != -1 && bucketIdx + 1 < segments.length) {
+        return segments.sublist(bucketIdx + 1).join('/');
+      }
+    }
+    final match = RegExp('$bucket/(.+?)(\\?|\$)').firstMatch(url);
+    if (match != null && match.group(1) != null) {
+      return match.group(1)!;
+    }
+    return url;
+  }
+
   /// Reference to the `faults` collection.
   CollectionReference<Map<String, dynamic>> get _faultsCollection =>
       _firestore.collection(AppConstants.faultsCollection);
@@ -195,11 +215,56 @@ class FaultService {
     final docRef = _faultsCollection.doc();
     final generatedDocId = docRef.id;
 
-    // 8. Construct complete validated model ensuring ID, status, and derived reporter UID
+    // 8. Resolve permanent storagePath and storageProvider metadata.
+    // Ensure expiring Supabase signed URLs are NOT stored in Firestore as permanent image references.
+    String? permanentImageUrl = fault.imageUrl;
+    String? permanentStoragePath = fault.storagePath;
+    String? permanentStorageProvider = fault.storageProvider;
+
+    final isSupabaseExpiringUrl = permanentImageUrl != null &&
+        permanentImageUrl.contains('supabase.co') &&
+        (permanentImageUrl.contains('/object/sign/') || permanentImageUrl.contains('token='));
+
+    if (isSupabaseExpiringUrl) {
+      permanentStoragePath ??= extractStoragePath(permanentImageUrl);
+      permanentStorageProvider = AppConstants.storageProviderSupabase;
+      permanentImageUrl = null; // Do NOT store expiring signed URL in Firestore
+    } else if (permanentStoragePath != null && permanentStoragePath.trim().isNotEmpty) {
+      permanentStorageProvider ??= AppConstants.storageProviderSupabase;
+      if (permanentStorageProvider == AppConstants.storageProviderSupabase) {
+        permanentImageUrl = null;
+      }
+    } else if (permanentImageUrl != null && permanentImageUrl.trim().isNotEmpty) {
+      permanentStorageProvider ??= AppConstants.storageProviderFirebase;
+    }
+
+    // 9. Resolve reportedByName following Priority:
+    // 1. Caller-supplied reportedByName (if valid, non-empty, and not equal to a raw UID)
+    // 2. Firestore users/{uid} displayName
+    // 3. Firestore users/{uid} name
+    // 4. Firebase Auth displayName
+    // 5. Firebase Auth email as last meaningful fallback
+    String? resolvedReportedByName;
+    final callerName = fault.reportedByName?.trim();
+    if (callerName != null &&
+        callerName.isNotEmpty &&
+        callerName != reporterUid &&
+        !_isRawUid(callerName)) {
+      resolvedReportedByName = callerName;
+    } else {
+      resolvedReportedByName =
+          await _resolveReporterName(reporterUid, currentUser);
+    }
+
+    // 10. Construct complete validated model ensuring ID, status, and derived reporter UID and name
     final faultToCreate = fault.copyWith(
       id: generatedDocId,
       reportedBy: reporterUid,
+      reportedByName: resolvedReportedByName,
       status: resolvedStatus,
+      imageUrl: permanentImageUrl,
+      storagePath: permanentStoragePath,
+      storageProvider: permanentStorageProvider,
     );
 
     final validationErrors = faultToCreate.validate();
@@ -210,18 +275,26 @@ class FaultService {
       );
     }
 
-    // 9. Serialize to Firestore map with server timestamp
+    // 11. Serialize to Firestore map with server timestamp
     final data = faultToCreate.toFirestoreMap(isUpdate: false);
     data['id'] = generatedDocId;
     data['faultId'] = generatedDocId;
     data['reportedBy'] = reporterUid;
+    data['reportedByName'] = resolvedReportedByName;
     data['status'] = resolvedStatus;
+    data['imageUrl'] = permanentImageUrl;
+    if (permanentStoragePath != null) {
+      data['storagePath'] = permanentStoragePath;
+    }
+    if (permanentStorageProvider != null) {
+      data['storageProvider'] = permanentStorageProvider;
+    }
 
     if (fault.createdAt == null) {
       data['createdAt'] = FieldValue.serverTimestamp();
     }
 
-    // 10. Write to Firestore
+    // 12. Write to Firestore
     try {
       await docRef.set(data);
       return generatedDocId;
@@ -234,6 +307,131 @@ class FaultService {
         message: 'Failed to add fault: $e',
       );
     }
+  }
+
+  /// Resolves the reporter display name from Firestore profile or Firebase Auth session.
+  Future<String?> _resolveReporterName(String uid, User? currentUser) async {
+    // 1. Retrieve trusted Firestore profile from users/{uid}
+    try {
+      final docSnap = await _firestore
+          .collection(AppConstants.usersCollection)
+          .doc(uid)
+          .get();
+      if (docSnap.exists && docSnap.data() != null) {
+        final data = docSnap.data()!;
+        final displayName = data['displayName']?.toString().trim();
+        if (displayName != null && displayName.isNotEmpty) {
+          return displayName;
+        }
+        final name = data['name']?.toString().trim();
+        if (name != null && name.isNotEmpty) {
+          return name;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Firebase Auth displayName
+    try {
+      final authDisplayName = currentUser?.displayName?.trim();
+      if (authDisplayName != null && authDisplayName.isNotEmpty) {
+        return authDisplayName;
+      }
+    } catch (_) {}
+
+    // 3. Firebase Auth email
+    try {
+      final authEmail = currentUser?.email?.trim();
+      if (authEmail != null && authEmail.isNotEmpty) {
+        return authEmail;
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  /// Checks whether [value] matches typical raw Firebase UID format.
+  static bool _isRawUid(String value) {
+    final trimmed = value.trim();
+    if (trimmed.length >= 20 &&
+        !trimmed.contains(' ') &&
+        !trimmed.contains('@') &&
+        RegExp(r'^[a-zA-Z0-9_-]{20,}$').hasMatch(trimmed)) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Dynamically resolves a displayable image URL for [fault].
+  ///
+  /// - Enforces role-based image access policy:
+  ///   - Operators are strictly prohibited from viewing foreign operators' private fault images.
+  ///   - Managers and technicians retain plant-wide authorized access.
+  /// - If the fault has a private [storagePath] under Supabase, dynamically generates
+  ///   a fresh signed URL for secure viewing.
+  /// - If the fault has an existing [imageUrl] (Firebase Storage permanent record),
+  ///   returns it directly, ensuring historical fault images continue to load.
+  Future<String?> getFaultImageUrl(
+    FaultModel fault, {
+    StorageService? storageService,
+    int expiresInSeconds = 3600,
+    String? callerRole,
+    String? callerUid,
+  }) async {
+    if (!fault.hasImage) return null;
+
+    // Role-based image access authorization
+    final uid = (callerUid != null && callerUid.trim().isNotEmpty)
+        ? callerUid.trim()
+        : _firebaseAuth.currentUser?.uid.trim();
+
+    String? role = callerRole?.trim().toLowerCase();
+    if (role == null && uid != null && uid.isNotEmpty) {
+      try {
+        final userDoc = await _firestore
+            .collection(AppConstants.usersCollection)
+            .doc(uid)
+            .get();
+        if (userDoc.exists && userDoc.data() != null) {
+          role = userDoc.data()!['role']?.toString().trim().toLowerCase();
+        }
+      } catch (_) {}
+    }
+
+    if (role == AppConstants.roleOperator && uid != null) {
+      final reporter = fault.reportedBy.trim();
+      if (reporter.isNotEmpty && reporter != uid) {
+        // Operators cannot read foreign operators' private fault images
+        return null;
+      }
+    }
+
+    // 1. Dynamic signed URL generation for Supabase private storage
+    if (fault.storageProvider == AppConstants.storageProviderSupabase ||
+        (fault.storagePath != null && fault.storagePath!.trim().isNotEmpty)) {
+      final path = fault.storagePath!;
+      if (storageService != null) {
+        return await storageService.getSignedUrl(
+          path,
+          expiresInSeconds: expiresInSeconds,
+        );
+      }
+      if (SupabaseConfig.isConfigured && SupabaseConfig.client != null) {
+        try {
+          return await SupabaseConfig.client!.storage
+              .from(SupabaseConfig.faultImagesBucket)
+              .createSignedUrl(path, expiresInSeconds);
+        } catch (e) {
+          debugPrint('[FaultService] Failed to generate Supabase signed URL: $e');
+        }
+      }
+    }
+
+    // 2. Existing permanent imageUrl (Firebase Storage or direct URL)
+    if (fault.imageUrl != null && fault.imageUrl!.trim().isNotEmpty) {
+      return fault.imageUrl!.trim();
+    }
+
+    return null;
   }
 
   /// Retrieves a fault document by its ID: `faults/{faultId}`.
@@ -263,12 +461,13 @@ class FaultService {
 
   /// Helper to build a Firestore query for the faults collection with optional filters.
   ///
-  /// Supports exact-match filtering by [machineId], [status], and [severity].
+  /// Supports exact-match filtering by [machineId], [status], [severity], and [reportedBy].
   /// Trims whitespace and treats null, empty, or whitespace-only values as omitted.
   Query<Map<String, dynamic>> _buildFaultsQuery({
     String? machineId,
     String? status,
     String? severity,
+    String? reportedBy,
   }) {
     Query<Map<String, dynamic>> query = _faultsCollection;
 
@@ -284,23 +483,29 @@ class FaultService {
       query = query.where('severity', isEqualTo: severity.trim());
     }
 
+    if (reportedBy != null && reportedBy.trim().isNotEmpty) {
+      query = query.where('reportedBy', isEqualTo: reportedBy.trim());
+    }
+
     return query;
   }
 
   /// Retrieves a list of faults, with optional filtering by [machineId],
-  /// [status], and/or [severity].
+  /// [status], [severity], and/or [reportedBy].
   ///
   /// Throws [FaultServiceException] on Firestore error.
   Future<List<FaultModel>> getFaults({
     String? machineId,
     String? status,
     String? severity,
+    String? reportedBy,
   }) async {
     try {
       final query = _buildFaultsQuery(
         machineId: machineId,
         status: status,
         severity: severity,
+        reportedBy: reportedBy,
       );
 
       final snapshot = await query.get();
@@ -320,16 +525,18 @@ class FaultService {
 
   /// Streams real-time updates for the faults collection.
   ///
-  /// Optionally filters by [machineId], [status], and/or [severity].
+  /// Optionally filters by [machineId], [status], [severity], and/or [reportedBy].
   Stream<List<FaultModel>> streamFaults({
     String? machineId,
     String? status,
     String? severity,
+    String? reportedBy,
   }) {
     final query = _buildFaultsQuery(
       machineId: machineId,
       status: status,
       severity: severity,
+      reportedBy: reportedBy,
     );
 
     return query

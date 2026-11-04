@@ -33,26 +33,35 @@ class MachineModel {
   String get machineId => id;
 
   /// Returns whether this machine has a recognized operational status.
-  bool get hasRecognizedStatus => AppConstants.machineStatuses.any(
-    (s) => s.toLowerCase() == status.trim().toLowerCase(),
-  );
+  bool get hasRecognizedStatus =>
+      isOperational || isWarning || isCritical || isUnderMaintenance;
 
-  /// Helper getters for operational statuses.
-  bool get isOperational =>
-      status.trim().toLowerCase() ==
-      AppConstants.machineStatusOperational.toLowerCase();
+  /// Helper getters for operational statuses supporting canonical and equivalent semantics.
+  bool get isOperational {
+    final s = status.trim().toLowerCase();
+    return s == AppConstants.machineStatusOperational.toLowerCase() ||
+        s == 'running';
+  }
 
-  bool get isWarning =>
-      status.trim().toLowerCase() ==
-      AppConstants.machineStatusWarning.toLowerCase();
+  bool get isWarning {
+    final s = status.trim().toLowerCase();
+    return s == AppConstants.machineStatusWarning.toLowerCase() ||
+        s == 'warn';
+  }
 
-  bool get isCritical =>
-      status.trim().toLowerCase() ==
-      AppConstants.machineStatusCritical.toLowerCase();
+  bool get isCritical {
+    final s = status.trim().toLowerCase();
+    return s == AppConstants.machineStatusCritical.toLowerCase() ||
+        s == 'breakdown' ||
+        s == 'broken';
+  }
 
-  bool get isUnderMaintenance =>
-      status.trim().toLowerCase() ==
-      AppConstants.machineStatusUnderMaintenance.toLowerCase();
+  bool get isUnderMaintenance {
+    final s = status.trim().toLowerCase();
+    return s == AppConstants.machineStatusUnderMaintenance.toLowerCase() ||
+        s == 'in maintenance' ||
+        s == 'maintenance';
+  }
 
   MachineModel copyWith({
     String? id,
