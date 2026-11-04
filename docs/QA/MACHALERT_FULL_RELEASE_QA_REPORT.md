@@ -21,15 +21,17 @@ The application was evaluated across business logic integrity, role-based access
 ### Summary Metrics
 | Metric | Value | Verification Status |
 | :--- | :--- | :--- |
-| **Total Automated Tests Executed** | **976** | **PASS (100% of runnable tests)** |
-| **Automated Tests Passed** | **976** | **0 Failures** |
+| **Total Automated Tests Executed** | **977** | **PASS (100% of runnable tests)** |
+| **Automated Tests Passed** | **977** | **0 Failures** |
 | **Skipped Tests** | **3** | Unconfigured external physical driver mocks |
+| **Node.js Administrative Tests** | **12 / 12** | **PASS (100%)** |
 | **Static Analysis (`flutter analyze`)** | **0 Issues** | Clean run in 4.8s (zero warnings, zero errors) |
 | **Tested Screen Viewports** | **4 distinct form-factors** | `320x568`, `360x800`, `393x852`, `412x915` |
 | **ReportsScreen Distinct Tabs** | **3/3 Functional** | Overview, Inspections, Breakdowns |
 | **RenderFlex Overflows Discovered** | **3 (in ReportsScreen)** | **ALL 3 FIXED & VERIFIED AT 320px** |
 | **Simulated Telemetry Curves** | **0 (Eliminated)** | Replaced with honest insufficient-data state |
 | **Android Release Compilation** | **`app-release.apk` (60.8 MB)** | Succeeded in 38.7s |
+| **Android Launcher App Label** | **`MachAlert`** | Verified via `aapt dump badging` |
 | **Dashboard Inventory Invariant** | **100% Satisfied** | $Running + Maintenance + Breakdown + Other == Total$ |
 
 ---

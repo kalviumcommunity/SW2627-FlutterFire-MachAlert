@@ -6,7 +6,6 @@ import 'dart:ui' as ui;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mach_alert/models/fault_model.dart';
 import 'package:mach_alert/models/machine_model.dart';
@@ -78,29 +77,7 @@ class _FakeFaultService extends Fake implements FaultService {
 }
 
 void main() {
-  const artifactDir = '/Users/jatinkashyap/.gemini/antigravity/brain/2f4c9bae-798d-4c78-aed7-38b045c27798';
-
-  setUpAll(() async {
-    TestWidgetsFlutterBinding.ensureInitialized();
-
-    // Load Arial as Roboto
-    final fontFile = File('/System/Library/Fonts/Supplemental/Arial.ttf');
-    if (fontFile.existsSync()) {
-      final fontBytes = fontFile.readAsBytesSync();
-      final fontLoader = FontLoader('Roboto');
-      fontLoader.addFont(Future.value(ByteData.view(fontBytes.buffer)));
-      await fontLoader.load();
-    }
-
-    // Load MaterialIcons
-    final iconFile = File('/opt/homebrew/share/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf');
-    if (iconFile.existsSync()) {
-      final iconBytes = iconFile.readAsBytesSync();
-      final iconLoader = FontLoader('MaterialIcons');
-      iconLoader.addFont(Future.value(ByteData.view(iconBytes.buffer)));
-      await iconLoader.load();
-    }
-  });
+  final artifactDir = Platform.environment['ARTIFACT_DIR'];
 
   testWidgets('Capture My Reports Screen Screenshot', (tester) async {
     tester.view.physicalSize = const Size(390 * 2.0, 844 * 2.0);
@@ -194,15 +171,20 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    await tester.runAsync(() async {
-      final boundary = repaintKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 2.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      final bytes = byteData!.buffer.asUint8List();
+    expect(find.byType(MyReportsScreen), findsOneWidget);
+    expect(find.text('My Reports'), findsOneWidget);
 
-      final file = File('$artifactDir/my_reports_screen.png');
-      await file.writeAsBytes(bytes);
-    });
+    if (artifactDir != null && Directory(artifactDir).existsSync()) {
+      await tester.runAsync(() async {
+        final boundary = repaintKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+        final image = await boundary.toImage(pixelRatio: 2.0);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        final bytes = byteData!.buffer.asUint8List();
+
+        final file = File('$artifactDir/my_reports_screen.png');
+        await file.writeAsBytes(bytes);
+      });
+    }
   });
 
   testWidgets('Capture Maintenance Task Form Screen with Fault Dropdown Screenshot', (tester) async {
@@ -303,14 +285,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.runAsync(() async {
-      final boundary = repaintKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 2.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      final bytes = byteData!.buffer.asUint8List();
+    expect(find.byType(MaintenanceTaskFormScreen), findsOneWidget);
+    expect(find.text('5-Axis CNC Milling Center (MCH-CNC-01)'), findsWidgets);
 
-      final file = File('$artifactDir/maintenance_task_form_screen.png');
-      await file.writeAsBytes(bytes);
-    });
+    if (artifactDir != null && Directory(artifactDir).existsSync()) {
+      await tester.runAsync(() async {
+        final boundary = repaintKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+        final image = await boundary.toImage(pixelRatio: 2.0);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        final bytes = byteData!.buffer.asUint8List();
+
+        final file = File('$artifactDir/maintenance_task_form_screen.png');
+        await file.writeAsBytes(bytes);
+      });
+    }
   });
 }
